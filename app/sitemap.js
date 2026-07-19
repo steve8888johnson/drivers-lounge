@@ -1,0 +1,1 @@
+export default function sitemap(){const base='https://driverslounge.com';return ['','/road-tools','/carriers','/intelligence','/driver-hub','/pilot-cars','/petitions','/advertise','/privacy','/terms','/support'].map(path=>({url:base+path,lastModified:new Date()}));}

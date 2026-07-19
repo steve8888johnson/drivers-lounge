@@ -1,0 +1,2 @@
+import PageShell from '../../components/PageShell';import CarrierSearch from '../../components/CarrierSearch';
+export default function Carriers(){return <PageShell eyebrow="CARRIER INTELLIGENCE" title="Search official carrier records and driver experience" intro="The production version will synchronize FMCSA data and clearly separate official records from driver-submitted reviews."><CarrierSearch/></PageShell>}
