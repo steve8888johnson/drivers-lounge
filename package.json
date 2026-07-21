@@ -1,6 +1,6 @@
 {
   "name": "drivers-lounge-production-beta-v2",
-  "version": "5.0.0",
+  "version": "6.0.0",
   "private": true,
   "engines": {
     "node": ">=22.0.0"
@@ -8,5 +8,5 @@
   "scripts": {
     "build": "node build.mjs"
   },
-  "description": "Drivers Lounge production beta v5 premium navigation"
+  "description": "Drivers Lounge production beta v6 platform expansion"
 }

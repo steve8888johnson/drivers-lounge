@@ -15,9 +15,33 @@
   "description": "Truck-safe navigation, live road intelligence and driver community.",
   "shortcuts": [
     {
-      "name": "Plan a Route",
-      "short_name": "Navigation",
+      "name": "Navigate",
+      "short_name": "Navigate",
       "url": "/navigation",
+      "icons": [
+        {
+          "src": "/assets/drivers-lounge-logo.png",
+          "sizes": "512x512",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Driver Dashboard",
+      "short_name": "Dashboard",
+      "url": "/dashboard",
+      "icons": [
+        {
+          "src": "/assets/drivers-lounge-logo.png",
+          "sizes": "512x512",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Load Center",
+      "short_name": "Loads",
+      "url": "/loads",
       "icons": [
         {
           "src": "/assets/drivers-lounge-logo.png",
@@ -30,18 +54,6 @@
       "name": "Road Intelligence",
       "short_name": "Road Intel",
       "url": "/road-tools",
-      "icons": [
-        {
-          "src": "/assets/drivers-lounge-logo.png",
-          "sizes": "512x512",
-          "type": "image/png"
-        }
-      ]
-    },
-    {
-      "name": "Driver Community",
-      "short_name": "Community",
-      "url": "/community",
       "icons": [
         {
           "src": "/assets/drivers-lounge-logo.png",
