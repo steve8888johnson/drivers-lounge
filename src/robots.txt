@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://drivers-lounge.vercel.app/sitemap.xml

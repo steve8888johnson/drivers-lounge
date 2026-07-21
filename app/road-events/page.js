@@ -1,2 +1,0 @@
-import PageShell from '../../components/PageShell';import {roadEvents} from '../../lib/road-data';
-export default function Page(){return <PageShell eyebrow="ROAD EVENTS" title="Construction, crashes and commercial restrictions" intro="Driver reports and verified feeds are displayed with confidence and freshness."><div className="alert-list">{roadEvents.map(a=><article key={a.id}><b>{a.type}: {a.title}</b><span>{a.route}</span><p>{a.delay} · {a.confidence}% confidence</p></article>)}</div></PageShell>}

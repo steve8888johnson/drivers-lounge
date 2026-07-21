@@ -1,4 +1,0 @@
-'use client';
-import {useState} from 'react';
-import {petitions as seeded} from '../lib/data';
-export default function PetitionList(){const [items,setItems]=useState(seeded);const [signed,setSigned]=useState({});function sign(slug){if(signed[slug])return;setSigned({...signed,[slug]:true});setItems(items.map(p=>p.slug===slug?{...p,signatures:p.signatures+1}:p))}return <div className="cards">{items.map(p=>{const pct=Math.min(100,Math.round(p.signatures/p.target*100));return <article className="data-card" key={p.slug}><h3>{p.title}</h3><p>{p.summary}</p><div className="progress"><span style={{width:`${pct}%`}}/></div><p><b>{p.signatures.toLocaleString()}</b> of {p.target.toLocaleString()} signatures</p><button disabled={signed[p.slug]} onClick={()=>sign(p.slug)}>{signed[p.slug]?'Signed':'Read and sign'}</button></article>})}</div>}

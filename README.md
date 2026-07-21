@@ -1,24 +1,23 @@
-# Drivers Lounge Public Beta
+# Drivers Lounge Production Beta v2
 
-A free, advertiser-supported commercial-driver platform built with Next.js and Supabase.
+A dependency-free static production build designed for reliable Vercel deployment.
 
-## Included beta modules
+## Why this build is different
 
-Accounts, Driver Dashboard, Driver Passport, resume/employment history, document tracking, My Truck, carrier intelligence, broker reviews, shipper intelligence, repair-shop reviews, jobs, pilot-car jobs, driver rooms, petitions, feedback, road tools, scale reports, parking, fuel, services marketplace, truck-routing profile foundation, advertising and moderation foundation.
-
-## Run locally
-
-```bash
-npm install
-npm run dev
-```
-
-Copy `.env.example` to `.env.local` and provide the existing Supabase public URL and anon/publishable key.
+- No Next.js dependency install
+- No package-lock.json
+- No npm package-resolution failures
+- Node 22-compatible build script using only the Node standard library
+- Clean branded homepage and 25+ working routes
+- Responsive desktop/mobile layouts
+- Interactive tab filters, reporting buttons and route-planner demo
 
 ## Deploy
 
-Push the repository with GitHub Desktop. Vercel will redeploy automatically from `main`.
+Replace the contents of your local `Documents\GitHub\drivers-lounge` repository with this folder, commit, and push. Vercel reads `vercel.json`, skips dependency installation, runs `node build.mjs`, and serves `dist`.
 
-## Important beta boundaries
+Recommended commit: `Deploy stable Drivers Lounge beta v2`
 
-Commercial turn-by-turn routing, live FMCSA synchronization, live fuel/traffic/weather feeds and licensed facility directories require provider integrations. The current product includes the user interface and database foundation for these services and does not claim that sample/crowdsourced data is guaranteed.
+## Important
+
+Road, fuel, weather, parking and carrier records in this beta are demonstration data until licensed APIs and verified driver submissions are connected.

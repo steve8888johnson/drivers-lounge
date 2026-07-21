@@ -1,0 +1,15 @@
+{
+  "name": "Drivers Lounge",
+  "short_name": "Drivers Lounge",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#06101b",
+  "theme_color": "#06101b",
+  "icons": [
+    {
+      "src": "/assets/drivers-lounge-logo.png",
+      "sizes": "430x1005",
+      "type": "image/png"
+    }
+  ]
+}
