@@ -1,6 +1,6 @@
 {
   "name": "drivers-lounge-production-beta-v2",
-  "version": "8.0.0",
+  "version": "9.0.0-rc.1",
   "private": true,
   "engines": {
     "node": ">=22.0.0"
@@ -8,5 +8,5 @@
   "scripts": {
     "build": "node build.mjs"
   },
-  "description": "Drivers Lounge production beta v8 Mission Control"
+  "description": "Drivers Lounge RC1 unified platform groundwork"
 }

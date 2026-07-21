@@ -1,5 +1,5 @@
 {
-  "name": "Drivers Lounge Driver OS",
+  "name": "Drivers Lounge RC1",
   "short_name": "Drivers Lounge",
   "start_url": "/",
   "display": "standalone",
@@ -12,7 +12,7 @@
       "type": "image/png"
     }
   ],
-  "description": "Commercial-driver navigation, road intelligence, freight, community and business tools.",
+  "description": "Commercial-driver navigation, road intelligence, career, community, pilot car and business platform.",
   "shortcuts": [
     {
       "name": "Mission Control",
@@ -27,8 +27,8 @@
       ]
     },
     {
-      "name": "Navigate",
-      "short_name": "Navigate",
+      "name": "Navigation",
+      "short_name": "Navigation",
       "url": "/navigation",
       "icons": [
         {
@@ -51,9 +51,9 @@
       ]
     },
     {
-      "name": "Load Center",
-      "short_name": "Loads",
-      "url": "/loads",
+      "name": "Pilot Car Center",
+      "short_name": "Pilot Cars",
+      "url": "/pilot-center",
       "icons": [
         {
           "src": "/assets/drivers-lounge-logo.png",
