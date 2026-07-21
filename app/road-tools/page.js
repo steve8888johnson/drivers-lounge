@@ -1,2 +1,4 @@
-import PageShell from '../../components/PageShell';import ScaleReporter from '../../components/ScaleReporter';
-export default function RoadTools(){return <PageShell eyebrow="ROAD TOOLS" title="Live scale reports and driver road services" intro="Check inspection stations, then report what you observe with one tap. Truck stops, CAT Scales, washes and parking will use the same map layer."><ScaleReporter/></PageShell>}
+import PageShell from '../../components/PageShell';
+import RoadIntelligenceDashboard from '../../components/RoadIntelligenceDashboard';
+import ScaleReporter from '../../components/ScaleReporter';
+export default function RoadTools(){return <PageShell eyebrow="ROAD INTELLIGENCE" title="Everything ahead, in one view" intro="Parking forecasts, route-adjusted fuel, weather, road events, truck stops, scales and services. Driver reports remain clearly separated from verified data feeds."><RoadIntelligenceDashboard/><section style={{marginTop:28}}><ScaleReporter/></section></PageShell>}

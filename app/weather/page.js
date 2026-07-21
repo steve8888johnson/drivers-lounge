@@ -1,0 +1,2 @@
+import PageShell from '../../components/PageShell';import {weatherAlerts} from '../../lib/road-data';
+export default function Page(){return <PageShell eyebrow="ROUTE WEATHER" title="Weather that matters to commercial vehicles" intro="High wind, heavy rain, ice, heat and visibility alerts organized around truck routes."><div className="alert-list">{weatherAlerts.map(a=><article key={a.id} className="weather-card"><b>{a.severity}: {a.title}</b><span>{a.route}</span><p>{a.detail}</p><small>Expires in {a.expires}</small></article>)}</div></PageShell>}
