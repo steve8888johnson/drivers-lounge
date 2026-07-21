@@ -1,6 +1,6 @@
 
-const CACHE='drivers-lounge-v4';
-const CORE=['/','/assets/styles.css','/assets/app.js','/assets/navigation.js','/assets/navigation.css','/assets/drivers-lounge-logo.png','/road-tools','/navigation','/community'];
+const CACHE='drivers-lounge-v5';
+const CORE=['/','/assets/styles.css','/assets/app.js','/assets/navigation.js','/assets/navigation.css','/assets/navigation-v5.js','/assets/navigation-v5.css','/assets/drivers-lounge-logo.png','/road-tools','/navigation','/community'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{
