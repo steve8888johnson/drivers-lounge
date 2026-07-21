@@ -1,5 +1,5 @@
 
-const CACHE='drivers-lounge-v7';
+const CACHE='drivers-lounge-v8';
 const CORE=['/','/assets/styles.css','/assets/app.js','/assets/platform-v7.css','/assets/platform-v7.js','/assets/navigation.js','/assets/navigation.css','/assets/navigation-v5.js','/assets/navigation-v5.css','/assets/drivers-lounge-logo.png','/road-tools','/navigation','/community'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));

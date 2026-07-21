@@ -1,0 +1,12 @@
+
+(function(){
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+function toast(msg){let el=$('.mc-toast');if(!el){el=document.createElement('div');el.className='mc-toast';document.body.appendChild(el)}el.textContent=msg;el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>el.hidden=true,2500)}
+const ask=$('#mc-ask'),q=$('#mc-question'),out=$('#mc-answer');
+function reply(text){const s=text.toLowerCase();if(s.includes('parking'))return 'Reserve before Ardmore. The demo feed shows 23 spaces, but availability is expected to tighten after 8 PM.';if(s.includes('fuel'))return 'Fuel in Gainesville at the current demo route-adjusted price of $3.49. That is approximately 18¢ below the next major stop.';if(s.includes('scale'))return 'The Gainesville I-35 scale is likely open with 90% confidence. Prepare paperwork and follow all posted directions.';if(s.includes('profit')||s.includes('load'))return 'The Dallas–Kansas City demo load shows $3.90 per mile before deadhead and operating costs. Use the load calculator before accepting.';if(s.includes('weather')||s.includes('wind'))return 'Crosswinds near Ardmore may reach 35 mph. Reduce speed and monitor trailer stability.';return 'Stay on the major commercial corridor, verify official restrictions, and plan fuel, parking and inspection stops before departure.'}
+ask?.addEventListener('click',()=>{if(!q.value.trim()){toast('Ask Mission Control a question');return}out.textContent=reply(q.value);localStorage.setItem('dl-v8-ai',JSON.stringify({q:q.value,a:out.textContent}))});
+$$('[data-command]').forEach(b=>b.addEventListener('click',()=>{q.value=b.dataset.command;ask.click()}));
+const modal=$('#dispatch-modal');$('#open-dispatch')?.addEventListener('click',()=>modal.hidden=false);$('#close-dispatch')?.addEventListener('click',()=>modal.hidden=true);$('#save-dispatch')?.addEventListener('click',()=>{localStorage.setItem('dl-v8-dispatch',JSON.stringify({customer:$('#dispatch-customer').value,pickup:$('#dispatch-pickup').value,delivery:$('#dispatch-delivery').value,rate:$('#dispatch-rate').value,time:Date.now()}));modal.hidden=true;toast('Dispatch record saved locally')});
+$$('[data-counter]').forEach(el=>{const end=+el.dataset.counter;let v=Math.max(0,Math.floor(end*.8));const t=setInterval(()=>{v=Math.min(end,v+1);el.textContent=v.toLocaleString();if(v>=end)clearInterval(t)},60)});
+const saved=JSON.parse(localStorage.getItem('dl-v8-ai')||'null');if(saved){q.value=saved.q;out.textContent=saved.a}
+})();

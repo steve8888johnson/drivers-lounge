@@ -15,6 +15,18 @@
   "description": "Commercial-driver navigation, road intelligence, freight, community and business tools.",
   "shortcuts": [
     {
+      "name": "Mission Control",
+      "short_name": "Mission Control",
+      "url": "/mission-control",
+      "icons": [
+        {
+          "src": "/assets/drivers-lounge-logo.png",
+          "sizes": "512x512",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
       "name": "Navigate",
       "short_name": "Navigate",
       "url": "/navigation",
@@ -27,9 +39,9 @@
       ]
     },
     {
-      "name": "Driver Dashboard",
-      "short_name": "Dashboard",
-      "url": "/dashboard",
+      "name": "Road Intelligence",
+      "short_name": "Road Intel",
+      "url": "/road-tools",
       "icons": [
         {
           "src": "/assets/drivers-lounge-logo.png",
@@ -42,18 +54,6 @@
       "name": "Load Center",
       "short_name": "Loads",
       "url": "/loads",
-      "icons": [
-        {
-          "src": "/assets/drivers-lounge-logo.png",
-          "sizes": "512x512",
-          "type": "image/png"
-        }
-      ]
-    },
-    {
-      "name": "Road Intelligence",
-      "short_name": "Road Intel",
-      "url": "/road-tools",
       "icons": [
         {
           "src": "/assets/drivers-lounge-logo.png",
