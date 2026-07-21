@@ -1,5 +1,5 @@
 {
-  "name": "Drivers Lounge",
+  "name": "Drivers Lounge Driver OS",
   "short_name": "Drivers Lounge",
   "start_url": "/",
   "display": "standalone",
@@ -12,7 +12,7 @@
       "type": "image/png"
     }
   ],
-  "description": "Truck-safe navigation, live road intelligence and driver community.",
+  "description": "Commercial-driver navigation, road intelligence, freight, community and business tools.",
   "shortcuts": [
     {
       "name": "Navigate",
