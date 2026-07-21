@@ -1,11 +1,12 @@
 {
   "name": "drivers-lounge-production-beta-v2",
-  "version": "2.0.0",
+  "version": "4.0.0",
   "private": true,
   "engines": {
     "node": ">=22.0.0"
   },
   "scripts": {
     "build": "node build.mjs"
-  }
+  },
+  "description": "Drivers Lounge production beta v4 with interactive navigation"
 }

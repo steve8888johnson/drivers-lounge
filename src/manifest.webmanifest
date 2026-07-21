@@ -12,5 +12,43 @@
       "type": "image/png"
     }
   ],
-  "description": "Truck-safe navigation, live road intelligence and driver community."
+  "description": "Truck-safe navigation, live road intelligence and driver community.",
+  "shortcuts": [
+    {
+      "name": "Plan a Route",
+      "short_name": "Navigation",
+      "url": "/navigation",
+      "icons": [
+        {
+          "src": "/assets/drivers-lounge-logo.png",
+          "sizes": "512x512",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Road Intelligence",
+      "short_name": "Road Intel",
+      "url": "/road-tools",
+      "icons": [
+        {
+          "src": "/assets/drivers-lounge-logo.png",
+          "sizes": "512x512",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Driver Community",
+      "short_name": "Community",
+      "url": "/community",
+      "icons": [
+        {
+          "src": "/assets/drivers-lounge-logo.png",
+          "sizes": "512x512",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
 }
