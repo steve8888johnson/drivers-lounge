@@ -1,6 +1,6 @@
 {
   "name": "drivers-lounge-production-beta-v2",
-  "version": "9.0.0-rc.1",
+  "version": "1.0.0-groundwork",
   "private": true,
   "engines": {
     "node": ">=22.0.0"
@@ -8,5 +8,5 @@
   "scripts": {
     "build": "node build.mjs"
   },
-  "description": "Drivers Lounge RC1 unified platform groundwork"
+  "description": "Drivers Lounge 1.0 Supabase-ready product groundwork"
 }

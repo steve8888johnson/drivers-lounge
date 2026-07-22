@@ -6,13 +6,13 @@ const links=[
  ['/', 'Home'],['/mission-control','Mission Control'],['/navigation','Navigation'],
  ['/road-tools','Road Intel'],['/loads','Loads'],['/carriers','Carriers'],
  ['/community','Community'],['/pilot-cars','Pilot Cars'],['/marketplace','Marketplace'],
- ['/driver-hub','Driver Passport']
+ ['/driver-hub','Driver Passport'],['/create','Create']
 ];
 function header(){
  const h=document.createElement('header');h.className='dl-unified-header';
  h.innerHTML=`<a class="dl-unified-brand" href="/"><img src="/assets/drivers-lounge-logo.png" alt="Drivers Lounge"><span><strong>Drivers Lounge</strong><small>Built by drivers for drivers</small></span></a>
  <nav class="dl-unified-nav">${links.map(([u,n])=>`<a href="${u}" class="${path===u?'active':''}">${n}</a>`).join('')}</nav>
- <div class="dl-unified-actions"><a href="/portal">Portal</a><button id="dl-report-button">+ Report</button><a class="primary" href="/dashboard">Dashboard</a></div>`;
+ <div class="dl-unified-actions"><a href="/launch">Launch</a><a href="/portal">Portal</a><button id="dl-report-button">+ Report</button><a class="primary" href="/account">Account</a></div>`;
  return h;
 }
 function footer(){

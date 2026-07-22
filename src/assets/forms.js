@@ -1,0 +1,6 @@
+(function(){
+const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
+function toast(m){let e=$('.dl10-toast');if(!e){e=document.createElement('div');e.className='dl10-toast';document.body.appendChild(e)}e.textContent=m;e.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>e.hidden=true,2500)}
+async function uid(){return (await DLBackend.user())?.id||null}
+$$('[data-db-form]').forEach(form=>form.addEventListener('submit',async e=>{e.preventDefault();const table=form.dataset.dbForm;const fd=new FormData(form),row={};for(const [k,v] of fd.entries())if(v!=='')row[k]=v;const user=await uid();if(user){if(table==='road_reports')row.user_id=user;if(table==='community_posts')row.author_user_id=user;if(table==='marketplace_listings')row.seller_user_id=user;if(table==='pilot_car_jobs')row.poster_user_id=user}try{const res=await DLBackend.insert(table,row);toast(res.local?'Saved locally. Connect Supabase to sync.':'Saved successfully.');form.reset()}catch(err){toast(err.message)}}));
+})();
