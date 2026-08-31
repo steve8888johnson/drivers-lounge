@@ -1,66 +1,22 @@
 {
-  "name": "Drivers Lounge 1.0 Groundwork",
+  "id": "/",
+  "name": "Drivers Lounge",
   "short_name": "Drivers Lounge",
-  "start_url": "/",
+  "description": "Built by drivers for drivers. Commercial-driver community, carrier intelligence, road tools, jobs, loads and pilot-car resources.",
+  "start_url": "/dashboard",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#06101b",
-  "theme_color": "#06101b",
-  "icons": [
-    {
-      "src": "/assets/drivers-lounge-logo.png",
-      "sizes": "430x1005",
-      "type": "image/png"
-    }
-  ],
-  "description": "Account-ready commercial-driver operating platform.",
+  "orientation": "any",
+  "background_color": "#071522",
+  "theme_color": "#071522",
+  "categories": ["navigation", "business", "social"],
+  "icons": [{"src":"/assets/drivers-lounge-logo.png","sizes":"any","type":"image/png","purpose":"any maskable"}],
   "shortcuts": [
-    {
-      "name": "Mission Control",
-      "short_name": "Mission Control",
-      "url": "/mission-control",
-      "icons": [
-        {
-          "src": "/assets/drivers-lounge-logo.png",
-          "sizes": "512x512",
-          "type": "image/png"
-        }
-      ]
-    },
-    {
-      "name": "Navigation",
-      "short_name": "Navigation",
-      "url": "/navigation",
-      "icons": [
-        {
-          "src": "/assets/drivers-lounge-logo.png",
-          "sizes": "512x512",
-          "type": "image/png"
-        }
-      ]
-    },
-    {
-      "name": "Road Intelligence",
-      "short_name": "Road Intel",
-      "url": "/road-tools",
-      "icons": [
-        {
-          "src": "/assets/drivers-lounge-logo.png",
-          "sizes": "512x512",
-          "type": "image/png"
-        }
-      ]
-    },
-    {
-      "name": "Pilot Car Center",
-      "short_name": "Pilot Cars",
-      "url": "/pilot-center",
-      "icons": [
-        {
-          "src": "/assets/drivers-lounge-logo.png",
-          "sizes": "512x512",
-          "type": "image/png"
-        }
-      ]
-    }
+    {"name":"Dashboard","short_name":"Dashboard","url":"/dashboard"},
+    {"name":"Navigation","short_name":"Navigation","url":"/navigation"},
+    {"name":"Road Intelligence","short_name":"Road Intel","url":"/road-tools"},
+    {"name":"Carrier Intelligence","short_name":"Carriers","url":"/carriers"},
+    {"name":"Driver Community","short_name":"Community","url":"/community"},
+    {"name":"Pilot Car Center","short_name":"Pilot Cars","url":"/pilot-cars"}
   ]
 }
