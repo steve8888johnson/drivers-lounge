@@ -2,21 +2,23 @@
   "id": "/",
   "name": "Drivers Lounge",
   "short_name": "Drivers Lounge",
-  "description": "Built by drivers for drivers. Commercial-driver community, carrier intelligence, road tools, jobs, loads and pilot-car resources.",
-  "start_url": "/dashboard",
+  "description": "Free commercial-driver tools for navigation planning, road intelligence, carrier research, community, loads and saved offers.",
+  "start_url": "/dashboard?source=pwa",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
   "orientation": "any",
   "background_color": "#071522",
   "theme_color": "#071522",
   "categories": ["navigation", "business", "social"],
+  "prefer_related_applications": false,
   "icons": [{"src":"/assets/drivers-lounge-logo.png","sizes":"any","type":"image/png","purpose":"any maskable"}],
   "shortcuts": [
     {"name":"Dashboard","short_name":"Dashboard","url":"/dashboard"},
     {"name":"Navigation","short_name":"Navigation","url":"/navigation"},
     {"name":"Road Intelligence","short_name":"Road Intel","url":"/road-tools"},
     {"name":"Carrier Intelligence","short_name":"Carriers","url":"/carriers"},
-    {"name":"Driver Community","short_name":"Community","url":"/community"},
-    {"name":"Pilot Car Center","short_name":"Pilot Cars","url":"/pilot-cars"}
+    {"name":"Saved Offers","short_name":"Offers","url":"/saved-offers"},
+    {"name":"Driver Community","short_name":"Community","url":"/community"}
   ]
 }
