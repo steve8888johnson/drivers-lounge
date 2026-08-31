@@ -3,6 +3,9 @@
   "version": "2.0.0-rc.2",
   "private": true,
   "engines": {"node": ">=22.0.0"},
-  "scripts": {"build": "node build.mjs"},
+  "scripts": {
+    "build": "node build.mjs",
+    "import:fmcsa": "node scripts/import-fmcsa-carriers.mjs"
+  },
   "description": "Drivers Lounge commercial-driver platform — RC2 store-ready candidate"
 }
