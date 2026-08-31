@@ -1,7 +1,7 @@
 import { access, readFile } from 'node:fs/promises';
 
 const requiredFiles = [
-  'src/index.html','src/dashboard.html','src/navigation.html','src/road-tools.html','src/carriers.html','src/community.html','src/account.html','src/privacy.html','src/terms.html','src/support.html','src/delete-account.html','src/offline.html','src/manifest.webmanifest','src/sw.js','src/assets/backend.js','src/assets/auth.js','src/assets/carriers-rc2.js','src/assets/community-rc2.js','src/assets/delete-account-rc2.js','src/assets/road-intel-rc2.js','scripts/import-fmcsa-carriers.mjs','vercel.json',
+  'src/index.html','src/dashboard.html','src/navigation.html','src/road-tools.html','src/carriers.html','src/community.html','src/account.html','src/privacy.html','src/terms.html','src/support.html','src/delete-account.html','src/offline.html','src/manifest.webmanifest','src/sw.js','src/assets/backend.js','src/assets/auth.js','src/assets/carriers-rc2.js','src/assets/community-rc2.js','src/assets/delete-account-rc2.js','src/assets/road-intel-rc2.js','scripts/import-fmcsa-carriers.mjs','vercel.json','store/rc2-store-metadata.json',
   'supabase/005_rc1_platform_groundwork.sql','supabase/006_v1_auth_and_rls.sql','supabase/007_rc2_carrier_reviews.sql','supabase/008_rc2_security_and_views.sql','supabase/009_rc2_support_and_account_deletion.sql','supabase/010_rc2_load_marketplace.sql','supabase/011_rc2_driver_audio_ads.sql','supabase/012_rc2_advertiser_studio.sql','supabase/013_rc2_ad_pricing_and_billing.sql','supabase/014_rc2_advertiser_analytics.sql','supabase/014_rc2_support_hardening.sql','supabase/015_rc2_community_safety.sql','supabase/016_rc2_welcome_deals.sql','supabase/017_rc2_offer_delivery_preferences.sql'
 ];
 
@@ -41,6 +41,14 @@ const shell=await read('src/assets/rc1-design-system.js');
 if(!/beforeinstallprompt/.test(shell)||!/appinstalled/.test(shell))fail('Global shell must expose controlled PWA install handling');
 if(!/updatefound/.test(shell)||!/Reload when safely parked/.test(shell))fail('Global shell must provide non-disruptive service-worker update messaging');
 if(!errors.some(e=>e.startsWith('Global shell')))pass('PWA install and safe-update UX are wired');
+
+const store=JSON.parse(await read('store/rc2-store-metadata.json'));
+if(store.appName!=='Drivers Lounge')fail('Store metadata app name must match Drivers Lounge');
+for(const key of ['privacy','terms','support','accountDeletion'])if(!String(store.urls?.[key]||'').startsWith('/'))fail(`Store metadata must provide same-origin ${key} URL`);
+if(!Array.isArray(store.reviewNotes)||store.reviewNotes.length<5)fail('Store metadata must contain reviewer notes for safety/moderation/deletion/consent');
+if(!Array.isArray(store.dataSafety?.collectedDependingOnUse)||store.dataSafety.collectedDependingOnUse.length<5)fail('Store metadata must maintain a data-safety inventory');
+if(!Array.isArray(store.externalOwnerGates)||store.externalOwnerGates.length<5)fail('Store metadata must preserve external owner launch gates');
+if(!errors.some(e=>e.startsWith('Store metadata')))pass('App-store submission metadata is synchronized and complete enough for account-side entry');
 
 if(errors.length){console.error('\nDrivers Lounge RC2 store-readiness gate FAILED:\n');errors.forEach((e,i)=>console.error(`${i+1}. ${e}`));process.exit(1)}
 console.log('\nDrivers Lounge RC2 store-readiness gate PASSED.');
