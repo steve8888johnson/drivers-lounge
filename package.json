@@ -2,7 +2,7 @@
   "name": "drivers-lounge",
   "version": "2.0.0-rc.2",
   "private": true,
-  "engines": {"node": ">=22.0.0"},
+  "engines": {"node": "22.x"},
   "scripts": {
     "check:store": "node scripts/check-store-readiness.mjs",
     "build": "npm run check:store && node build.mjs",
