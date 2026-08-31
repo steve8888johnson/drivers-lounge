@@ -1,7 +1,7 @@
 import { access, readFile } from 'node:fs/promises';
 
 const requiredFiles = [
-  'src/index.html','src/dashboard.html','src/navigation.html','src/road-tools.html','src/carriers.html','src/community.html','src/account.html','src/privacy.html','src/terms.html','src/support.html','src/delete-account.html','src/offline.html','src/manifest.webmanifest','src/sw.js','src/assets/backend.js','src/assets/auth.js','src/assets/carriers-rc2.js','src/assets/community-rc2.js','src/assets/delete-account-rc2.js','src/assets/road-intel-rc2.js','scripts/import-fmcsa-carriers.mjs','vercel.json','store/rc2-store-metadata.json',
+  'src/index.html','src/dashboard.html','src/navigation.html','src/road-tools.html','src/carriers.html','src/community.html','src/account.html','src/privacy.html','src/terms.html','src/support.html','src/delete-account.html','src/offline.html','src/manifest.webmanifest','src/sw.js','src/assets/backend.js','src/assets/auth.js','src/assets/carriers-rc2.js','src/assets/community-rc2.js','src/assets/delete-account-rc2.js','src/assets/road-intel-rc2.js','scripts/import-fmcsa-carriers.mjs','scripts/check-supabase-preflight.mjs','vercel.json','store/rc2-store-metadata.json',
   'supabase/005_rc1_platform_groundwork.sql','supabase/006_v1_auth_and_rls.sql','supabase/007_rc2_carrier_reviews.sql','supabase/008_rc2_security_and_views.sql','supabase/009_rc2_support_and_account_deletion.sql','supabase/010_rc2_load_marketplace.sql','supabase/011_rc2_driver_audio_ads.sql','supabase/012_rc2_advertiser_studio.sql','supabase/013_rc2_ad_pricing_and_billing.sql','supabase/014_rc2_advertiser_analytics.sql','supabase/014_rc2_support_hardening.sql','supabase/015_rc2_community_safety.sql','supabase/016_rc2_welcome_deals.sql','supabase/017_rc2_offer_delivery_preferences.sql'
 ];
 
@@ -49,6 +49,12 @@ if(!Array.isArray(store.reviewNotes)||store.reviewNotes.length<5)fail('Store met
 if(!Array.isArray(store.dataSafety?.collectedDependingOnUse)||store.dataSafety.collectedDependingOnUse.length<5)fail('Store metadata must maintain a data-safety inventory');
 if(!Array.isArray(store.externalOwnerGates)||store.externalOwnerGates.length<5)fail('Store metadata must preserve external owner launch gates');
 if(!errors.some(e=>e.startsWith('Store metadata')))pass('App-store submission metadata is synchronized and complete enough for account-side entry');
+
+const pkg=JSON.parse(await read('package.json'));
+if(pkg.scripts?.['check:supabase']!=='node scripts/check-supabase-preflight.mjs')fail('package.json must expose the read-only Supabase preflight command');
+const preflight=await read('scripts/check-supabase-preflight.mjs');
+if(!/SUPABASE_URL/.test(preflight)||!/SUPABASE_SERVICE_ROLE_KEY/.test(preflight)||!/limit=0/.test(preflight))fail('Supabase preflight must remain credential-gated and read-only');
+if(!errors.some(e=>e.includes('Supabase preflight')||e.includes('package.json')))pass('Supabase post-migration preflight tooling is release-gated');
 
 if(errors.length){console.error('\nDrivers Lounge RC2 store-readiness gate FAILED:\n');errors.forEach((e,i)=>console.error(`${i+1}. ${e}`));process.exit(1)}
 console.log('\nDrivers Lounge RC2 store-readiness gate PASSED.');
