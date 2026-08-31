@@ -1,40 +1,13 @@
-
 (function(){
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const path=(location.pathname.replace(/\/$/,'')||'/');
-const links=[
- ['/', 'Home'],['/mission-control','Mission Control'],['/navigation','Navigation'],
- ['/road-tools','Road Intel'],['/loads','Loads'],['/carriers','Carriers'],
- ['/community','Community'],['/pilot-cars','Pilot Cars'],['/marketplace','Marketplace'],
- ['/driver-hub','Driver Passport'],['/create','Create']
-];
-function header(){
- const h=document.createElement('header');h.className='dl-unified-header';
- h.innerHTML=`<a class="dl-unified-brand" href="/"><img src="/assets/drivers-lounge-logo.png" alt="Drivers Lounge"><span><strong>Drivers Lounge</strong><small>Built by drivers for drivers</small></span></a>
- <nav class="dl-unified-nav">${links.map(([u,n])=>`<a href="${u}" class="${path===u?'active':''}">${n}</a>`).join('')}</nav>
- <div class="dl-unified-actions"><a href="/launch">Launch</a><a href="/portal">Portal</a><button id="dl-report-button">+ Report</button><a class="primary" href="/account">Account</a></div>`;
- return h;
-}
-function footer(){
- const f=document.createElement('footer');f.className='dl-unified-footer';
- f.innerHTML=`<div><strong>Drivers Lounge</strong><span>Built by drivers for drivers · Release Candidate 1</span></div><nav><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/support">Support</a><a href="/feedback">Feedback</a><a href="/advertise">Advertise</a></nav>`;
- return f;
-}
-function modal(){
- const m=document.createElement('div');m.className='dl-report-modal';m.id='dl-global-report';m.hidden=true;
- m.innerHTML=`<div class="dl-report-card"><div class="dl-report-head"><div><small style="color:#72adff;font-weight:900">DRIVER REPORT</small><h2>What do drivers need to know?</h2></div><button id="dl-close-report">×</button></div><div class="dl-report-options"><button data-dl-report="Scale open">⚖️ Scale open</button><button data-dl-report="Scale closed">⚖️ Scale closed</button><button data-dl-report="Parking full">🅿️ Parking full</button><button data-dl-report="Crash">💥 Crash</button><button data-dl-report="Construction">🚧 Construction</button><button data-dl-report="High wind">🌬️ High wind</button><button data-dl-report="Road closure">⛔ Road closure</button><button data-dl-report="Truck restriction">⚠️ Truck restriction</button><button data-dl-report="Fuel outage">⛽ Fuel outage</button></div></div>`;
- return m;
-}
-function toast(msg){let e=$('.dl-global-toast');if(!e){e=document.createElement('div');e.className='dl-global-toast';document.body.appendChild(e)}e.textContent=msg;e.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>e.hidden=true,2500)}
-function install(){
- const existing=$$('body > header, .header, .platform-header, .v7-header, .mc-header, .nav-app-header');
- existing.forEach((e,i)=>{if(i===0)e.replaceWith(header());else e.remove()});
- if(!$('.dl-unified-header')) document.body.prepend(header());
- document.body.prepend(Object.assign(document.createElement('div'),{className:'dl-rc-banner'}));
- if(!$('.dl-demo-notice')){const n=document.createElement('div');n.className='dl-demo-notice';n.innerHTML='<strong>Public RC1:</strong> Live-data integrations are being connected. Demo and community-submitted records are labeled throughout the platform.';const h=$('.dl-unified-header');h?.insertAdjacentElement('afterend',n)}
- const existingFoot=$$('body > footer, .footer, .v7-footer');existingFoot.forEach(x=>x.remove());document.body.appendChild(footer());document.body.appendChild(modal());
- $('#dl-report-button')?.addEventListener('click',()=>$('#dl-global-report').hidden=false);$('#dl-close-report')?.addEventListener('click',()=>$('#dl-global-report').hidden=true);
- $$('[data-dl-report]').forEach(b=>b.addEventListener('click',()=>{localStorage.setItem('dl-rc1-report',JSON.stringify({type:b.dataset.dlReport,time:Date.now()}));$('#dl-global-report').hidden=true;toast(`${b.dataset.dlReport} report saved`)}));
-}
+const links=[['/','Home'],['/mission-control','Mission Control'],['/navigation','Navigation'],['/road-tools','Road Intel'],['/loads','Loads'],['/carriers','Carriers'],['/community','Community'],['/pilot-cars','Pilot Cars'],['/marketplace','Marketplace'],['/driver-hub','Driver Passport'],['/create','Create']];
+function header(){const h=document.createElement('header');h.className='dl-unified-header';h.innerHTML=`<a class="dl-unified-brand" href="/"><img src="/assets/drivers-lounge-logo.png" alt="Drivers Lounge"><span><strong>Drivers Lounge</strong><small>Built by drivers for drivers</small></span></a><nav class="dl-unified-nav">${links.map(([u,n])=>`<a href="${u}" class="${path===u?'active':''}">${n}</a>`).join('')}</nav><div class="dl-unified-actions"><a href="/launch">Launch</a><a href="/portal">Portal</a><button id="dl-report-button">+ Report</button><a class="primary" href="/account">Account</a></div>`;return h;}
+function footer(){const f=document.createElement('footer');f.className='dl-unified-footer';f.innerHTML=`<div><strong>Drivers Lounge</strong><span>Built by drivers for drivers · RC2</span></div><nav><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/support">Support</a><a href="/feedback">Feedback</a><a href="/advertise">Advertise</a></nav>`;return f;}
+function modal(){const m=document.createElement('div');m.className='dl-report-modal';m.id='dl-global-report';m.hidden=true;m.innerHTML=`<div class="dl-report-card"><div class="dl-report-head"><div><small style="color:#72adff;font-weight:900">DRIVER REPORT</small><h2>What do drivers need to know?</h2></div><button id="dl-close-report" aria-label="Close">×</button></div><div class="dl-report-options"><button data-dl-report="scale_open">⚖️ Scale open</button><button data-dl-report="scale_closed">⚖️ Scale closed</button><button data-dl-report="parking_full">🅿️ Parking full</button><button data-dl-report="crash">💥 Crash</button><button data-dl-report="construction">🚧 Construction</button><button data-dl-report="high_wind">🌬️ High wind</button><button data-dl-report="road_closure">⛔ Road closure</button><button data-dl-report="truck_restriction">⚠️ Truck restriction</button><button data-dl-report="fuel_outage">⛽ Fuel outage</button></div><input id="dl-report-note" class="form-control" maxlength="500" placeholder="Optional location or note" style="margin-top:12px"><label style="display:flex;gap:8px;align-items:center;margin-top:10px;color:#9db0bd;font-size:11px"><input id="dl-report-location" type="checkbox"> Include my current location</label></div>`;return m;}
+function toast(msg){let e=$('.dl-global-toast');if(!e){e=document.createElement('div');e.className='dl-global-toast';document.body.appendChild(e)}e.textContent=msg;e.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>e.hidden=true,2800)}
+function coords(){return new Promise(resolve=>{if(!$('#dl-report-location')?.checked||!navigator.geolocation)return resolve({});navigator.geolocation.getCurrentPosition(p=>resolve({latitude:p.coords.latitude,longitude:p.coords.longitude}),()=>resolve({}),{enableHighAccuracy:false,timeout:6000,maximumAge:60000});});}
+async function saveReport(type){const B=window.DLBackend;const note=$('#dl-report-note')?.value.trim()||null;const pos=await coords();try{const user=await B?.user();if(B?.configured&&user){await B.insert('road_reports',{user_id:user.id,report_type:type,note,...pos,expires_at:new Date(Date.now()+8*60*60*1000).toISOString()});toast('Driver report posted.');}else{const rows=JSON.parse(localStorage.getItem('dl-local-road_reports')||'[]');rows.unshift({id:crypto.randomUUID?.()||String(Date.now()),report_type:type,note,...pos,created_at:new Date().toISOString()});localStorage.setItem('dl-local-road_reports',JSON.stringify(rows.slice(0,100)));toast(B?.configured?'Sign in to publish; report saved on this device.':'Report saved on this device.');}}catch(err){console.error(err);toast('Could not publish; report saved on this device.');}$('#dl-global-report').hidden=true;}
+function install(){const existing=$$('body > header, .header, .platform-header, .v7-header, .mc-header, .nav-app-header');existing.forEach((e,i)=>{if(i===0)e.replaceWith(header());else e.remove()});if(!$('.dl-unified-header'))document.body.prepend(header());document.body.prepend(Object.assign(document.createElement('div'),{className:'dl-rc-banner'}));if(!$('.dl-demo-notice')){const n=document.createElement('div');n.className='dl-demo-notice';n.innerHTML='<strong>Drivers Lounge RC2:</strong> Driver-submitted content is community data. Verify conditions before relying on a report.';$('.dl-unified-header')?.insertAdjacentElement('afterend',n)}const existingFoot=$$('body > footer, .footer, .v7-footer');existingFoot.forEach(x=>x.remove());document.body.appendChild(footer());document.body.appendChild(modal());$('#dl-report-button')?.addEventListener('click',()=>$('#dl-global-report').hidden=false);$('#dl-close-report')?.addEventListener('click',()=>$('#dl-global-report').hidden=true);$$('[data-dl-report]').forEach(b=>b.addEventListener('click',()=>saveReport(b.dataset.dlReport)));if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);else install();
 })();
