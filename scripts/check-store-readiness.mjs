@@ -104,7 +104,7 @@ if (!/dry.run|dryrun|dry_run/i.test(fmcsaImporter) || !/retry/i.test(fmcsaImport
 } else pass('FMCSA importer includes dry-run and retry safeguards');
 
 const sw = await read('src/sw.js');
-if (!/offline\.html/.test(sw)) fail('Service worker must use the driver-safe offline fallback');
+if (!/['"]\/offline(?:\.html)?['"]/.test(sw)) fail('Service worker must use the driver-safe offline fallback');
 if (/road-tools|road-intel|navigation/i.test(sw) && /cache\.addAll|PRECACHE/i.test(sw)) {
   console.log('ℹ Review service-worker changes carefully so live road/navigation data is never treated as authoritative cached data.');
 }
