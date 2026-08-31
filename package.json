@@ -1,12 +1,8 @@
 {
-  "name": "drivers-lounge-production-beta-v2",
-  "version": "1.0.0-groundwork",
+  "name": "drivers-lounge",
+  "version": "2.0.0-rc.2",
   "private": true,
-  "engines": {
-    "node": ">=22.0.0"
-  },
-  "scripts": {
-    "build": "node build.mjs"
-  },
-  "description": "Drivers Lounge 1.0 Supabase-ready product groundwork"
+  "engines": {"node": ">=22.0.0"},
+  "scripts": {"build": "node build.mjs"},
+  "description": "Drivers Lounge commercial-driver platform — RC2 store-ready candidate"
 }
