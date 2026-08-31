@@ -1,96 +1,20 @@
 create extension if not exists pgcrypto;
-
-create table if not exists public.profiles (
- id uuid primary key references auth.users(id) on delete cascade,
- role text not null default 'driver' check (role in ('driver','shipper','admin')),
- full_name text,
- company_name text,
- phone text,
- status text not null default 'pending' check (status in ('pending','approved','rejected','suspended')),
- is_verified boolean not null default false,
- created_at timestamptz not null default now(),
- updated_at timestamptz not null default now()
-);
-
-create table if not exists public.driver_profiles (
- user_id uuid primary key references public.profiles(id) on delete cascade,
- mc_number text,dot_number text,equipment_types text[] default '{}',home_city text,home_state text,
- available_now boolean not null default true,hazmat boolean default false,tanker boolean default false,
- rating numeric(3,2) default 0,completed_loads int default 0,insurance_verified boolean default false,
- cdl_verified boolean default false,w9_verified boolean default false
-);
-
-create table if not exists public.shipper_profiles (
- user_id uuid primary key references public.profiles(id) on delete cascade,
- contact_name text,business_phone text,business_email text,business_verified boolean default false,
- loads_posted int default 0,rating numeric(3,2) default 0
-);
-
-create table if not exists public.loads (
- id uuid primary key default gen_random_uuid(),shipper_id uuid not null references public.profiles(id) on delete cascade,
- pickup_city text not null,pickup_state text not null,delivery_city text not null,delivery_state text not null,
- pickup_address text,delivery_address text,pickup_at timestamptz,delivery_at timestamptz,commodity text,
- weight numeric default 0,equipment_required text,hazmat_required boolean default false,oversize boolean default false,
- rate_offer numeric not null default 0,payment_terms text default 'standard',notes text,
- status text not null default 'posted' check(status in ('posted','requested','assigned','in_transit','delivered','completed','canceled','disputed')),
- assigned_driver_id uuid references public.profiles(id),created_at timestamptz not null default now(),updated_at timestamptz not null default now()
-);
-create index if not exists loads_status_created_idx on public.loads(status,created_at desc);
-create index if not exists loads_shipper_idx on public.loads(shipper_id,created_at desc);
-
-create table if not exists public.load_requests (
- id uuid primary key default gen_random_uuid(),load_id uuid not null references public.loads(id) on delete cascade,
- driver_id uuid not null references public.profiles(id) on delete cascade,shipper_id uuid not null references public.profiles(id) on delete cascade,
- offer_amount numeric,message text,status text not null default 'pending' check(status in ('pending','accepted','rejected','withdrawn')),
- created_at timestamptz not null default now(),unique(load_id,driver_id)
-);
-
-create table if not exists public.chats (
- id uuid primary key default gen_random_uuid(),load_id uuid references public.loads(id) on delete cascade,
- shipper_id uuid not null references public.profiles(id) on delete cascade,driver_id uuid not null references public.profiles(id) on delete cascade,
- last_message text,last_message_at timestamptz,created_at timestamptz not null default now(),unique(load_id,shipper_id,driver_id)
-);
-create table if not exists public.messages (
- id uuid primary key default gen_random_uuid(),chat_id uuid not null references public.chats(id) on delete cascade,
- sender_id uuid not null references public.profiles(id) on delete cascade,message_text text,attachment_url text,
- message_type text not null default 'text',created_at timestamptz not null default now()
-);
-create table if not exists public.documents (
- id uuid primary key default gen_random_uuid(),owner_id uuid not null references public.profiles(id) on delete cascade,
- load_id uuid references public.loads(id) on delete cascade,document_type text not null,file_name text,file_url text not null,
- status text not null default 'pending' check(status in ('pending','verified','rejected')),created_at timestamptz not null default now()
-);
-create table if not exists public.notifications (
- id uuid primary key default gen_random_uuid(),recipient_id uuid not null references public.profiles(id) on delete cascade,
- title text not null,body text,type text,load_id uuid references public.loads(id) on delete cascade,is_read boolean default false,created_at timestamptz default now()
-);
-
-alter table public.profiles enable row level security;
-alter table public.driver_profiles enable row level security;
-alter table public.shipper_profiles enable row level security;
-alter table public.loads enable row level security;
-alter table public.load_requests enable row level security;
-alter table public.chats enable row level security;
-alter table public.messages enable row level security;
-alter table public.documents enable row level security;
-alter table public.notifications enable row level security;
-
-create policy "profiles self read" on public.profiles for select using (auth.uid()=id);
-create policy "profiles self insert" on public.profiles for insert with check (auth.uid()=id);
-create policy "profiles self update" on public.profiles for update using (auth.uid()=id);
-create policy "posted loads public authenticated read" on public.loads for select to authenticated using (status='posted' or shipper_id=auth.uid() or assigned_driver_id=auth.uid());
-create policy "shippers create loads" on public.loads for insert to authenticated with check (shipper_id=auth.uid() and exists(select 1 from public.profiles p where p.id=auth.uid() and p.role='shipper'));
-create policy "shippers update own loads" on public.loads for update to authenticated using (shipper_id=auth.uid());
-create policy "drivers create requests" on public.load_requests for insert to authenticated with check (driver_id=auth.uid() and exists(select 1 from public.profiles p where p.id=auth.uid() and p.role='driver'));
-create policy "request parties read" on public.load_requests for select to authenticated using (driver_id=auth.uid() or shipper_id=auth.uid());
-create policy "chat parties read" on public.chats for select to authenticated using (driver_id=auth.uid() or shipper_id=auth.uid());
-create policy "chat parties insert" on public.chats for insert to authenticated with check (driver_id=auth.uid() or shipper_id=auth.uid());
-create policy "message parties read" on public.messages for select to authenticated using (exists(select 1 from public.chats c where c.id=chat_id and (c.driver_id=auth.uid() or c.shipper_id=auth.uid())));
-create policy "message parties insert" on public.messages for insert to authenticated with check (sender_id=auth.uid() and exists(select 1 from public.chats c where c.id=chat_id and (c.driver_id=auth.uid() or c.shipper_id=auth.uid())));
-create policy "owners read docs" on public.documents for select to authenticated using (owner_id=auth.uid() or exists(select 1 from public.loads l where l.id=load_id and (l.shipper_id=auth.uid() or l.assigned_driver_id=auth.uid())));
-create policy "owners create docs" on public.documents for insert to authenticated with check (owner_id=auth.uid());
-create policy "recipient notifications" on public.notifications for select to authenticated using (recipient_id=auth.uid());
-
-insert into storage.buckets(id,name,public) values('documents','documents',false) on conflict(id) do nothing;
-create policy "users upload own documents" on storage.objects for insert to authenticated with check(bucket_id='documents' and (storage.foldername(name))[1]=auth.uid()::text);
-create policy "users read own documents" on storage.objects for select to authenticated using(bucket_id='documents' and (storage.foldername(name))[1]=auth.uid()::text);
+create table if not exists public.profiles(id uuid primary key references auth.users(id) on delete cascade,role text not null default 'driver' check(role in('driver','shipper','admin')),full_name text,company_name text,phone text,status text not null default 'pending' check(status in('pending','approved','rejected','suspended')),is_verified boolean not null default false,created_at timestamptz not null default now(),updated_at timestamptz not null default now());
+create table if not exists public.driver_profiles(user_id uuid primary key references public.profiles(id) on delete cascade,mc_number text,dot_number text,equipment_types text[] default '{}',home_city text,home_state text,available_now boolean not null default true,hazmat boolean default false,tanker boolean default false,rating numeric(3,2) default 0,completed_loads int default 0,insurance_verified boolean default false,cdl_verified boolean default false,w9_verified boolean default false);
+create table if not exists public.shipper_profiles(user_id uuid primary key references public.profiles(id) on delete cascade,contact_name text,business_phone text,business_email text,business_verified boolean default false,loads_posted int default 0,rating numeric(3,2) default 0);
+create table if not exists public.loads(id uuid primary key default gen_random_uuid(),shipper_id uuid not null references public.profiles(id) on delete cascade,pickup_city text not null,pickup_state text not null,delivery_city text not null,delivery_state text not null,pickup_address text,delivery_address text,pickup_at timestamptz,delivery_at timestamptz,commodity text,weight numeric default 0,equipment_required text,hazmat_required boolean default false,oversize boolean default false,rate_offer numeric not null default 0,payment_terms text default 'standard',notes text,status text not null default 'posted' check(status in('posted','requested','assigned','in_transit','delivered','completed','canceled','disputed')),assigned_driver_id uuid references public.profiles(id),created_at timestamptz not null default now(),updated_at timestamptz not null default now());
+create table if not exists public.load_requests(id uuid primary key default gen_random_uuid(),load_id uuid not null references public.loads(id) on delete cascade,driver_id uuid not null references public.profiles(id) on delete cascade,shipper_id uuid not null references public.profiles(id) on delete cascade,offer_amount numeric,message text,status text not null default 'pending' check(status in('pending','accepted','rejected','withdrawn')),created_at timestamptz not null default now(),unique(load_id,driver_id));
+create table if not exists public.chats(id uuid primary key default gen_random_uuid(),load_id uuid references public.loads(id) on delete cascade,shipper_id uuid not null references public.profiles(id) on delete cascade,driver_id uuid not null references public.profiles(id) on delete cascade,last_message text,last_message_at timestamptz,created_at timestamptz not null default now(),unique(load_id,shipper_id,driver_id));
+create table if not exists public.messages(id uuid primary key default gen_random_uuid(),chat_id uuid not null references public.chats(id) on delete cascade,sender_id uuid not null references public.profiles(id) on delete cascade,message_text text,attachment_url text,message_type text not null default 'text',created_at timestamptz not null default now());
+create table if not exists public.documents(id uuid primary key default gen_random_uuid(),owner_id uuid not null references public.profiles(id) on delete cascade,load_id uuid references public.loads(id) on delete cascade,document_type text not null,file_name text,file_url text not null,status text not null default 'pending' check(status in('pending','verified','rejected')),created_at timestamptz not null default now());
+create table if not exists public.notifications(id uuid primary key default gen_random_uuid(),recipient_id uuid not null references public.profiles(id) on delete cascade,title text not null,body text,type text,load_id uuid references public.loads(id) on delete cascade,is_read boolean default false,created_at timestamptz default now());
+create index if not exists loads_status_created_idx on public.loads(status,created_at desc);create index if not exists loads_shipper_idx on public.loads(shipper_id,created_at desc);create index if not exists req_load_idx on public.load_requests(load_id,created_at desc);create index if not exists msg_chat_idx on public.messages(chat_id,created_at);
+alter table public.profiles enable row level security;alter table public.driver_profiles enable row level security;alter table public.shipper_profiles enable row level security;alter table public.loads enable row level security;alter table public.load_requests enable row level security;alter table public.chats enable row level security;alter table public.messages enable row level security;alter table public.documents enable row level security;alter table public.notifications enable row level security;
+create policy "profiles self read" on public.profiles for select using(auth.uid()=id);create policy "profiles self insert" on public.profiles for insert with check(auth.uid()=id);create policy "profiles self update" on public.profiles for update using(auth.uid()=id);
+create policy "posted and related loads read" on public.loads for select to authenticated using(status in('posted','requested') or shipper_id=auth.uid() or assigned_driver_id=auth.uid());create policy "shippers create loads" on public.loads for insert to authenticated with check(shipper_id=auth.uid() and exists(select 1 from public.profiles p where p.id=auth.uid() and p.role='shipper'));create policy "shippers update own loads" on public.loads for update to authenticated using(shipper_id=auth.uid());create policy "assigned drivers update load" on public.loads for update to authenticated using(assigned_driver_id=auth.uid());
+create policy "drivers create requests" on public.load_requests for insert to authenticated with check(driver_id=auth.uid() and exists(select 1 from public.profiles p where p.id=auth.uid() and p.role='driver'));create policy "request parties read" on public.load_requests for select to authenticated using(driver_id=auth.uid() or shipper_id=auth.uid());create policy "request shipper updates" on public.load_requests for update to authenticated using(shipper_id=auth.uid());create policy "request driver updates" on public.load_requests for update to authenticated using(driver_id=auth.uid());
+create policy "chat parties read" on public.chats for select to authenticated using(driver_id=auth.uid() or shipper_id=auth.uid());create policy "chat parties insert" on public.chats for insert to authenticated with check(driver_id=auth.uid() or shipper_id=auth.uid());create policy "chat parties update" on public.chats for update to authenticated using(driver_id=auth.uid() or shipper_id=auth.uid());
+create policy "message parties read" on public.messages for select to authenticated using(exists(select 1 from public.chats c where c.id=chat_id and(c.driver_id=auth.uid() or c.shipper_id=auth.uid())));create policy "message parties insert" on public.messages for insert to authenticated with check(sender_id=auth.uid() and exists(select 1 from public.chats c where c.id=chat_id and(c.driver_id=auth.uid() or c.shipper_id=auth.uid())));
+create policy "owners read docs" on public.documents for select to authenticated using(owner_id=auth.uid() or exists(select 1 from public.loads l where l.id=load_id and(l.shipper_id=auth.uid() or l.assigned_driver_id=auth.uid())));create policy "owners create docs" on public.documents for insert to authenticated with check(owner_id=auth.uid());create policy "recipient notifications" on public.notifications for select to authenticated using(recipient_id=auth.uid());create policy "users create notifications" on public.notifications for insert to authenticated with check(true);
+insert into storage.buckets(id,name,public) values('documents','documents',false) on conflict(id) do nothing;create policy "users upload own documents" on storage.objects for insert to authenticated with check(bucket_id='documents' and(storage.foldername(name))[1]=auth.uid()::text);create policy "users read own documents" on storage.objects for select to authenticated using(bucket_id='documents' and(storage.foldername(name))[1]=auth.uid()::text);
+alter publication supabase_realtime add table public.messages;
