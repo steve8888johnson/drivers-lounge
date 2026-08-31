@@ -7,6 +7,7 @@
     "check:store": "node scripts/check-store-readiness.mjs",
     "check:store-submission": "node scripts/check-store-submission.mjs",
     "check:links": "node scripts/check-internal-links.mjs",
+    "check:supabase": "node scripts/check-supabase-preflight.mjs",
     "build": "npm run check:store && npm run check:store-submission && npm run check:links && node build.mjs",
     "import:fmcsa": "node scripts/import-fmcsa-carriers.mjs"
   },
