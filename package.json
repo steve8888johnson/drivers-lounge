@@ -4,7 +4,8 @@
   "private": true,
   "engines": {"node": ">=22.0.0"},
   "scripts": {
-    "build": "node build.mjs",
+    "check:store": "node scripts/check-store-readiness.mjs",
+    "build": "npm run check:store && node build.mjs",
     "import:fmcsa": "node scripts/import-fmcsa-carriers.mjs"
   },
   "description": "Drivers Lounge commercial-driver platform — RC2 store-ready candidate"
