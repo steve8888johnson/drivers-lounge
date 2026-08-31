@@ -5,7 +5,8 @@
   "engines": {"node": "22.x"},
   "scripts": {
     "check:store": "node scripts/check-store-readiness.mjs",
-    "build": "npm run check:store && node build.mjs",
+    "check:links": "node scripts/check-internal-links.mjs",
+    "build": "npm run check:store && npm run check:links && node build.mjs",
     "import:fmcsa": "node scripts/import-fmcsa-carriers.mjs"
   },
   "description": "Drivers Lounge commercial-driver platform — RC2 store-ready candidate"
