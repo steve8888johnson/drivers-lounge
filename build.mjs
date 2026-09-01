@@ -10,6 +10,18 @@ await rm('dist',{recursive:true,force:true});
 await mkdir('dist',{recursive:true});
 await cp('src','dist',{recursive:true});
 
+const supabaseUrl=process.env.NEXT_PUBLIC_SUPABASE_URL||process.env.SUPABASE_URL||'';
+const supabaseAnonKey=process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||process.env.SUPABASE_ANON_KEY||'';
+if(!supabaseUrl||!supabaseAnonKey)throw new Error('Public Supabase configuration is missing.');
+if(!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/i.test(supabaseUrl))throw new Error('Public Supabase URL is invalid.');
+const publicConfig=`window.DRIVERS_LOUNGE_CONFIG = ${JSON.stringify({
+  supabaseUrl,
+  supabaseAnonKey,
+  environment:process.env.VERCEL_ENV||'development',
+  appName:'Drivers Lounge'
+},null,2)};\n`;
+await writeFile('dist/config.js',publicConfig,'utf8');
+
 const mobileHeadTags=[
   '<meta name="application-name" content="Drivers Lounge">',
   '<meta name="theme-color" content="#071522">',
