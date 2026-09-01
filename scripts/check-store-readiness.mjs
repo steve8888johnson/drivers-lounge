@@ -28,7 +28,8 @@ if(!/advisory/i.test(terms)||!/posted signs|official/i.test(terms))fail('Terms m
 const support=await read('src/support.html'); if(!/support/i.test(support)||!/email/i.test(support))fail('Support page must expose support intake and email contact context'); else pass('Support surface is present');
 const deletion=await read('src/delete-account.html'); includesAll(deletion,['delete-account-rc2.js'],'Account deletion page'); if(!/delete|deletion/i.test(deletion))fail('Account deletion page must clearly describe deletion'); else pass('Public account-deletion surface is present');
 const account=await read('src/account.html'); if(!/delete-account/i.test(account))fail('In-app Account page must link to account deletion'); else pass('Account page exposes deletion access');
-const communityJs=await read('src/assets/community-rc2.js'); if(!/report/i.test(communityJs)||!/delete|remove/i.test(communityJs))fail('Community client must retain report and author-removal controls'); else pass('Community moderation controls are wired');
+const communityJs=await read('src/assets/community-rc2.js');
+if(!/report/i.test(communityJs)||!/delete|remove/i.test(communityJs)||!/block|hide driver/i.test(communityJs))fail('Community client must retain report, author-removal, and abusive-user blocking controls'); else pass('Community reporting, author removal, and user blocking controls are wired');
 const roadIntelJs=await read('src/assets/road-intel-rc2.js'); if(!/fresh|stale|expire/i.test(roadIntelJs))fail('Road intelligence must contain freshness/staleness handling'); else pass('Road intelligence includes stale-data protection');
 const fmcsaImporter=await read('scripts/import-fmcsa-carriers.mjs'); if(!/dry.run|dryrun|dry_run/i.test(fmcsaImporter)||!/retry/i.test(fmcsaImporter))fail('FMCSA importer must retain dry-run and retry support'); else pass('FMCSA importer includes dry-run and retry safeguards');
 const sw=await read('src/sw.js'); if(!/['"]\/offline(?:\.html)?['"]/.test(sw))fail('Service worker must use the driver-safe offline fallback'); if(!errors.some(e=>e.startsWith('Service worker')))pass('Offline fallback is wired');
@@ -46,6 +47,7 @@ const store=JSON.parse(await read('store/rc2-store-metadata.json'));
 if(store.appName!=='Drivers Lounge')fail('Store metadata app name must match Drivers Lounge');
 for(const key of ['privacy','terms','support','accountDeletion'])if(!String(store.urls?.[key]||'').startsWith('/'))fail(`Store metadata must provide same-origin ${key} URL`);
 if(!Array.isArray(store.reviewNotes)||store.reviewNotes.length<5)fail('Store metadata must contain reviewer notes for safety/moderation/deletion/consent');
+if(!store.reviewNotes?.some(note=>/hide|block/i.test(note)))fail('Store metadata must document Community abusive-user hiding/blocking behavior for reviewers');
 if(!Array.isArray(store.dataSafety?.collectedDependingOnUse)||store.dataSafety.collectedDependingOnUse.length<5)fail('Store metadata must maintain a data-safety inventory');
 if(!Array.isArray(store.externalOwnerGates)||store.externalOwnerGates.length<5)fail('Store metadata must preserve external owner launch gates');
 if(!errors.some(e=>e.startsWith('Store metadata')))pass('App-store submission metadata is synchronized and complete enough for account-side entry');
