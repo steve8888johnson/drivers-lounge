@@ -13,7 +13,8 @@
   "reviewNotes": [
     "Routing and road intelligence are advisory; posted signs, permits and official restrictions control.",
     "Location is requested only for features that need it and is not declared as background location unless a native build later adds that capability.",
-    "Community content is user-generated; signed-in users can report posts and authors can remove their own posts.",
+    "Community content is user-generated; signed-in users can report posts, authors can remove their own posts, and users can immediately hide another driver's Community content on their device.",
+    "The Community hidden-driver list is stored locally on the device/browser and is not uploaded as a server-side profile attribute.",
     "Account deletion is available from the Account screen and from a public web deletion page.",
     "Saved-offer email/SMS delivery is opt-in; in-app saving does not require marketing consent.",
     "Drivers Lounge Free Finds are curated public offers and are not represented as paid sponsorships."
