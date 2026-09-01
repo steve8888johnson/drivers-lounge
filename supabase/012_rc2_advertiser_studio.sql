@@ -13,8 +13,16 @@ drop policy if exists "advertisers read own campaigns" on ad_campaigns;
 create policy "advertisers read own campaigns" on ad_campaigns for select to authenticated using (submitted_by=auth.uid());
 
 drop policy if exists "authenticated upload ad images" on storage.objects;
-create policy "authenticated upload ad images" on storage.objects for insert to authenticated with check (bucket_id='ad-images');
+create policy "authenticated upload ad images" on storage.objects for insert to authenticated
+with check (
+  bucket_id='ad-images'
+  and (storage.foldername(name))[1]=auth.uid()::text
+);
 drop policy if exists "authenticated upload ad audio" on storage.objects;
-create policy "authenticated upload ad audio" on storage.objects for insert to authenticated with check (bucket_id='ad-audio');
+create policy "authenticated upload ad audio" on storage.objects for insert to authenticated
+with check (
+  bucket_id='ad-audio'
+  and (storage.foldername(name))[1]=auth.uid()::text
+);
 
 grant insert on ad_campaigns to authenticated;
