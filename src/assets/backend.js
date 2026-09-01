@@ -12,6 +12,7 @@ window.DLBackend={configured,client,
  async reset(email){return requireClient().auth.resetPasswordForEmail(email,{redirectTo:location.origin+'/account'})},
  async upsert(table,row,conflict){const q=requireClient().from(table).upsert(row,conflict?{onConflict:conflict}:undefined).select().single();const {data,error}=await q;if(error)throw error;return {data,local:false}},
  async insert(table,row){const {data,error}=await requireClient().from(table).insert(row).select().single();if(error)throw error;return {data,local:false}},
+ async update(table,values,eq={}){let q=requireClient().from(table).update(values);for(const [k,v] of Object.entries(eq))q=q.eq(k,v);const {data,error}=await q.select();if(error)throw error;return {data:data||[],local:false}},
  async list(table,opts={}){if(!client)return [];let q=client.from(table).select(opts.select||'*').limit(opts.limit||50);if(opts.eq)for(const [k,v] of Object.entries(opts.eq))q=q.eq(k,v);if(opts.order)q=q.order(opts.order,{ascending:opts.ascending===true});const {data,error}=await q;if(error)throw error;return data||[]}
 };
 })();
