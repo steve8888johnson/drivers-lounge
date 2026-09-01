@@ -48,18 +48,20 @@ Do not declare background location, contacts, photos, microphone, payments, adve
 Apply in order and verify in a DEVELOPMENT Supabase project first:
 1. `005_rc1_platform_groundwork.sql`
 2. `006_v1_auth_and_rls.sql`
-3. `007_rc2_carrier_reviews.sql`
-4. `008_rc2_security_and_views.sql`
-5. `009_rc2_support_and_account_deletion.sql`
-6. `010_rc2_load_marketplace.sql`
-7. `011_rc2_driver_audio_ads.sql`
-8. `012_rc2_advertiser_studio.sql`
-9. `013_rc2_ad_pricing_and_billing.sql`
-10. `014_rc2_advertiser_analytics.sql`
-11. `014_rc2_support_hardening.sql`
-12. `015_rc2_community_safety.sql`
-13. `016_rc2_welcome_deals.sql`
-14. `017_rc2_offer_delivery_preferences.sql`
+3. `006a_rc2_legacy_schema_bridge.sql` (only moves incompatible, empty prototype tables)
+4. `007_rc2_carrier_reviews.sql`
+5. `008_rc2_security_and_views.sql`
+6. `009_rc2_support_and_account_deletion.sql`
+7. `010_rc2_load_marketplace.sql`
+8. `011_rc2_driver_audio_ads.sql`
+9. `012_rc2_advertiser_studio.sql`
+10. `013_rc2_ad_pricing_and_billing.sql`
+11. `014_rc2_advertiser_analytics.sql`
+12. `014_rc2_support_hardening.sql`
+13. `015_rc2_community_safety.sql`
+14. `016_rc2_welcome_deals.sql`
+15. `017_rc2_offer_delivery_preferences.sql`
+16. `018_rc2_live_schema_reconciliation.sql`
 
 Note: two historical migrations use the `014` prefix; preserve their filenames and execute both in the sequence above.
 
