@@ -1,3 +1,5 @@
+import { requiredSupabaseTables } from './supabase-contract.mjs';
+
 const url=(process.env.SUPABASE_URL||'').replace(/\/$/,'');
 const key=process.env.SUPABASE_SERVICE_ROLE_KEY||'';
 
@@ -7,11 +9,6 @@ if(!url||!key){
 }
 
 const headers={apikey:key,Authorization:`Bearer ${key}`};
-const requiredTables=[
-  'profiles','driver_passports','business_accounts','road_reports','loads','community_rooms','community_posts',
-  'carriers','carrier_reviews','carrier_review_reports','support_requests','account_deletion_requests',
-  'load_listings','ad_campaigns','ad_events','saved_offers','community_post_reports'
-];
 
 const results=[];
 async function probe(label,target,options={}){
@@ -36,7 +33,7 @@ console.log('Drivers Lounge RC2 Supabase preflight (read-only)');
 console.log(`Target: ${new URL(url).host}`);
 
 await probe('Auth health',`${url}/auth/v1/health`,{method:'GET'});
-for(const table of requiredTables){
+for(const table of requiredSupabaseTables){
   await probe(`REST table ${table}`,`${url}/rest/v1/${table}?select=*&limit=0`,{method:'GET',headers:{Prefer:'count=none'}});
 }
 

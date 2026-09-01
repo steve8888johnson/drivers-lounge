@@ -9,8 +9,9 @@
     "check:links": "node scripts/check-internal-links.mjs",
     "check:syntax": "node scripts/check-js-syntax.mjs",
     "check:stripe": "node scripts/check-stripe-webhook.mjs",
+    "check:supabase-contract": "node scripts/check-supabase-contract.mjs",
     "check:supabase": "node scripts/check-supabase-preflight.mjs",
-    "build": "npm run check:syntax && npm run check:stripe && npm run check:store && npm run check:store-submission && npm run check:links && node build.mjs",
+    "build": "npm run check:syntax && npm run check:stripe && npm run check:supabase-contract && npm run check:store && npm run check:store-submission && npm run check:links && node build.mjs",
     "import:fmcsa": "node scripts/import-fmcsa-carriers.mjs"
   },
   "description": "Drivers Lounge commercial-driver platform — RC2 store-ready candidate"
