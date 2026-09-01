@@ -16,7 +16,7 @@ function renderBlockControls(){
   if(clear)clear.onclick=()=>{localStorage.removeItem(BLOCK_KEY);note('Hidden-driver list cleared.');if(selectedRoom)openRoom(selectedRoom);};
 }
 async function requireUser(){const u=currentUser||await B?.user();if(!u)throw new Error('Sign in from Account to participate in Community.');currentUser=u;return u;}
-async function loadRooms(){try{const rows=await B.list('community_rooms',{limit:100,order:'created_at'});roomsEl.innerHTML=rows.length?rows.map(r=>`<button class="community-room" data-room="${esc(r.id)}"><span>🚛</span><span><strong>${esc(r.name)}</strong><small>${esc(r.topic||'Driver discussion')}</small></span></button>`).join(''):'<p class="page-subtitle">No rooms yet. Start the first one.</p>';roomsEl.querySelectorAll('[data-room]').forEach(x=>x.onclick=()=>openRoom(rows.find(r=>String(r.id)===x.dataset.room));if(!selectedRoom&&rows[0])openRoom(rows[0]);}catch(e){note(e.message,true)}}
+async function loadRooms(){try{const rows=await B.list('community_rooms',{limit:100,order:'created_at'});roomsEl.innerHTML=rows.length?rows.map(r=>`<button class="community-room" data-room="${esc(r.id)}"><span>🚛</span><span><strong>${esc(r.name)}</strong><small>${esc(r.topic||'Driver discussion')}</small></span></button>`).join(''):'<p class="page-subtitle">No rooms yet. Start the first one.</p>';roomsEl.querySelectorAll('[data-room]').forEach(x=>x.onclick=()=>openRoom(rows.find(r=>String(r.id)===x.dataset.room)));if(!selectedRoom&&rows[0])openRoom(rows[0]);}catch(e){note(e.message,true)}}
 function postMarkup(p){
   const own=currentUser&&String(currentUser.id)===String(p.author_user_id);
   const actions=own
