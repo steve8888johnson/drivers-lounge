@@ -1,0 +1,3 @@
+import {NextResponse} from 'next/server';import {createClient} from '@/lib/supabase/server';
+export const dynamic='force-dynamic';
+export async function GET(){const s=await createClient();const{error}=await s.from('ha_loads').select('id',{head:true,count:'exact'}).limit(1);const stripeKey=process.env.STRIPE_SECRET_KEY||process.env.STRIPE_SECRET||process.env.STRIPE_API_KEY;return NextResponse.json({app:'highway-automation',status:error?'degraded':'ok',database:error?'error':'connected',stripe:stripeKey?'configured':'missing',stripeWebhook:process.env.STRIPE_WEBHOOK_SECRET?'configured':'missing',supabaseAdmin:process.env.SUPABASE_SERVICE_ROLE_KEY?'configured':'missing',version:'mvp-rc1'},{status:error?503:200,headers:{'cache-control':'no-store'}})}

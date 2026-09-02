@@ -1,0 +1,3 @@
+import {NextResponse} from 'next/server';import {createClient} from '@/lib/supabase/server';
+export const dynamic='force-dynamic';
+export async function GET(req:Request){const s=await createClient();const id=new URL(req.url).searchParams.get('id');if(!id)return NextResponse.redirect(new URL('/',req.url));const{data}=await s.from('ha_advertising_campaigns').select('cta_url,placement').eq('id',id).single();if(!data?.cta_url)return NextResponse.redirect(new URL('/',req.url));await s.from('ha_ad_events').insert({campaign_id:id,event_type:'click',placement:data.placement});return NextResponse.redirect(data.cta_url)}
