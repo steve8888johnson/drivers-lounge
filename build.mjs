@@ -10,10 +10,12 @@ await rm('dist',{recursive:true,force:true});
 await mkdir('dist',{recursive:true});
 await cp('src','dist',{recursive:true});
 
-const supabaseUrl=process.env.NEXT_PUBLIC_SUPABASE_URL||process.env.SUPABASE_URL||'';
-const supabaseAnonKey=process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||process.env.SUPABASE_ANON_KEY||'';
-if(!supabaseUrl||!supabaseAnonKey)throw new Error('Public Supabase configuration is missing.');
-if(!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/i.test(supabaseUrl))throw new Error('Public Supabase URL is invalid.');
+const normalizeEnv=value=>String(value||'').trim().replace(/^['"]|['"]$/g,'').replace(/\/$/,'');
+const supabaseUrl=[process.env.NEXT_PUBLIC_SUPABASE_URL,process.env.SUPABASE_URL]
+  .map(normalizeEnv)
+  .find(value=>/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(value))||'';
+const supabaseAnonKey=normalizeEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||process.env.SUPABASE_ANON_KEY);
+if(!supabaseUrl||!supabaseAnonKey)throw new Error('Valid public Supabase configuration is missing.');
 const publicConfig=`window.DRIVERS_LOUNGE_CONFIG = ${JSON.stringify({
   supabaseUrl,
   supabaseAnonKey,
