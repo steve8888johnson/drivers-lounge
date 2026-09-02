@@ -1,12 +1,18 @@
 {
-  "name": "drivers-lounge-production-beta-v2",
-  "version": "1.0.0-groundwork",
+  "name": "drivers-lounge",
+  "version": "2.0.0-rc.2",
   "private": true,
-  "engines": {
-    "node": ">=22.0.0"
-  },
+  "engines": {"node": "22.x"},
   "scripts": {
-    "build": "node build.mjs"
+    "check:store": "node scripts/check-store-readiness.mjs",
+    "check:store-submission": "node scripts/check-store-submission.mjs",
+    "check:links": "node scripts/check-internal-links.mjs",
+    "check:syntax": "node scripts/check-js-syntax.mjs",
+    "check:stripe": "node scripts/check-stripe-webhook.mjs",
+    "check:supabase-contract": "node scripts/check-supabase-contract.mjs",
+    "check:supabase": "node scripts/check-supabase-preflight.mjs",
+    "build": "npm run check:syntax && npm run check:stripe && npm run check:supabase-contract && npm run check:store && npm run check:store-submission && npm run check:links && node build.mjs",
+    "import:fmcsa": "node scripts/import-fmcsa-carriers.mjs"
   },
-  "description": "Drivers Lounge 1.0 Supabase-ready product groundwork"
+  "description": "Drivers Lounge commercial-driver platform — RC2 store-ready candidate"
 }
