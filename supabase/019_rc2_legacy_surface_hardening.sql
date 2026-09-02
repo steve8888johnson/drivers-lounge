@@ -26,15 +26,8 @@ begin
   end loop;
 end $$;
 
--- PostGIS owns spatial_ref_sys. Keep read compatibility but remove direct writes.
-alter table public.spatial_ref_sys enable row level security;
-drop policy if exists "spatial reference read only" on public.spatial_ref_sys;
-create policy "spatial reference read only"
-on public.spatial_ref_sys for select
-to anon, authenticated
-using (true);
-revoke all on public.spatial_ref_sys from anon, authenticated;
-grant select on public.spatial_ref_sys to anon, authenticated;
+-- spatial_ref_sys is owned and managed by the PostGIS extension. Supabase
+-- project migrations are not its owner and must not alter extension objects.
 
 -- Legacy ownership policies need only the authenticated user's UUID, not a
 -- privileged lookup through profiles.
