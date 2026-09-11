@@ -34,7 +34,7 @@ async function refresh(){
    msg('This email link has expired or has already been used. Sign in with your password, or request a fresh reset or confirmation email below.','error');
    history.replaceState(null,'',location.pathname);
   }else if(recovery){msg(user?'Choose a new password below to finish resetting your account.':'Open the newest password-reset email to continue. If that link has expired, request a new one below.',user?'info':'warning');}
-  else if(query.get('confirmed'))msg(user?'Email confirmed. Your account is ready.':'Email confirmed. Sign in to continue.','success');
+  else if(query.get('confirmed'))msg(user?'Email confirmed. Your account is ready.':'You returned from an email link. Sign in to continue; request a fresh confirmation if needed.','success');
   if(user&&!recovery)await loadCommunicationPreferences(user);
   const onboard=$('#onboarding-form');
   if(onboard&&user&&!onboard.dataset.loaded){const rows=await B.list('profiles',{eq:{id:user.id},limit:1});const p=rows[0];if(p){onboard.elements.name.value=p.display_name||'';onboard.elements.company.value=p.company_name||'';onboard.elements.role.value=['driver','carrier','pilot_car','business'].includes(p.role)?p.role:'driver';}onboard.dataset.loaded='1';}

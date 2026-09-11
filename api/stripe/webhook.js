@@ -76,34 +76,21 @@ function billingUpdateFor(event) {
     case 'payment_intent.payment_failed':
       return { billing_status: 'unpaid', payment_reference: object.payment_intent || object.id };
     case 'charge.refunded':
+      if(!object.refunded || object.amount_refunded<object.amount)return null;
       return { billing_status: 'refunded', payment_reference: object.payment_intent || object.id };
     default:
       return null;
   }
 }
 
-async function updateCampaign(campaignId, patch) {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error('Supabase webhook environment is not configured');
-  }
-
-  const response = await fetch(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/ad_campaigns?id=eq.${encodeURIComponent(campaignId)}`, {
-    method: 'PATCH',
-    headers: {
-      apikey: serviceRoleKey,
-      Authorization: `Bearer ${serviceRoleKey}`,
-      'Content-Type': 'application/json',
-      Prefer: 'return=minimal'
-    },
-    body: JSON.stringify(patch)
-  });
-
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw new Error(`Supabase campaign update failed (${response.status})${detail ? `: ${detail.slice(0, 300)}` : ''}`);
-  }
+async function updateCampaign(campaignId, patch, event) {
+ const supabaseUrl=process.env.SUPABASE_URL,serviceRoleKey=process.env.SUPABASE_SERVICE_ROLE_KEY;
+ if(!supabaseUrl||!serviceRoleKey)throw Error('Webhook configuration unavailable');
+ const response=await fetch(supabaseUrl.replace(/\/$/,'')+'/rest/v1/rpc/apply_ad_billing_event',{
+ method:'POST',headers:{apikey:serviceRoleKey,Authorization:'Bearer '+serviceRoleKey,'Content-Type':'application/json'},
+ body:JSON.stringify({p_event_id:event.id,p_campaign_id:campaignId,p_event_created:event.created,p_billing_status:patch.billing_status,p_payment_reference:patch.payment_reference,p_submitted_by:event.data.object.metadata.submitted_by})});
+ if(!response.ok)throw Error('Billing event transaction failed ('+response.status+')');
+ return response.json();
 }
 
 module.exports = async function handler(req, res) {
@@ -148,6 +135,9 @@ module.exports = async function handler(req, res) {
   if (!event?.id || !event?.type) return send(res, 400, { ok: false, error: 'Invalid Stripe event' });
   if (!HANDLED_EVENTS.has(event.type)) return send(res, 200, { ok: true, received: event.id, ignored: event.type });
 
+  const stripeKey=process.env.STRIPE_SECRET_KEY||'';
+  if(!/^sk_(test|live)_/.test(stripeKey))return send(res,503,{ok:false,error:'Payment mode is not configured'});
+  if(event.livemode!==stripeKey.startsWith('sk_live_'))return send(res,400,{ok:false,error:'Payment mode mismatch'});
   const campaignId = campaignIdFor(event);
   const patch = billingUpdateFor(event);
   if (!campaignId || !patch) {
@@ -159,9 +149,15 @@ module.exports = async function handler(req, res) {
     });
   }
 
+  const object=event.data.object,uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if(!uuid.test(campaignId)||!uuid.test(object.metadata?.submitted_by||'')||!Number.isInteger(event.created))return send(res,400,{ok:false,error:'Invalid campaign event metadata'});
+  if(patch.billing_status==='paid'){
+    const amount=object.amount_total??object.amount_received??object.amount,quoted=Number(object.metadata.quoted_amount_cents);
+    if(!Number.isInteger(amount)||amount<50||amount!==quoted||object.currency!=='usd')return send(res,400,{ok:false,error:'Payment amount or currency mismatch'});
+  }
   try {
-    await updateCampaign(campaignId, patch);
-    return send(res, 200, { ok: true, received: event.id, handled: event.type, campaignId, billingStatus: patch.billing_status });
+    const outcome=await updateCampaign(campaignId, patch, event);
+    return send(res, 200, { ok: true, received: event.id, handled: event.type, campaignId, outcome });
   } catch (error) {
     console.error('Stripe webhook writeback failed', { eventId: event.id, eventType: event.type, campaignId, message: error.message });
     return send(res, 500, { ok: false, error: 'Webhook processing failed' });

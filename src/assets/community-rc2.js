@@ -3,7 +3,7 @@ const B=window.DLBackend;
 const roomsEl=document.querySelector('#community-rooms'),roomForm=document.querySelector('#room-form'),postsEl=document.querySelector('#community-posts'),postForm=document.querySelector('#post-form'),roomTitle=document.querySelector('#selected-room-title');
 let selectedRoom=null,currentUser=null;
 const BLOCK_KEY='drivers-lounge-community-blocked-users-v1';
-const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const note=(m,bad=false)=>{const e=document.querySelector('#community-status');if(e){e.textContent=m;e.dataset.bad=bad?'1':'0';}};
 const blockedUsers=()=>{try{return new Set(JSON.parse(localStorage.getItem(BLOCK_KEY)||'[]').map(String));}catch{return new Set();}};
 const saveBlocked=set=>localStorage.setItem(BLOCK_KEY,JSON.stringify([...set]));
@@ -29,7 +29,7 @@ async function openRoom(room){
   try{
     currentUser=await B.user();
     const rows=await B.list('community_posts',{limit:100,eq:{room_id:room.id},order:'created_at'}),blocked=blockedUsers();
-    const visible=rows.filter(p=>!blocked.has(String(p.author_user_id)));
+    const visible=rows.filter(p=>p.status==='published'&&!blocked.has(String(p.author_user_id)));
     postsEl.innerHTML=visible.length?visible.map(postMarkup).join(''):'<p class="page-subtitle">No visible posts in this room yet.</p>';
     postsEl.querySelectorAll('[data-report]').forEach(b=>b.onclick=()=>reportPost(b.dataset.report));
     postsEl.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>removePost(b.dataset.remove));

@@ -71,4 +71,4 @@ if(!errors.some(e=>e.includes('Supabase preflight')||e.includes('package.json'))
 
 if(errors.length){console.error('\nDrivers Lounge RC2 store-readiness gate FAILED:\n');errors.forEach((e,i)=>console.error(`${i+1}. ${e}`));process.exit(1)}
 console.log('\nDrivers Lounge RC2 store-readiness gate PASSED.');
-console.log('External launch gates still require owner action: Supabase migrations/QA, store accounts/signing, final legal contacts, native physical-device tests, and explicit production approval.');
+console.log('External launch gates still require owner action: Supabase migrations/QA, store accounts/signing, final legal contacts, native physical-device tests, and release verification.');
