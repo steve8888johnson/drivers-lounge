@@ -87,6 +87,15 @@
           "value": "no-store, max-age=0"
         }
       ]
+    },
+    {
+      "source": "/api/cameras-nearby",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "private, max-age=60"
+        }
+      ]
     }
   ]
 }
