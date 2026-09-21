@@ -1,0 +1,57 @@
+{
+  "release": "2.0.0-rc.2",
+  "appName": "Drivers Lounge",
+  "subtitle": "Free tools and community for commercial drivers",
+  "shortDescription": "Driver-first navigation planning, road intelligence, carrier research, community tools and saved offers.",
+  "categories": ["Navigation", "Business", "Social"],
+  "urls": {
+    "privacy": "/privacy",
+    "terms": "/terms",
+    "support": "/support",
+    "accountDeletion": "/delete-account"
+  },
+  "reviewNotes": [
+    "Routing and road intelligence are advisory; posted signs, permits and official restrictions control.",
+    "Location is requested only for features that need it and is not declared as background location unless a native build later adds that capability.",
+    "Community content is user-generated; signed-in users can report posts, authors can remove their own posts, and users can immediately hide another driver's Community content on their device.",
+    "The Community hidden-driver list is stored locally on the device/browser and is not uploaded as a server-side profile attribute.",
+    "Account deletion is available from the Account screen and from a public web deletion page.",
+    "Saved-offer email/SMS delivery is opt-in; in-app saving does not require marketing consent.",
+    "Drivers Lounge Free Finds are curated public offers and are not represented as paid sponsorships."
+  ],
+  "dataSafety": {
+    "collectedDependingOnUse": [
+      "email/account identifier",
+      "profile and business information supplied by the user",
+      "driver credential/profile information supplied by the user",
+      "location when the user permits a location-dependent feature",
+      "community posts and content reports",
+      "carrier reviews and review reports",
+      "road reports",
+      "marketplace/load/job/pilot-car content submitted by users",
+      "support requests",
+      "advertising interaction events and saved offers",
+      "optional mobile number and communication preferences"
+    ],
+    "doNotDeclareUnlessNativeBuildUses": [
+      "background location",
+      "contacts",
+      "microphone",
+      "photos/media library",
+      "SMS access",
+      "advertising identifier",
+      "cross-app tracking",
+      "payments"
+    ]
+  },
+  "externalOwnerGates": [
+    "Apple Developer/App Store Connect access and signing",
+    "Google Play Console access and signing",
+    "final bundle/package identifiers",
+    "final legal/business/support contact information",
+    "production Supabase migrations and authenticated QA",
+    "physical iOS/Android device testing",
+    "store screenshots and final artwork",
+    "explicit production promotion approval"
+  ]
+}
