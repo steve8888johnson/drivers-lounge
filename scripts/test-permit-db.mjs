@@ -1,0 +1,56 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { PGlite } from '@electric-sql/pglite';
+
+test('private crew database enforces membership, ownership, invitations, revisions and revocation', async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(`create role anon; create role authenticated; create schema auth; create table auth.users(id uuid primary key);
+      create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
+      grant usage on schema auth to authenticated,anon; grant execute on function auth.uid() to authenticated,anon;`);
+    await db.exec(await readFile(new URL('../supabase/migrations/20260925010204_permitted_trip_crew.sql', import.meta.url), 'utf8'));
+    const owner = '11111111-1111-4111-8111-111111111111', escort = '22222222-2222-4222-8222-222222222222', stranger = '33333333-3333-4333-8333-333333333333', trip = '44444444-4444-4444-8444-444444444444';
+    await db.query('insert into auth.users values ($1),($2),($3)', [owner, escort, stranger]);
+    const actor = async id => { await db.exec('reset role; set role authenticated'); await db.query("select set_config('request.jwt.claim.sub',$1,false)", [id]); };
+    const rejected = async (query, params = []) => { await assert.rejects(() => db.query(query, params)); };
+    const count = async table => Number((await db.query(`select count(*) as n from public.${table}`)).rows[0].n);
+    await actor(owner);
+    await db.query('insert into public.dl_permit_trips(id,snapshot) values($1,$2)', [trip, { route: 'immutable test route' }]);
+    assert.equal(await count('dl_permit_trips'), 1);
+    await rejected('update public.dl_permit_trips set owner_id=$1 where id=$2', [stranger, trip]);
+    await rejected('update public.dl_permit_trips set snapshot=$1 where id=$2', [{ route: 'changed' }, trip]);
+    await db.query('update public.dl_permit_trips set snapshot=$1,revision=2 where id=$2', [{ route: 'revised' }, trip]);
+    const token = 'abcdef01-2345-4678-9012-abcdef012345', tokenHash = createHash('sha256').update(token).digest('hex');
+    await db.query('insert into public.dl_permit_invites(trip_id,owner_id,token_hash,role) values($1,$2,$3,$4)', [trip, owner, tokenHash, 'lead']);
+    await rejected("insert into public.dl_permit_invites(trip_id,owner_id,token_hash,role,expires_at) values($1,$2,$3,'chase',now()+interval '3 days')", [trip, owner, 'a'.repeat(64)]);
+    await actor(stranger);
+    assert.equal(await count('dl_permit_trips'), 0); assert.equal(await count('dl_permit_invites'), 0);
+    await rejected('insert into public.dl_permit_trips(id,owner_id,snapshot) values($1,$2,$3)', [crypto.randomUUID(), owner, {}]);
+    await rejected("insert into public.dl_permit_members(trip_id,owner_id,user_id,role) values($1,$2,$3,'lead')", [trip, owner, stranger]);
+    await rejected('select public.dl_join_permit_trip($1)', ['0'.repeat(36)]);
+    await actor(escort);
+    assert.equal((await db.query('select public.dl_join_permit_trip($1) as id', [token])).rows[0].id, trip);
+    assert.equal(await count('dl_permit_trips'), 1); assert.equal(await count('dl_permit_invites'), 0);
+    await rejected('select public.dl_join_permit_trip($1)', [token]);
+    const modified = await db.query('update public.dl_permit_trips set snapshot=$1,revision=3 where id=$2 returning id', [{ route: 'escort tamper' }, trip]); assert.equal(modified.rows.length, 0);
+    await rejected("update public.dl_permit_members set role='chase' where trip_id=$1", [trip]);
+    const insertPosition = 'insert into public.dl_permit_positions(trip_id,user_id,latitude,longitude,accuracy,progress_m,revision) values($1,$2,41,-88,5,100,$3)';
+    await rejected(insertPosition, [trip, escort, 2]);
+    await db.query('update public.dl_permit_members set accepted_revision=2 where trip_id=$1', [trip]);
+    await rejected(insertPosition, [trip, owner, 2]); await rejected(insertPosition, [trip, escort, 1]);
+    await db.query(insertPosition, [trip, escort, 2]); assert.equal(await count('dl_permit_positions'), 1);
+    await rejected('update public.dl_permit_positions set updated_at=now() where trip_id=$1', [trip]);
+    await actor(stranger); assert.equal(await count('dl_permit_positions'), 0);
+    await actor(owner); assert.equal(await count('dl_permit_positions'), 1);
+    await db.query('delete from public.dl_permit_members where trip_id=$1 and user_id=$2', [trip, escort]);
+    await actor(escort); assert.equal(await count('dl_permit_trips'), 0); assert.equal(await count('dl_permit_positions'), 0);
+    assert.equal((await db.query('update public.dl_permit_positions set progress_m=200 where trip_id=$1 returning trip_id', [trip])).rows.length, 0);
+    await actor(owner); await db.query('update public.dl_permit_trips set closed=true where id=$1', [trip]);
+    await rejected(insertPosition, [trip, owner, 2]);
+    await db.exec('reset role; set role anon'); await rejected('select * from public.dl_permit_trips'); await rejected('select public.dl_join_permit_trip($1)', [token]);
+    await db.exec('reset role');
+    const publicDefiners = await db.query("select p.proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace where p.prosecdef and n.nspname='public'"); assert.equal(publicDefiners.rows.length, 0);
+  } finally { await db.close(); }
+});
