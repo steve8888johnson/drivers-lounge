@@ -3,7 +3,7 @@
   "name": "Drivers Lounge",
   "short_name": "Drivers Lounge",
   "description": "Free commercial-driver tools for navigation planning, road intelligence, carrier research, community, loads and saved offers.",
-  "start_url": "/dashboard?source=pwa",
+  "start_url": "/start",
   "scope": "/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone"],
@@ -14,7 +14,8 @@
   "prefer_related_applications": false,
   "icons": [{"src":"/assets/drivers-lounge-logo.png","sizes":"any","type":"image/png","purpose":"any maskable"}],
   "shortcuts": [
-    {"name":"Dashboard","short_name":"Dashboard","url":"/dashboard"},
+    {"name":"My day","short_name":"My day","url":"/start"},
+    {"name":"Permit wallet","short_name":"Permits","url":"/permitted-loads#tab=wallet"},
     {"name":"Navigation","short_name":"Navigation","url":"/navigation"},
     {"name":"Road Intelligence","short_name":"Road Intel","url":"/road-tools"},
     {"name":"Carrier Intelligence","short_name":"Carriers","url":"/carriers"},

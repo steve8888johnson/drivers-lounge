@@ -1,5 +1,5 @@
 {
-  "installCommand": "echo \"No npm dependencies to install\"",
+  "installCommand": "npm ci",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "cleanUrls": true,
@@ -94,6 +94,24 @@
         {
           "key": "Cache-Control",
           "value": "private, max-age=60"
+        }
+      ]
+    },
+    {
+      "source": "/permitted-loads",
+      "headers": [
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(self), microphone=(), payment=(), usb=(), geolocation=(self)"
+        }
+      ]
+    },
+    {
+      "source": "/permitted-loads.html",
+      "headers": [
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(self), microphone=(), payment=(), usb=(), geolocation=(self)"
         }
       ]
     }
