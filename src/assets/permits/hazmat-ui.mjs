@@ -8,10 +8,10 @@ const link=(url,label)=>`<a href="${esc(url)}" target="_blank" rel="noopener nor
 let root;
 export function setupHazmat(options) {
   root=document.querySelector('#hazmat-editor');
-  root.addEventListener('input',()=>{readHazmat(options.getTrip());options.onChange();});
+  root.addEventListener('input',()=>{const trip=options.getTrip();readHazmat(trip);options.onChange();renderHazmatStatus(trip);});
   const runAction=options.safe(async event=>{
     const button=event.target.closest('[data-haction]');if(!button)return;
-    const trip=options.getTrip();options.capture();const action=button.dataset.haction;
+    options.capture();const trip=options.getTrip();const action=button.dataset.haction;
     if(action==='add') { if(trip.hazmat.materials.length>=30)throw Error('Use at most 30 materials.');trip.hazmat.materials.push(blankMaterial());trip.hazmat.enabled=true; }
     if(action==='remove')trip.hazmat.materials.splice(Number(button.dataset.index),1);
     if(action==='cargo')confirmCargo(trip.hazmat);
@@ -56,12 +56,16 @@ export function renderHazmat(trip) {
   <label class="wide">Mixed-load compatibility / segregation review<textarea data-cargo-field="compatibilityNotes" rows="2" maxlength="2000">${esc(h.compatibilityNotes)}</textarea></label></div>
   <div class="hazmat-materials">${h.materials.map(materialMarkup).join('')}</div>
   <div class="actions"><button data-haction="add">+ Add hazardous material</button><button data-haction="cargo">Confirm cargo against shipping papers</button><button data-haction="save" class="primary">Save hazmat details</button></div>
-  <p class="muted">${cargoReviewed(h)?'Cargo confirmed for this revision.':'Cargo needs confirmation.'} Material details, notes and reviews are included in exported packets and private crew sharing. Original shipping papers should remain with the driver.</p>
+  <p class="muted"><span id="hazmat-cargo-status"></span> Material details, notes and reviews are included in exported packets and private crew sharing. Original shipping papers should remain with the driver.</p>
   <details><summary>Official research and response resources</summary><p>${link(REGISTRY,'FMCSA routes by state')} · ${link('https://cameochemicals.noaa.gov/search/simple','CAMEO Chemicals')} · ${link('https://www.phmsa.dot.gov/training/hazmat/erg/emergency-response-guidebook-erg','PHMSA Emergency Response Guidebook')}</p><p>${link('https://www.ecfr.gov/current/title-49/subtitle-B/chapter-III/subchapter-B/part-397','49 CFR Part 397')} · ${link('https://www.fmcsa.dot.gov/mission/field-offices','FMCSA field offices')}</p><p>CAMEO opens at the matching UN/NA reference, which may describe multiple chemicals. Check the exact shipping description. No chemical response data or compatibility verdict is inferred here. Online reference pages need connectivity; use the official offline CAMEO/ERG tools for emergency reference.</p></details>
   <h3>Check every state and each exact route</h3><p class="muted">Review designated/preferred corridors, prohibited roads, tunnels, bridges, local delivery exceptions, times and applicable state/tribal/local rules. Resolve a conflict with the authorities before moving. OS/OW authorization does not settle hazmat applicability.</p>
   <p class="muted">Official source directory checked ${SOURCE_CHECKED}. Linked documents have their own publication dates and may be older. No live national restriction feed is connected. An absent registry entry does not establish permission.</p>
   ${trip.permits.map(p=>routeMarkup(trip,p)).join('')||'<p>Add the state route/permit records first.</p>'}
   <div id="hazmat-check-summary"></div>`;
+  renderHazmatStatus(trip);
+}
+function renderHazmatStatus(trip) {
+  root.querySelector('#hazmat-cargo-status').textContent=cargoReviewed(trip.hazmat)?'Cargo confirmed for this revision.':'Cargo needs confirmation.';
   const errors=hazmatErrors(trip);root.querySelector('#hazmat-check-summary').innerHTML=!hazmatActive(trip)?'<p class="muted">Hazmat review is off for this load.</p>':errors.length?`<div class="hazmat-hold"><strong>${errors.length} hazmat checks need attention.</strong><p>${esc(errors[0])}</p></div>`:'<p class="good">Recorded hazmat reviews cover this planned trip. Recheck current conditions before departure.</p>';
 }
 function materialMarkup(m,i) {
