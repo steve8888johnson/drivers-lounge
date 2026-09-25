@@ -15,7 +15,7 @@
     "check:supabase": "node scripts/check-supabase-preflight.mjs",
     "build": "npm test && npm run check:syntax && npm run check:stripe && npm run check:supabase-contract && npm run check:store && npm run check:store-submission && npm run check:links && node build.mjs",
     "import:fmcsa": "node scripts/import-fmcsa-carriers.mjs",
-    "test": "node --test scripts/test-auth.mjs scripts/test-payments.mjs scripts/test-mission-control.mjs scripts/test-permits.mjs scripts/test-permit-db.mjs scripts/test-permit-storage.mjs"
+    "test": "node --test scripts/test-auth.mjs scripts/test-payments.mjs scripts/test-mission-control.mjs scripts/test-permits.mjs scripts/test-permit-db.mjs scripts/test-permit-storage.mjs scripts/test-hazmat.mjs"
   },
   "description": "Drivers Lounge commercial-driver platform — RC2 store-ready candidate",
   "devDependencies": {

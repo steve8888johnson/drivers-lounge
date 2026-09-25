@@ -1,3 +1,4 @@
+import { blankHazmat, blankHazmatRoute, sanitizeHazmat, sanitizeHazmatRoute, hazmatErrors } from './hazmat.mjs';
 // Permit text is evidence. Geometry is a reviewed transcription, never a new route.
 export const CONTROLLING_NOTICE = 'Drivers Lounge assists with following issued permits. The issued permit and state restrictions remain controlling. Never take an unapproved detour.';
 export const STATES = 'AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC'.split(' ');
@@ -7,11 +8,11 @@ export const clean = (value, max = 20000) => String(value ?? '').slice(0, max);
 export function blankPermit() {
   return { id: id(), state: '', number: '', kind: 'single-trip', validFrom: '', validTo: '', timeZone: '',
     entry: { label: '', state: '', road: '' }, exit: { label: '', state: '', road: '' }, routeText: '',
-    restrictions: '', complete: false, qr: [], documents: [], steps: [], confidence: {}, limits: {}, travelWindow: null, geometrySource: null, review: null, geometryReview: null };
+    restrictions: '', complete: false, qr: [], documents: [], steps: [], confidence: {}, limits: {}, travelWindow: null, geometrySource: null, review: null, geometryReview: null, hazmatRoute: blankHazmatRoute() };
 }
 export function blankTrip() {
   return { schema: 'dl-permit-trip/v1', id: id(), revision: 1, name: '', departure: new Date().toLocaleDateString('en-CA'),
-    profile: { heightFt: '', widthFt: '', lengthFt: '', weightLb: '', axles: '', axleWeights: '', hazmat: '' }, permits: [], acknowledged: false };
+    profile: { heightFt: '', widthFt: '', lengthFt: '', weightLb: '', axles: '', axleWeights: '', hazmat: '' }, permits: [], acknowledged: false, hazmat: blankHazmat() };
 }
 export const validDate = s => /^\d{4}-\d{2}-\d{2}$/.test(s || '') && Number.isFinite(Date.parse(s + 'T12:00:00Z')) && new Date(s + 'T12:00:00Z').toISOString().slice(0, 10) === s;
 export const pointOK = p => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite) && Math.abs(p[0]) <= 90 && Math.abs(p[1]) <= 180;
@@ -26,7 +27,7 @@ export function reviewKey(p) {
 export const geometryKey = p => JSON.stringify([reviewKey(p), p.steps, p.geometrySource]);
 export const reviewed = p => p.review?.key === reviewKey(p);
 export const geometryReviewed = p => reviewed(p) && p.geometryReview?.key === geometryKey(p);
-export const crewKey = trip => JSON.stringify([trip.profile, trip.permits.map(p => [p.state, p.number, p.kind, p.validFrom, p.validTo, p.timeZone, p.entry, p.exit, p.routeText, p.restrictions, p.complete, p.limits, p.travelWindow, p.steps, p.geometrySource])]);
+export const crewKey = trip => JSON.stringify([trip.profile, sanitizeHazmat(trip.hazmat), trip.permits.map(p => [p.state, p.number, p.kind, p.validFrom, p.validTo, p.timeZone, p.entry, p.exit, p.routeText, p.restrictions, p.complete, p.limits, p.travelWindow, p.steps.map(s => [s.text, s.road || '', s.lane || '', Number(s.routeLine), s.points]), p.geometrySource, sanitizeHazmatRoute(p.hazmatRoute)])]);
 export function confirmPermit(p, reviewer = 'Device operator') {
   const errors = permitErrors(p, false);
   if (errors.length) throw Error(errors.join(' '));
@@ -92,7 +93,7 @@ export function orderPermits(permits) {
   return { permits: [...ordered, ...permits.filter(p => !ordered.includes(p))], issues };
 }
 export function buildMaster(trip, { date = trip.departure, geometry = false } = {}) {
-  const sorted = orderPermits(trip.permits), issues = [...profileErrors(trip.profile), ...sorted.issues], segments = [], boundaries = [];
+  const sorted = orderPermits(trip.permits), issues = [...profileErrors(trip.profile), ...sorted.issues, ...hazmatErrors(trip, { date })], segments = [], boundaries = [];
   if (!trip.permits.length) issues.push('Add every state permit for this load.');
   if (trip.completedAt && trip.permits.some(p => p.kind === 'single-trip')) issues.push('This single-trip move is marked complete. Obtain new permits for another move.');
   if (!validDate(date)) issues.push('Choose a valid travel date.');
@@ -121,7 +122,7 @@ export function buildMaster(trip, { date = trip.departure, geometry = false } = 
       }
     }
   });
-  return { permits: sorted.permits, issues: [...new Set(issues)], ready: issues.length === 0, segments, boundaries, meters: offset };
+  return { permits: sorted.permits, issues: [...new Set(issues)], ready: issues.length === 0, segments, boundaries, meters: offset, trip };
 }
 function project(point, segment) {
   const k = Math.cos(point[0] * Math.PI / 180), a = [segment.a[0] - point[0], (segment.a[1] - point[1]) * k], b = [segment.b[0] - point[0], (segment.b[1] - point[1]) * k];
@@ -144,10 +145,12 @@ export function locateOnMaster(master, fix, previous = null, now = Date.now()) {
   const permit = master.permits.find(p => p.id === segment.permitId);
   const localDate = new Intl.DateTimeFormat('en-CA', { timeZone: permit.timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(now));
   if (localDate < permit.validFrom || localDate > permit.validTo) return { status: 'expired', message: `${permit.state} permit is outside its effective dates. Guidance paused.` };
+  const hazmatIssues = master.trip ? hazmatErrors(master.trip, { date: localDate, permit }) : [];
+  if (hazmatIssues.length) return { status: 'hazmat-hold', message: hazmatIssues[0] };
   const window = movementWindow(permit, now);
   if (!window.allowed) return { status: 'curfew', message: window.message };
   const stepEnd = master.segments.find(s => s.start >= segment.start && (s.permitId !== segment.permitId || s.stepIndex !== segment.stepIndex));
-  return { status: 'on-route', permit, step: segment.step, progress, timestamp: fix.timestamp, remaining: master.meters - progress, toManeuver: (stepEnd?.start ?? master.meters) - progress, nextStep: stepEnd?.step || null, distance: nearest.distance };
+  return { status: 'on-route', permit, step: segment.step, progress, timestamp: fix.timestamp, remaining: master.meters - progress, toManeuver: (stepEnd?.start ?? master.meters) - progress, nextStep: stepEnd?.step || null, nextPermitId: stepEnd?.permitId || null, distance: nearest.distance };
 }
 export function warnings(permit, profile, role = 'driver', now = Date.now()) {
   const alerts = [];
@@ -194,5 +197,6 @@ export function sanitizePermit(value) {
   if (value.geometrySource?.format === 'promiles-public-json/v1') p.geometrySource = { format: 'promiles-public-json/v1', note: 'Geometry supplied by public issued-route endpoint; full original review required' };
   if (value.travelWindow) { if (!windowValid(value.travelWindow)) throw Error('Invalid copied movement window.'); p.travelWindow = { from: value.travelWindow.from, to: value.travelWindow.to, days: [...value.travelWindow.days], closedDates: [...value.travelWindow.closedDates] }; }
   p.qr = Array.isArray(value.qr) ? value.qr.slice(0, 20).map(s => clean(s, 50000)) : [];
+  p.hazmatRoute = sanitizeHazmatRoute(value.hazmatRoute);
   return p;
 }

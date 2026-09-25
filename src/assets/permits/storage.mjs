@@ -1,4 +1,5 @@
 import { sanitizePermit, blankTrip, clean } from './core.mjs';
+import { sanitizeHazmat } from './hazmat.mjs';
 const DB = 'dl-permit-wallet-v1';
 let connection;
 export async function database() {
@@ -56,6 +57,7 @@ export async function exportPacket(trip) {
 export async function importPacket(packet) {
   if (packet?.schema !== 'dl-permit-packet/v1' || !Array.isArray(packet.trip?.permits) || packet.trip.permits.length > 60 || !Array.isArray(packet.documents) || packet.documents.length > 200) throw Error('Unsupported permit-trip packet.');
   const trip = blankTrip(); trip.name = clean(packet.trip.name, 120); trip.departure = clean(packet.trip.departure, 10);
+  trip.hazmat = sanitizeHazmat(packet.trip.hazmat);
   if (packet.trip.completedAt) trip.completedAt = clean(packet.trip.completedAt, 40);
   for (const key of Object.keys(trip.profile)) trip.profile[key] = clean(packet.trip.profile?.[key], 500);
   const docs = [], mappings = new Map(); let total = 0;
