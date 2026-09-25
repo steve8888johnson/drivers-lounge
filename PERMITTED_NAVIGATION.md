@@ -67,3 +67,23 @@ Run `npm run build` with the existing public Supabase preview environment. Local
 Browser checks cover load editing, Ohio QR/photo import, Illinois authorization fallback, wallet originals, disabled guidance for incomplete permits, mobile layout and successful wallet/page reload while the local server is stopped. GPS progression and failure cases use synthetic coordinates in unit tests; no road drive is claimed.
 
 Before release: obtain complete permit evidence and legitimate geometry for all states; test the crew migration and two signed-in devices on a dedicated preview; validate permissions/speech/GPS/offline behavior on supported phones; connect licensed restriction/basemap/native-navigation services if required. Keep this feature unmerged until those gates and the production release decision are complete.
+
+## Hazmat routing review
+
+The Hazmat tab now records multiple materials: UN/NA identifier, proper shipping name, primary and subsidiary class/division, packing group, quantity/units, packaging/residue status, inhalation hazard and HRCQ status. The carrier records placarding applicability, shipping-paper/emergency references, compatibility review for mixed cargo and written route-plan references when required. Existing legacy hazmat notes also activate the checks.
+
+Each state route needs a source-backed carrier determination, reviewed-on and coverage-through dates, reviewer, authority URL, current registry/authority checks and notes. Unknown applicability, conflicts, missing evidence, changed cargo/route/date, and expired reviews block guidance and crew publishing. An OS/OW permit does not override a hazmat restriction. The app does not calculate an alternative route. A carrier hazmat route-plan record supports hazmat-only travel without inventing an OS/OW permit; the written plan and detailed geometry must be supplied and reviewed.
+
+Operators can attach source-linked warnings to exact supplied maneuver lines. Driver and lead/chase guidance show and speak these warnings, including upcoming warnings within 800 meters. The wallet retains cargo and route-review references. Offline packets preserve the data while discarding cargo and route confirmations, and crew revision matching includes the cargo and hazmat determinations.
+
+Official reference directory checked September 24, 2026:
+- FMCSA National Hazardous Materials Route Registry by State: https://www.fmcsa.dot.gov/regulations/hazardous-materials/national-hazardous-materials-route-registry-state
+- CAMEO Chemicals: https://cameochemicals.noaa.gov/about and https://cameochemicals.noaa.gov/browse/unna
+- PHMSA Emergency Response Guidebook: https://www.phmsa.dot.gov/training/hazmat/erg/emergency-response-guidebook-erg
+- Federal routing requirements: 49 CFR 397.67 and 397.101, linked from the UI, with the FMCSA highway routing guidance and training manuals as supporting references.
+
+The bundled directory contains official FMCSA links for all 50 states and DC plus 2,369 public UN/NA identifiers for CAMEO deep links. It is not a machine-readable, complete road restriction dataset. The link-check date is not a document effective date. State/tribal/local routing authorities, current exceptions, and any delivery-specific requirements still need review. Older state publications and absent entries never produce automatic clearance.
+
+CAMEO opens the matching UN/NA reference only when the operator follows the link; a number may represent multiple chemical datasheets. Chemical classification, compatibility, emergency-response distances and route legality are never inferred. No third-party CAMEO chemical datasets, CAS proprietary data or NFPA ratings are republished. Official reference pages require connectivity; use official offline CAMEO/ERG products for offline emergency reference.
+
+Release limitation: this implements hazmat profiles, exact-route review gates and reviewed maneuver alerts. Automatic national hazmat route generation, live restriction ingestion, tunnel/bridge geofencing and a validated commercial routing provider remain unconnected. Keep the feature in development until those services and physical-device verification are complete.

@@ -3,6 +3,8 @@ import { classifyQR, parsePermitText, importPublicQR, scanImage } from './import
 import { listTrips, saveTrip, addDocument, getDocument, deleteTrip, exportPacket, importPacket, verifyWallet } from './storage.mjs';
 import { exampleTrip } from './examples.mjs';
 import { Crew } from './crew.mjs';
+import { blankHazmat, sanitizeHazmat, hazmatWarnings, hazmatActive } from './hazmat.mjs';
+import { setupHazmat, renderHazmat, readHazmat } from './hazmat-ui.mjs';
 
 const $ = selector => document.querySelector(selector);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -11,6 +13,7 @@ let trip, selected, tab = 'load', dirty = false, watching = null, timer, lastFix
 const currentPermit = () => trip?.permits.find(p => p.id === selected);
 function status(text, error = false) { $('#status').textContent = text; $('#status').dataset.error = String(error); }
 let working = false;
+const spokenHazmat = new Set();
 function safe(fn) { return async event => {
   const lock = event?.type !== 'input'; if (lock && working) return;
   if (lock) { working = true; document.querySelectorAll('.layout,.trip-toolbar,.heading').forEach(el => el.inert = true); }
@@ -22,7 +25,7 @@ function switchTab(next) {
   tab = next;
   document.querySelectorAll('[data-tab]').forEach(b => { if (b.dataset.tab === next) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   document.querySelectorAll('.panel').forEach(p => p.hidden = p.id !== `panel-${next}`);
-  if (next === 'route') renderRoute(); if (next === 'wallet') renderWallet();
+  if (next === 'route') renderRoute(); if (next === 'wallet') renderWallet(); if (next === 'hazmat') renderHazmat(trip);
 }
 async function persist(message) { await saveTrip(trip); dirty = false; await renderPicker(); if (message) status(message); }
 function edit() {
@@ -88,7 +91,7 @@ function readPermit() {
   return p;
 }
 function captureDrafts() {
-  readLoad(); const p = currentPermit(); if (!p) return;
+  readLoad(); readHazmat(trip); const p = currentPermit(); if (!p) return;
   readPermit(); const parsed = sanitizePermit({ ...p, steps: JSON.parse($('#geometry-json').value || '[]') });
   if (JSON.stringify(p.steps) !== JSON.stringify(parsed.steps)) { p.steps = parsed.steps; p.geometrySource = null; p.geometryReview = null; }
 }
@@ -116,11 +119,12 @@ function renderRoute() {
   $('#map-caption').textContent = 'Permit geometry and labeled state entries · no street basemap. ' + (m.meters ? `${(m.meters / 1609.344).toFixed(1)} mi of supplied geometry.` : 'Import detailed geometry for GPS guidance.');
 }
 function renderWallet() {
+  $('#hazmat-wallet').innerHTML = hazmatActive(trip) ? '<article class="wallet-card"><h3>Hazmat cargo &amp; route references</h3><p>Shipping papers: '+esc(trip.hazmat.shippingPaperRef)+'<br>Emergency contact: '+esc(trip.hazmat.emergencyContact)+'</p>'+trip.hazmat.materials.map(m=>'<p><strong>'+esc(m.unNumber)+' · '+esc(m.shippingName)+'</strong><br>Class/division '+esc(m.division)+' · subsidiary '+esc(m.subsidiary||'none entered')+' · packing group '+esc(m.packingGroup)+' · '+esc(m.quantity)+' '+esc(m.unit)+' · '+esc(m.packaging)+'</p>').join('')+'<p>Written route plan: '+esc(trip.hazmat.writtenPlanRef||'not entered')+'</p>'+trip.permits.map(p=>'<details><summary>'+esc(p.state)+' hazmat review</summary><p>'+esc(p.hazmatRoute?.notes||'Not reviewed')+'</p><p>Review through '+esc(p.hazmatRoute?.validThrough||'unconfirmed')+'</p></details>').join('')+'<p class="muted">Retain the actual shipping papers and required originals. These saved references do not replace them.</p></article>' : '';
   $('#wallet').innerHTML = trip.permits.map(p => `<article class="wallet-card" id="wallet-${esc(p.id)}"><div class="section-head"><h3>${esc(p.state)} · ${esc(p.number || 'Number unconfirmed')}</h3><span class="pill">${esc(p.kind)}</span></div><p class="dates">${esc(p.validFrom || 'Dates needed')} through ${esc(p.validTo || '—')} · ${esc(p.timeZone)}</p>${documentRows(p) || '<p class="muted">Original pages missing on this device.</p>'}<details><summary>Issued route & restrictions</summary><pre>${esc(p.routeText)}</pre><pre>${esc(p.restrictions || 'Restrictions not entered. Consult original permit.')}</pre></details><details><summary>Retained QR contents (${p.qr.length})</summary>${p.qr.map(q => `<pre>${esc(q)}</pre>`).join('')}</details></article>`).join('') || '<p>Add originals to build the inspection wallet.</p>';
   wireDocuments($('#wallet'));
 }
-function render() { renderLoad(); renderList(); renderReview(); renderRoute(); if (tab === 'wallet') renderWallet(); }
-async function openTrip(value) { stopGuidance(); stopCamera(); trip = value; selected = trip.permits[0]?.id; dirty = false; $('#crew-role').value = trip.shared?.role || trip.localRole || 'driver'; $('#share-consent').checked = false; $('#conditions-checked').checked = false; await persist(); render(); switchTab('load'); $('#crew-status').textContent = trip.shared ? 'Saved crew link. Reconnect before sharing location.' : 'Live sharing is off.'; }
+function render() { renderLoad(); renderList(); renderReview(); renderRoute(); renderHazmat(trip); if (tab === 'wallet') renderWallet(); }
+async function openTrip(value) { stopGuidance(); stopCamera(); trip = value; trip.hazmat ??= blankHazmat(); selected = trip.permits[0]?.id; dirty = false; $('#crew-role').value = trip.shared?.role || trip.localRole || 'driver'; $('#share-consent').checked = false; $('#conditions-checked').checked = false; await persist(); render(); switchTab('load'); $('#crew-status').textContent = trip.shared ? 'Saved crew link. Reconnect before sharing location.' : 'Live sharing is off.'; }
 async function ensurePermit() { if (!currentPermit()) { edit(); const p = blankPermit(); trip.permits.push(p); selected = p.id; await persist(); renderList(); renderReview(); } return currentPermit(); }
 async function mergeImport(imported) {
   const p = await ensurePermit(); edit(); captureDrafts();
@@ -178,10 +182,13 @@ function displayFix(fix) {
   $('#next-maneuver').textContent = result.nextStep ? `Next: ${result.nextStep.text}` : 'Final authorized segment. Follow permit destination instructions.';
   $('#maneuver-distance').textContent = distance(result.toManeuver); $('#remaining').textContent = distance(result.remaining);
   $('#lane-info').textContent = `${result.step.road || 'Road not supplied'} · ${result.step.lane || 'Lane guidance not supplied'}`;
-  const alerts = warnings(result.permit, trip.profile, role); $('#nav-warnings').innerHTML = alerts.map(a => `<div class="warning">${esc(a)}</div>`).join('');
+  const ahead = result.toManeuver < 800 && result.nextStep ? master.permits.find(p=>p.id===result.nextPermitId) : null;
+  const alerts = [...warnings(result.permit, trip.profile, role), ...hazmatWarnings(trip, result.permit, result.step.routeLine), ...(ahead ? hazmatWarnings(trip,ahead,result.nextStep.routeLine).filter(a=>a.startsWith('Hazmat route alert:')).map(a=>'Upcoming '+a) : [])]; $('#nav-warnings').innerHTML = alerts.map(a => `<div class="warning">${esc(a)}</div>`).join('');
+  const newHazmat = alerts.filter(a=>a.includes('Hazmat route alert:')&&!spokenHazmat.has(`${result.permit.id}-${result.step.routeLine}-${a}`));
   const timed = alerts.find(a => /movement window closes/.test(a));
   $('#nav-status').textContent = `On reviewed route · GPS ±${Math.round(fix.accuracy)} m${navigator.onLine ? '' : ' · offline; crew progress unavailable'}`;
   if (activeState !== result.permit.id) { activeState = result.permit.id; say(`Active permit ${result.permit.state} ${result.permit.number}. ${alerts.join(' ')}. ${result.step.text}`, `state-${activeState}`); }
+  else if (newHazmat.length) { newHazmat.forEach(a=>spokenHazmat.add(`${result.permit.id}-${result.step.routeLine}-${a}`)); say(newHazmat.join(' '), `hazmat-${result.permit.id}-${result.step.routeLine}-${newHazmat.join()}`); }
   else if (timed) say(timed, `curfew-${result.permit.id}`);
   else say(`${result.step.text}. ${distance(result.toManeuver)} to ${result.nextStep?.text || 'the authorized destination'}.`, `${result.permit.id}-${result.step.routeLine}-${result.toManeuver < 150 ? 'near' : result.toManeuver < 800 ? 'approach' : 'far'}`);
   if (trip.shared && $('#share-consent').checked && Date.now() - lastCrew > 7000) { lastCrew = Date.now(); void syncCrew(fix, result); }
@@ -210,7 +217,7 @@ async function refreshCrew() {
     if (!trip.shared.owner && window.confirm('Download the updated route? Existing originals remain in the saved prior device copy. The new revision requires original pages and confirmation.')) {
       const updated = blankTrip(); updated.name = String(remote.snapshot.name).slice(0,120); updated.departure = remote.snapshot.departure;
       for (const key of Object.keys(updated.profile)) updated.profile[key] = String(remote.snapshot.profile?.[key] || '').slice(0,500);
-      updated.permits = remote.snapshot.permits.map(sanitizePermit); updated.shared = { ...trip.shared, revision: remote.revision };
+      updated.hazmat = sanitizeHazmat(remote.snapshot.hazmat); updated.permits = remote.snapshot.permits.map(sanitizePermit); updated.shared = { ...trip.shared, revision: remote.revision };
       await openTrip(updated); switchTab('crew');
     } else throw Error('Review the current crew revision before guidance.');
   }
@@ -231,7 +238,7 @@ async function startGuidance() {
     if (!trip.shared.owner) await crew.accept(trip.shared);
   }
   if (!navigator.geolocation) throw Error('GPS is unavailable on this device. Your permit wallet remains available.');
-  progress = null; lastFix = null; activeState = ''; spoken = '';
+  progress = null; lastFix = null; activeState = ''; spoken = ''; spokenHazmat.clear();
   watching = navigator.geolocation.watchPosition(position => displayFix({ point: [position.coords.latitude, position.coords.longitude], accuracy: position.coords.accuracy, timestamp: position.timestamp }), () => { navAlert('GPS unavailable. Guidance paused; follow the issued permit.', 'gps-error'); $('#maneuver').textContent = 'Waiting for reliable GPS'; }, { enableHighAccuracy: true, maximumAge: 3000, timeout: 12000 });
   $('#stop-guidance').disabled = false; $('#start-guidance').disabled = true;
   $('#guidance-role').textContent = ({ driver: 'TRUCK DRIVER', lead: 'LEAD PILOT CAR', chase: 'CHASE PILOT CAR' })[$('#crew-role').value];
@@ -257,6 +264,7 @@ async function prepareOffline() {
   $('#cache-status').textContent = `Trip data and originals saved on this device. Offline app shell ready. ${keep ? 'Persistent storage granted.' : 'The browser may evict storage; keep an exported backup.'} Street map tiles and live crew updates are not available offline.`;
 }
 
+setupHazmat({ getTrip: () => trip, safe, capture: captureDrafts, routeConfirmed: p => reviewed(p) && geometryReviewed(p), onChange: () => { edit(); status('Hazmat changed. Save and reconfirm cargo and route reviews.'); }, save: async message => { await persist(message); renderRoute(); } });
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
 for (const name of ['state', 'entry-state', 'exit-state']) $('#permit-form').elements[name].innerHTML = '<option value="">Select state / not a border</option>' + STATES.map(s => `<option>${s}</option>`).join('');
 for (const selector of ['#load-form', '#permit-form', '#geometry-json']) on(selector, 'input', () => { edit(); status('Unsaved changes. Save and reconfirm any changed route before guidance.'); });
@@ -281,7 +289,7 @@ on('#qr-photo', 'change', async e => { const files = [...e.target.files]; e.targ
 on('#camera-start', 'click', startCamera); on('#camera-stop', 'click', stopCamera);
 on('#start-guidance', 'click', startGuidance); on('#stop-guidance', 'click', () => stopGuidance());
 on('#finish-trip', 'click', async () => { if (!window.confirm('Mark this permitted move complete? A single-trip permit cannot be used for a second move.')) return; stopGuidance('Permitted move marked complete.'); trip.completedAt = new Date().toISOString(); await persist('Move complete. Original permits remain in the inspection wallet.'); if (trip.shared?.owner) await crew.close(trip.shared); renderRoute(); });
-on('#read-warnings', 'click', () => { const p = progress?.permit || currentPermit(); if (!p) throw Error('Choose a state permit first.'); spoken = ''; say(warnings(p, trip.profile, $('#crew-role').value).join(' ') || 'No restrictions entered. Consult the original permit.'); });
+on('#read-warnings', 'click', () => { const p = progress?.permit || currentPermit(); if (!p) throw Error('Choose a state permit first.'); spoken = ''; say([...warnings(p, trip.profile, $('#crew-role').value), ...hazmatWarnings(trip, p)].join(' ') || 'No restrictions entered. Consult the original permit.'); });
 on('#active-wallet', 'click', e => { e.preventDefault(); switchTab('wallet'); if (activeState) document.getElementById(`wallet-${activeState}`)?.scrollIntoView({ behavior: 'smooth' }); });
 on('#cache-trip', 'click', prepareOffline);
 on('#export-trip', 'click', async () => { if (dirty) throw Error('Save changes before exporting.'); const packet = await exportPacket(trip), url = URL.createObjectURL(new Blob([JSON.stringify(packet)], { type: 'application/json' })); objectURLs.push(url); const a = document.createElement('a'); a.href = url; a.download = `permitted-load-${trip.id}.json`; a.click(); status('Trip packet exported. It includes private permits; share only with your trip crew.'); });
@@ -292,7 +300,7 @@ on('#publish-crew', 'click', async () => { if (!$('#share-consent').checked) thr
 for (const role of ['lead', 'chase']) on(`#invite-${role}`, 'click', async () => { if (!trip.shared?.owner) throw Error('Publish this private crew route first.'); const code = await crew.invite(trip.shared.id, role); $('#invite-code').textContent = `${role.toUpperCase()} · one use · expires in 12 hours: ${code}`; });
 on('#join-crew', 'click', async () => {
   if (!changeGuard()) return; const remote = await crew.join($('#join-code').value); const matches = crewKey(trip) === crewKey(remote.snapshot); const imported = matches ? trip : blankTrip();
-  if (!matches) { imported.name = remote.snapshot.name; imported.departure = remote.snapshot.departure; for (const key of Object.keys(imported.profile)) imported.profile[key] = String(remote.snapshot.profile?.[key] || '').slice(0, 500); imported.permits = remote.snapshot.permits.map(p => sanitizePermit(p)); }
+  if (!matches) { imported.name = remote.snapshot.name; imported.departure = remote.snapshot.departure; for (const key of Object.keys(imported.profile)) imported.profile[key] = String(remote.snapshot.profile?.[key] || '').slice(0, 500); imported.hazmat = sanitizeHazmat(remote.snapshot.hazmat); imported.permits = remote.snapshot.permits.map(p => sanitizePermit(p)); }
   imported.shared = { id: remote.id, revision: remote.revision, owner: false, role: remote.role };
   await openTrip(imported); $('#crew-role').value = remote.role; switchTab('crew'); $('#crew-status').textContent = 'Joined. Add the original permit pages and confirm the route and geometry on this device before guidance. Location sharing is off.';
 });
