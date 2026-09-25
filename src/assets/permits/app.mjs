@@ -7,6 +7,7 @@ import { blankHazmat, sanitizeHazmat, hazmatWarnings, hazmatActive } from './haz
 import { setupHazmat, renderHazmat, readHazmat } from './hazmat-ui.mjs';
 import { captureTripDraft, applyGeometryDraft, maneuverKey } from './drafts.mjs';
 import { walkthrough } from './walkthrough.mjs';
+import { walletLaunch } from './launch.mjs';
 
 const $ = selector => document.querySelector(selector);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -38,6 +39,7 @@ function switchTab(next) {
   document.querySelectorAll('[data-tab]').forEach(b => { if (b.dataset.tab === next) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   document.querySelectorAll('.panel').forEach(p => p.hidden = p.id !== `panel-${next}`);
   if (next === 'route') renderRoute(); if (next === 'wallet') renderWallet(); if (next === 'hazmat') renderHazmat(trip);
+  if (trip) history.replaceState(null, '', location.pathname + location.search + '#trip=' + encodeURIComponent(trip.id) + '&tab=' + next);
 }
 async function persist(message) { await saveTrip(trip); savedTrip = structuredClone(trip); dirty = false; await renderPicker(); if (message) status(message); }
 function edit() {
@@ -150,7 +152,7 @@ function renderWallet() {
   wireDocuments($('#wallet'));
 }
 function render() { renderLoad(); renderList(); renderReview(); renderRoute(); renderHazmat(trip); if (tab === 'wallet') renderWallet(); }
-async function openTrip(value) { stopGuidance(); stopCamera(); trip = value; trip.hazmat ??= blankHazmat(); selected = trip.permits[0]?.id; dirty = false; walkthroughIndex = 0; $('#crew-role').value = trip.shared?.role || trip.localRole || 'driver'; $('#share-consent').checked = false; $('#conditions-checked').checked = false; $('#crew-members').textContent = ''; $('#crew-positions').textContent = ''; $('#invite-code').textContent = ''; $('#cache-status').textContent = ''; await persist(); render(); switchTab('load'); $('#crew-status').textContent = trip.shared ? 'Saved crew link. Reconnect before sharing location.' : 'Live sharing is off.'; }
+async function openTrip(value) { stopGuidance(); stopCamera(); trip = value; trip.hazmat ??= blankHazmat(); selected = trip.permits[0]?.id; dirty = false; walkthroughIndex = 0; $('#crew-role').value = trip.shared?.role || trip.localRole || 'driver'; $('#share-consent').checked = false; $('#conditions-checked').checked = false; $('#crew-members').textContent = ''; $('#crew-positions').textContent = ''; $('#invite-code').textContent = ''; $('#cache-status').textContent = ''; await persist(); try { localStorage.setItem('dl-last-permit-trip', JSON.stringify(trip.id)); } catch { /* The IndexedDB wallet remains usable without shortcut preferences. */ } render(); switchTab('load'); $('#crew-status').textContent = trip.shared ? 'Saved crew link. Reconnect before sharing location.' : 'Live sharing is off.'; }
 async function ensurePermit() { if (!currentPermit()) { captureDrafts(); edit(); const p = blankPermit(); trip.permits.push(p); selected = p.id; await persist(); renderList(); renderReview(); } return currentPermit(); }
 async function mergeImport(imported) {
   await ensurePermit(); captureDrafts(); const p = currentPermit(); edit();
@@ -349,5 +351,12 @@ window.addEventListener('online', connection); window.addEventListener('offline'
 document.addEventListener('visibilitychange', () => { if (document.hidden) { void stopCamera(); if (watching !== null) stopGuidance('Guidance paused while app was hidden. Restart when safely in the foreground.'); } });
 window.addEventListener('pagehide', () => { stopGuidance(); void stopCamera(); objectURLs.forEach(URL.revokeObjectURL); });
 window.addEventListener('beforeunload', event => { if (dirty) { event.preventDefault(); event.returnValue = ''; } });
-try { const all = await listTrips(); await openTrip(all[0] || blankTrip()); status('Private device wallet ready. Create a load and import every state permit.'); connection(); if ('serviceWorker' in navigator) void navigator.serviceWorker.register('/sw.js').catch(() => {}); }
+async function launchWallet() {
+  let lastId = ''; try { lastId = JSON.parse(localStorage.getItem('dl-last-permit-trip') || 'null') || ''; } catch { /* Use the available device trips. */ }
+  const launch = walletLaunch(await listTrips(), location.hash, lastId);
+  await openTrip(launch.trip || blankTrip()); switchTab(launch.missing ? 'load' : launch.tab);
+  status(launch.missing ? 'The linked trip is not saved on this device. Showing another available load; check the load name or import its backup before proceeding.' : 'Private device wallet ready. Create a load and import every state permit.', launch.missing);
+}
+window.addEventListener('hashchange', safe(async () => { const params = new URLSearchParams(location.hash.slice(1)); if (!['trip','tab','new'].some(key => params.has(key))) return; if (await changeGuard()) await launchWallet(); else switchTab(tab); }));
+try { await launchWallet(); connection(); if ('serviceWorker' in navigator) void navigator.serviceWorker.register('/sw.js').catch(() => {}); }
 catch (e) { status(`Device storage unavailable: ${e.message}. Enable browser storage before using the permit wallet.`, true); document.querySelectorAll('button,input,select,textarea').forEach(el => el.disabled = true); }
