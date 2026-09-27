@@ -8,6 +8,8 @@ Required proof before operational guidance: independently transcribe and compare
 
 No separate freight posting is permitted in this app. Retained historical database tables must be reviewed and archived separately; this change does not migrate or delete production freight records. Legacy backend endpoints may still exist and need production-policy inspection.
 
+New precise-location journal recording is held in this development version. The previous callback shared mutable trip state across asynchronous writes, so stop/retry behavior needs dedicated verification, alongside deployed row-level security, vendor location sharing and retention/deletion. The history/deletion page is retained for existing records. This does not disable historical production APIs or prove their access controls.
+
 Set HIGHWAY_AUTOMATION_URL only after the independent marketplace destination is verified. Missing/invalid configuration leaves a clear unavailable message.
 
 Recovery: keep the before-audit Git tag and original checkout. Build from source with the correct environment; tracked historical dist output is not a release candidate. Stop guidance before any update, preserve exported trip originals, then verify local wallet reload. Prefer a forward fix; restoring previous car-driving code would restore a known unsafe path. No database changes are included here.
