@@ -6,3 +6,4 @@ node_modules/
 work/
 test-results/
 supabase/.temp/
+/dist/

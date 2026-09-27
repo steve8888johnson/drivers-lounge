@@ -260,6 +260,7 @@ async function refreshCrew() {
   $('#crew-status').textContent = `Private crew revision ${remote.revision}. Location sharing ${watching !== null && $('#share-consent').checked ? 'active' : 'off'}.`;
 }
 async function startGuidance() {
+  const startVersion = ++guidanceVersion;
   if (dirty) throw Error('Save your changes before starting guidance.');
   if (!$('#conditions-checked').checked) throw Error('Confirm current restrictions, travel windows and escort arrangements before departure.');
   master = buildMaster(trip, { geometry: true }); if (!master.ready) throw Error(master.issues[0]);
@@ -271,6 +272,7 @@ async function startGuidance() {
     if (!trip.shared.owner) await crew.accept(trip.shared);
   }
   if (!navigator.geolocation) throw Error('GPS is unavailable on this device. Your permit wallet remains available.');
+  if (startVersion !== guidanceVersion || dirty || document.hidden) throw Error('Trip or app state changed during preparation. Review the trip and restart when safely in the foreground.');
   progress = null; lastFix = null; activeState = ''; spoken = ''; spokenHazmat.clear();
   watching = navigator.geolocation.watchPosition(position => displayFix({ point: [position.coords.latitude, position.coords.longitude], accuracy: position.coords.accuracy, timestamp: position.timestamp }), () => pauseFix('GPS unavailable. Guidance paused; follow the issued permit.', 'gps-error'), { enableHighAccuracy: true, maximumAge: 3000, timeout: 12000 });
   $('#stop-guidance').disabled = false; $('#start-guidance').disabled = true;

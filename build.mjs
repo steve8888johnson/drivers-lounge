@@ -22,6 +22,7 @@ const publicConfig=`window.DRIVERS_LOUNGE_CONFIG = ${JSON.stringify({
   supabaseUrl,
   supabaseAnonKey,
   environment:process.env.VERCEL_ENV||'development',
+  highwayAutomationUrl:normalizeEnv(process.env.HIGHWAY_AUTOMATION_URL),
   appName:'Drivers Lounge'
 },null,2)};\n`;
 await writeFile('dist/config.js',publicConfig,'utf8');

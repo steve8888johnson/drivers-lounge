@@ -93,3 +93,5 @@ test('copied movement windows use permit local time, close exclusively and handl
   assert.equal(movementWindow(p, Date.parse('2026-09-25T08:00:00Z')).allowed, true);
   p.travelWindow.closedDates = ['2026-09-25']; assert.equal(movementWindow(p, Date.parse('2026-09-25T08:00:00Z')).allowed, false);
 });
+
+test('unreviewed route and lost GPS continuity cannot issue guidance',()=>{const m=buildMaster(goodTrip(),{geometry:true}),fix={point:[41,-80.001],accuracy:5,timestamp:now};assert.equal(locateOnMaster({...m,ready:false},fix,null,now).status,'route-hold');const first=locateOnMaster(m,fix,null,now);assert.equal(locateOnMaster(m,fix,first,now).status,'gps-uncertain');assert.equal(locateOnMaster(m,{...fix,timestamp:now+31000},first,now+31000).status,'ambiguous');});

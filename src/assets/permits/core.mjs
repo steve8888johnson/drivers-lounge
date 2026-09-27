@@ -130,7 +130,10 @@ function project(point, segment) {
   return { distance: Math.hypot(a[0] + t * d[0], a[1] + t * d[1]) * 111195, progress: segment.start + t * (segment.end - segment.start), segment };
 }
 export function locateOnMaster(master, fix, previous = null, now = Date.now()) {
+  if (!master?.ready) return { status: 'route-hold', message: 'Route review is incomplete. Guidance paused; verify every issued permit.' };
   if (!pointOK(fix.point) || !Number.isFinite(fix.accuracy) || fix.accuracy < 0 || fix.accuracy > 50 || !Number.isFinite(fix.timestamp) || now - fix.timestamp > 15000 || fix.timestamp > now + 5000) return { status: 'gps-uncertain', message: 'GPS is stale or inaccurate. Guidance paused; follow the issued permit.' };
+  if (previous && fix.timestamp <= previous.timestamp) return { status: 'gps-uncertain', message: 'GPS update is out of order. Guidance paused; follow the issued permit.' };
+  if (previous && fix.timestamp - previous.timestamp > 30000) return { status: 'ambiguous', message: 'GPS continuity was lost. Stop when safe, verify your position and restart guidance.' };
   let candidates = master.segments.map(s => project(fix.point, s));
   if (previous) {
     // Stay on the same ordered corridor at crossings and loops. Never jump ahead to a nearby later road.
