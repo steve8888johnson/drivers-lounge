@@ -4,6 +4,7 @@ const query=new URLSearchParams(location.search);
 let refreshing=false;
 function msg(text,type='info'){const e=$('#auth-message');if(!e)return;e.textContent=text;e.className='auth-message '+type;e.hidden=false}
 if(!B?.configured){
+ $$('[data-guest-only]').forEach(section=>section.hidden=true);
  $$('form').forEach(form=>{form.hidden=true;form.querySelectorAll('input,select,textarea,button').forEach(control=>control.disabled=true)});
  if($('#account-title'))$('#account-title').textContent='Account services are not open';
  msg('This beta does not accept sign-ins, registrations or password resets. You can use the available planning tools without an account. For account help or privacy requests, contact support@atlasdigital.dev.');

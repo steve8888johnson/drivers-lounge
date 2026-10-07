@@ -13,7 +13,7 @@ test('read-only beta never initializes the backend even with configured public k
 test('unconfigured account screen disables inputs before registering submission handlers',()=>{
  const controls=[{disabled:false},{disabled:false}], form={hidden:false,querySelectorAll(){return controls;}};
  const title={},message={hidden:true};
- const document={querySelector(s){return s==='#account-title'?title:s==='#auth-message'?message:null;},querySelectorAll(s){assert.equal(s,'form');return [form];}};
+ const document={querySelector(s){return s==='#account-title'?title:s==='#auth-message'?message:null;},querySelectorAll(s){if(s==='[data-guest-only]')return [];assert.equal(s,'form');return [form];}};
  vm.runInNewContext(readFileSync('src/assets/auth.js','utf8'),{window:{DLBackend:{configured:false}},document,location:{search:''},URLSearchParams});
  assert.equal(form.hidden,true);assert(controls.every(c=>c.disabled));assert.equal(message.hidden,false);
  assert.match(message.textContent,/does not accept sign-ins/);assert.match(message.textContent,/support@atlasdigital.dev/);
