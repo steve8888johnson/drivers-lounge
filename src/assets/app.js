@@ -63,10 +63,7 @@ $$('[data-counter]').forEach(el=>{
   },35);
 });
 
-// Installable PWA support
-if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js').catch(()=>{}));
-}
+// The shared application shell owns service-worker registration.
 
 // Preserve small user preferences locally.
 $$('select,input[type="checkbox"]').forEach((el,i)=>{
