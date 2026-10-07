@@ -1,13 +1,13 @@
 (function(){
 const cfg=window.DRIVERS_LOUNGE_CONFIG||{};
-const configured=Boolean(cfg.supabaseUrl&&cfg.supabaseAnonKey&&window.supabase);
+const configured=!cfg.readOnlyBeta&&Boolean(cfg.supabaseUrl&&cfg.supabaseAnonKey&&window.supabase);
 // Capture recovery intent before Supabase consumes and removes the URL fragment.
 const callbackParams=new URLSearchParams(location.hash.slice(1));
 const queryParams=new URLSearchParams(location.search);
 const authCallback={recovery:callbackParams.get('type')==='recovery'||queryParams.get('flow')==='recovery',error:callbackParams.get('error_code')||queryParams.get('error_code')||callbackParams.get('error')||queryParams.get('error')||null};
 const client=configured?window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseAnonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}):null;
 if(client)client.auth.onAuthStateChange(event=>{if(event==='PASSWORD_RECOVERY')authCallback.recovery=true;window.dispatchEvent(new CustomEvent('dl-auth-change',{detail:{event}}))});
-function requireClient(){if(!client)throw new Error('Drivers Lounge backend is temporarily unavailable.');return client}
+function requireClient(){if(!client)throw new Error('Accounts and online submissions are not open in this beta. Email support@atlasdigital.dev for help.');return client}
 window.DLBackend={configured,client,authCallback,
  async session(){if(!client)return null;const {data,error}=await client.auth.getSession();if(error)throw error;return data.session||null},
  async user(){const s=await this.session();return s?.user||null},

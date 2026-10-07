@@ -132,7 +132,7 @@ function renderRoute() {
   $('#state-chain').innerHTML = m.permits.map(p => `<div class="state-stop"><strong>${esc(p.state || '?')}</strong><small>${esc(p.number || 'Permit needed')}</small></div>`).join('<span aria-hidden="true">→</span>');
   $('#route-checks').innerHTML = m.issues.length ? `<p class="info"><strong>${m.issues.length} checks need attention before guidance.</strong><br>${esc(m.issues[0])}</p><details><summary>Review all required checks</summary><ul class="issue-list">${m.issues.map(issue => `<li>${esc(issue)}</li>`).join('')}</ul></details>` : '<p class="good">Permit order and route connections checked. Verify current travel conditions before starting.</p>';
   $('#route-map').innerHTML = mapMarkup(m);
-  $('#start-guidance').disabled = !m.ready || watching !== null;
+  $('#start-guidance').disabled = window.DRIVERS_LOUNGE_CONFIG?.permitGuidanceEnabled !== true || !m.ready || watching !== null;
   $('#map-caption').textContent = 'Permit geometry and labeled state entries · no street basemap. ' + (m.meters ? `${(m.meters / 1609.344).toFixed(1)} mi of supplied geometry.` : 'Import detailed geometry for GPS guidance.');
   renderWalkthrough(m);
 }
@@ -260,6 +260,8 @@ async function refreshCrew() {
   $('#crew-status').textContent = `Private crew revision ${remote.revision}. Location sharing ${watching !== null && $('#share-consent').checked ? 'active' : 'off'}.`;
 }
 async function startGuidance() {
+  if (window.DRIVERS_LOUNGE_CONFIG?.permitGuidanceEnabled !== true) throw Error('Operational guidance is not available in this beta. Use the permit wallet for preparation while parked.');
+  if (window.DRIVERS_LOUNGE_CONFIG?.permitGuidanceEnabled !== true) throw Error('Operational guidance is not available in this beta. Use the permit wallet for preparation while parked.');
   const startVersion = ++guidanceVersion;
   if (dirty) throw Error('Save your changes before starting guidance.');
   if (!$('#conditions-checked').checked) throw Error('Confirm current restrictions, travel windows and escort arrangements before departure.');
@@ -291,7 +293,7 @@ function stopGuidance(message = 'Guidance is off. Location sharing stopped.') {
   $('#active-permit').textContent = 'NO ACTIVE PERMIT'; $('#maneuver').textContent = 'Guidance is off';
   $('#next-maneuver').textContent = 'Review the current trip and restart when ready.';
   $('#maneuver-distance').textContent = '—'; $('#remaining').textContent = '—'; $('#lane-info').textContent = 'Not supplied'; $('#nav-warnings').textContent = '';
-  $('#stop-guidance').disabled = true; $('#nav-status').textContent = message; $('#start-guidance').disabled = !trip || !buildMaster(trip, { geometry: true }).ready;
+  $('#stop-guidance').disabled = true; $('#nav-status').textContent = message; $('#start-guidance').disabled = window.DRIVERS_LOUNGE_CONFIG?.permitGuidanceEnabled !== true || !trip || !buildMaster(trip, { geometry: true }).ready;
   $('#walkthrough-panel').hidden = false;
 }
 async function prepareOffline() {

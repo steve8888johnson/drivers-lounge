@@ -15,12 +15,15 @@ const supabaseUrl=[process.env.NEXT_PUBLIC_SUPABASE_URL,process.env.SUPABASE_URL
   .map(normalizeEnv)
   .find(value=>/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(value))||'';
 const supabaseAnonKey=normalizeEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||process.env.SUPABASE_ANON_KEY);
-if(!supabaseUrl||!supabaseAnonKey)throw new Error('Valid public Supabase configuration is missing.');
+const readOnlyBeta=process.env.DL_READ_ONLY_BETA==='true';
+if(!readOnlyBeta&&(!supabaseUrl||!supabaseAnonKey))throw new Error('Valid public Supabase configuration is missing.');
 let keyRole='';try{keyRole=JSON.parse(Buffer.from(supabaseAnonKey.split('.')[1]||'','base64url').toString()).role}catch(_){}
-if(!supabaseAnonKey.startsWith('sb_publishable_')&&keyRole!=='anon')throw new Error('The browser requires a public publishable or anon key; privileged keys are forbidden.');
+if(!readOnlyBeta&&!supabaseAnonKey.startsWith('sb_publishable_')&&keyRole!=='anon')throw new Error('The browser requires a public publishable or anon key; privileged keys are forbidden.');
 const publicConfig=`window.DRIVERS_LOUNGE_CONFIG = ${JSON.stringify({
-  supabaseUrl,
-  supabaseAnonKey,
+  supabaseUrl:readOnlyBeta?'':supabaseUrl,
+  supabaseAnonKey:readOnlyBeta?'':supabaseAnonKey,
+  readOnlyBeta,
+  permitGuidanceEnabled:false,
   environment:process.env.VERCEL_ENV||'development',
   highwayAutomationUrl:normalizeEnv(process.env.HIGHWAY_AUTOMATION_URL),
   appName:'Drivers Lounge'
