@@ -5,6 +5,13 @@ export const STATES = 'AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME 
 export const id = () => crypto.randomUUID();
 export const clone = value => JSON.parse(JSON.stringify(value));
 export const clean = (value, max = 20000) => String(value ?? '').slice(0, max);
+// Issued text must fit in full. A shortened instruction is different evidence.
+export function sourceText(value, max = 20000, label = 'Permit text') {
+  if (value === undefined || value === null) return '';
+  if (typeof value !== 'string') throw Error(`${label} must be text. Keep the original and review this unsupported format.`);
+  if (value.length > max) throw Error(`${label} exceeds ${max} characters. Nothing was shortened; keep the full original for manual review.`);
+  return value;
+}
 export function blankPermit() {
   return { id: id(), state: '', number: '', kind: 'single-trip', validFrom: '', validTo: '', timeZone: '',
     entry: { label: '', state: '', road: '' }, exit: { label: '', state: '', road: '' }, routeText: '',
@@ -99,6 +106,8 @@ export function buildMaster(trip, { date = trip.departure, geometry = false } = 
   if (trip.completedAt && trip.permits.some(p => p.kind === 'single-trip')) issues.push('This single-trip move is marked complete. Obtain new permits for another move.');
   if (!validDate(date)) issues.push('Choose a valid travel date.');
   if (!trip.acknowledged) issues.push('Acknowledge that issued permits and state restrictions control.');
+  if (sorted.permits[0]?.entry.state) issues.push(`Start coverage is incomplete: the first saved permit enters from ${sorted.permits[0].entry.state}. Add the preceding coverage or verify the actual authorized pickup inside the first state.`);
+  if (sorted.permits.at(-1)?.exit.state) issues.push(`End coverage is incomplete: the last saved permit exits to ${sorted.permits.at(-1).exit.state}. Add the remaining coverage or verify the actual authorized delivery inside the final state.`);
   let offset = 0;
   sorted.permits.forEach((p, i) => {
     issues.push(...permitErrors(p));
@@ -207,20 +216,25 @@ export function movementWindow(permit, now = Date.now()) {
 export function sanitizePermit(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw Error('Permit data must be an object.');
   const p = blankPermit();
-  for (const field of ['state', 'number', 'kind', 'validFrom', 'validTo', 'timeZone', 'routeText', 'restrictions']) p[field] = clean(value[field]);
+  for (const [field, max] of Object.entries({ state: 2, number: 100, kind: 30, validFrom: 10, validTo: 10, timeZone: 100, routeText: 20000, restrictions: 20000 })) p[field] = sourceText(value[field], max, field);
   p.state = p.state.toUpperCase(); p.complete = value.complete === true;
-  for (const key of ['entry', 'exit']) for (const field of ['label', 'state', 'road']) p[key][field] = clean(value[key]?.[field], 300);
-  for (const key of ['heightFt', 'widthFt', 'lengthFt', 'weightLb', 'axles']) if (Number.isFinite(Number(value.limits?.[key])) && Number(value.limits[key]) > 0) p.limits[key] = Number(value.limits[key]);
+  for (const key of ['entry', 'exit']) for (const [field, max] of Object.entries({ label: 300, state: 2, road: 100 })) p[key][field] = sourceText(value[key]?.[field], max, `${key} ${field}`);
+  for (const key of ['heightFt', 'widthFt', 'lengthFt', 'weightLb', 'axles']) {
+    const n = value.limits?.[key]; if (n === undefined || n === null || n === '') continue;
+    if (!['number', 'string'].includes(typeof n) || !Number.isFinite(Number(n)) || Number(n) <= 0 || (key === 'axles' && !Number.isInteger(Number(n)))) throw Error(`Invalid stated permit limit: ${key}. Compare with the original.`);
+    p.limits[key] = Number(n);
+  }
   if (value.steps !== undefined && (!Array.isArray(value.steps) || value.steps.length > 1000)) throw Error('Invalid maneuver list.');
   let count = 0;
   p.steps = (value.steps || []).map(s => {
-    if (!Array.isArray(s.points) || !s.points.every(pointOK) || (count += s.points.length) > 100000) throw Error('Invalid or excessive route geometry.');
-    return { text: clean(s.text, 1000), road: clean(s.road, 200), lane: clean(s.lane, 300), routeLine: Number(s.routeLine), points: s.points.map(pt => [...pt]) };
+    if (!s || !Array.isArray(s.points) || !s.points.every(pointOK) || (count += s.points.length) > 100000) throw Error('Invalid or excessive route geometry.');
+    return { text: sourceText(s.text, 1000, 'Maneuver instruction'), road: sourceText(s.road, 200, 'Maneuver road'), lane: sourceText(s.lane, 300, 'Lane instruction'), routeLine: Number(s.routeLine), points: s.points.map(pt => [...pt]) };
   });
   p.confidence = Object.fromEntries(['state', 'number', 'validFrom', 'validTo', 'entry', 'exit', 'routeText'].map(field => [field, { score: p[field] && (typeof p[field] !== 'object' || p[field].label) ? .8 : 0, source: 'Imported data; compare with original' }]));
   if (value.geometrySource?.format === 'promiles-public-json/v1') p.geometrySource = { format: 'promiles-public-json/v1', note: 'Geometry supplied by public issued-route endpoint; full original review required' };
   if (value.travelWindow) { if (!windowValid(value.travelWindow)) throw Error('Invalid copied movement window.'); p.travelWindow = { from: value.travelWindow.from, to: value.travelWindow.to, days: [...value.travelWindow.days], closedDates: [...value.travelWindow.closedDates] }; }
-  p.qr = Array.isArray(value.qr) ? value.qr.slice(0, 20).map(s => clean(s, 50000)) : [];
+  if (value.qr !== undefined && (!Array.isArray(value.qr) || value.qr.length > 20)) throw Error('Too many or unsupported QR references. Keep all originals; import at most 20 references per permit.');
+  p.qr = (value.qr || []).map(s => sourceText(s, 50000, 'QR reference'));
   p.hazmatRoute = sanitizeHazmatRoute(value.hazmatRoute);
   return p;
 }

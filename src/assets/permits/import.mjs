@@ -1,9 +1,10 @@
-import { blankPermit, sanitizePermit, clean } from './core.mjs';
+import { blankPermit, sanitizePermit, sourceText } from './core.mjs';
 import { publicProviderURL } from './provider.mjs';
 import { decodePhotoPixels } from './qr-scan.mjs';
 
 export function classifyQR(raw) {
-  raw = clean(raw, 50000).trim();
+  if (typeof raw !== 'string' || raw.length > 50000) return { kind: 'manual', message: 'Unsupported or oversized QR contents. Nothing was shortened or imported; keep the original.' };
+  raw = raw.trim();
   if (!raw) return { kind: 'empty', message: 'No QR data found.' };
   try {
     const parsed = JSON.parse(raw);
@@ -19,9 +20,11 @@ export function classifyQR(raw) {
 }
 
 export function parsePermitText(text) {
-  const p = blankPermit(); p.routeText = clean(text);
-  if (/illinois/i.test(text)) { p.state = 'IL'; p.timeZone = 'America/Chicago'; }
-  else if (/state of ohio|\bohio\b/i.test(text)) { p.state = 'OH'; p.timeZone = 'America/New_York'; }
+  const p = blankPermit(); p.routeText = sourceText(text);
+  const illinois = /^\s*(?:STATE OF ILLINOIS|Illinois OS\/OW Permit)\s*$/im.test(text), ohio = /^\s*STATE OF OHIO\s*$/im.test(text);
+  // Border names and destination cities do not establish the issuing state.
+  if (illinois && !ohio) { p.state = 'IL'; p.timeZone = 'America/Chicago'; }
+  else if (ohio && !illinois) { p.state = 'OH'; p.timeZone = 'America/New_York'; }
   p.number = text.match(/permit\s*(?:number|no\.?|#)?\s*:?\s*([A-Z]?\d{5,})/i)?.[1] || '';
   const date = s => { const m = s?.match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[1]}-${m[2]}` : ''; };
   const dates = text.match(/Effective\s*Date\s*:?\s*(\d{2}\/\d{2}\/\d{4})\s*(?:through|to|–|-)\s*(\d{2}\/\d{2}\/\d{4})/i);

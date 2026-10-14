@@ -10,7 +10,7 @@ export function reviewFixture(date = '2026-09-25') {
   for (const [i, state] of ['OH', 'IN', 'IL'].entries()) {
     const p = blankPermit(), start = -80 - i * .002, mid = start - .001, end = start - .002;
     Object.assign(p, { state, number: `SYNTHETIC-${state}`, validFrom: date, validTo: date, timeZone: 'America/Chicago', kind: 'hazmat-route-plan', complete: true,
-      entry: { state: ['PA', 'OH', 'IN'][i], road: 'TEST ROAD', label: `SYNTHETIC ${state} entry` }, exit: { state: ['IN', 'IL', 'IA'][i], road: 'TEST ROAD', label: `SYNTHETIC ${state} exit` },
+      entry: { state: ['', 'OH', 'IN'][i], road: 'TEST ROAD', label: `SYNTHETIC ${state} ${i === 0 ? 'pickup inside state' : 'entry'}` }, exit: { state: ['IN', 'IL', ''][i], road: 'TEST ROAD', label: `SYNTHETIC ${state} ${i === 2 ? 'delivery inside state' : 'exit'}` },
       routeText: `SYNTHETIC ${state} entry maneuver\nSYNTHETIC ${state} exit maneuver`, restrictions: 'SYNTHETIC QA ONLY. Not a permit or a road route.',
       documents: [{ id: `test-original-${state}`, name: 'SYNTHETIC QA logo - not a permit.png', type: 'image/png', size: 1 }],
       steps: [{ routeLine: 1, text: `SYNTHETIC ${state} entry maneuver`, road: 'TEST ROAD', lane: 'Synthetic lane instruction', points: [[41, start], [41, mid]] }, { routeLine: 2, text: `SYNTHETIC ${state} exit maneuver`, road: 'TEST ROAD', lane: '', points: [[41, mid], [41, end]] }],

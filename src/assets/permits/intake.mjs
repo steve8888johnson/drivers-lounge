@@ -23,6 +23,26 @@ export function mergePermitIntake(existing, value) {
   return next;
 }
 
+// Preview the exact merge; never manufacture a diff from a truncated excerpt.
+export function previewPermitIntake(existing, value) {
+  const next = mergePermitIntake(existing, value), changes = [], retained = [];
+  const fields = [['state','Issuing state'],['number','Permit number'],['kind','Permit type'],['validFrom','Effective from'],['validTo','Effective through'],['timeZone','Permit time zone'],['entry','Origin / entry'],['exit','Destination / exit'],['routeText','Issued route text'],['restrictions','Conditions / restrictions'],['limits','Stated vehicle limits'],['travelWindow','Copied movement window']];
+  const display = v => v == null || v === '' ? '(not supplied)' : typeof v === 'string' ? v : JSON.stringify(v, null, 2);
+  for (const [field, label] of fields) {
+    if (JSON.stringify(existing[field]) !== JSON.stringify(next[field])) changes.push({ field, label, before: display(existing[field]), after: display(next[field]) });
+    else if (['validFrom','validTo','timeZone','restrictions','limits','travelWindow'].includes(field) && existing[field] && (typeof existing[field] !== 'object' || Object.keys(existing[field]).length)) retained.push(label);
+  }
+  const geometryChanged = JSON.stringify(existing.steps) !== JSON.stringify(next.steps) || JSON.stringify(existing.geometrySource) !== JSON.stringify(next.geometrySource);
+  return { next, changes, retained, geometryChanged, geometryBefore: existing.steps.length, geometryAfter: next.steps.length,
+    warnings: ['This is an unconfirmed draft. Applying it clears the complete-pages checkbox and both permit and geometry confirmations.',
+      ...(existing.steps.length && !next.steps.length ? ['The issued route changed without replacement geometry. The old maneuvers will be removed; no roads will be calculated between points.'] : []),
+      ...(retained.length ? ['Unchanged saved fields are retained, not reverified by this import: ' + retained.join(', ') + '. Compare them with every current original page.'] : []),
+      ...(next.steps.length ? ['Imported maneuver count is not proof of complete route or road coverage. Compare every instruction and original condition.'] : [])] };
+}
+
+export function intakeContext(tripId, permit) { return JSON.stringify([tripId, permit.id, permit]); }
+export function intakeContextMatches(context, tripId, permit) { return !!permit && context === intakeContext(tripId, permit); }
+
 export function createCameraSession() {
   let generation = 0;
   return {

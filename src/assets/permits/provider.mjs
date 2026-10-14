@@ -1,4 +1,4 @@
-import { blankPermit, clean, pointOK } from './core.mjs';
+import { blankPermit, sourceText, pointOK, STATES } from './core.mjs';
 
 // Read-only public references observed on the supplied issued permits. No credentials,
 // returned apiKey, remote scripts, SSML, alternative routes or navigation UI are used.
@@ -22,23 +22,24 @@ export function decodePolyline(encoded, precision) {
   while (index < encoded.length) { lat += next(); lng += next(); const point = [lat / factor, lng / factor]; if (!pointOK(point) || points.length >= 100000) throw Error('Invalid provider coordinates.'); points.push(point); }
   return points;
 }
-export function parsePublicProvider(payload) {
+export function parsePublicProvider(payload, expectedState = '') {
   if (!payload || typeof payload.data !== 'string' || payload.data.length > 2000000) throw Error('Unsupported public provider format. Keep the QR and use manual entry.');
   const data = JSON.parse(payload.data);
   if (data.code !== 'Ok' || data.routes?.length !== 1) throw Error('Expected exactly one issued route. Alternative routes require manual review.');
   const route = data.routes[0], steps = route.legs?.flatMap(leg => leg.steps);
   if (!Array.isArray(steps) || !steps.length || steps.length > 1000) throw Error('No supported authorized maneuvers found.');
-  const p = blankPermit(); p.state = clean(payload.jurisdiction, 2).toUpperCase();
+  const p = blankPermit(); p.state = sourceText(payload.jurisdiction, 2, 'Issuing state').toUpperCase();
+  if (!STATES.includes(p.state) || (expectedState && p.state !== expectedState)) throw Error('The route response does not match its issuing-state reference. Keep the QR and verify the original.');
   p.timeZone = p.state === 'OH' ? 'America/New_York' : p.state === 'IL' ? 'America/Chicago' : '';
-  p.entry.label = clean(data.waypoints?.[0]?.name, 300); p.exit.label = clean(data.waypoints?.at(-1)?.name, 300);
+  p.entry.label = sourceText(data.waypoints?.[0]?.name, 300, 'Route origin'); p.exit.label = sourceText(data.waypoints?.at(-1)?.name, 300, 'Route destination');
   for (const edge of [p.entry, p.exit]) { const match = edge.label.match(/^(.+?)\s+([A-Z]{2})\s+Line$/); if (match) { edge.road = match[1]; edge.state = match[2]; } }
   p.steps = steps.map((step, i) => {
     if (!step.maneuver?.instruction) throw Error('An issued maneuver is missing its instruction.');
-    return { routeLine: i + 1, text: clean(step.maneuver.instruction, 1000), road: clean(step.name, 200), lane: '', points: decodePolyline(step.geometry, payload.geometryPrecision) };
+    return { routeLine: i + 1, text: sourceText(step.maneuver.instruction, 1000, 'Maneuver instruction'), road: sourceText(step.name, 200, 'Maneuver road'), lane: '', points: decodePolyline(step.geometry, payload.geometryPrecision) };
   });
   p.geometrySource = { format: 'promiles-public-json/v1', note: 'Geometry supplied by public issued-route endpoint; full original review required' };
-  p.routeText = p.steps.map(s => s.text).join('\n');
-  p.restrictions = clean(payload.preRouteMessage);
+  p.routeText = sourceText(p.steps.map(s => s.text).join('\n'));
+  p.restrictions = sourceText(payload.preRouteMessage, 20000, 'Route conditions');
   p.confidence = Object.fromEntries(['state', 'entry', 'exit', 'routeText'].map(field => [field, { score: .85, source: 'Public issued-route QR data; compare with complete permit' }]));
   p.confidence.number = p.confidence.validFrom = p.confidence.validTo = { score: 0, source: 'Not supplied by navigation endpoint' };
   p.complete = false; return p;

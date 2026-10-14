@@ -8,7 +8,8 @@ export async function resolvePermitURL(raw, fetcher = fetch) {
   const reader = response.body.getReader(), chunks = []; let size = 0;
   try { while (true) { const part = await reader.read(); if (part.done) break; size += part.value.byteLength; if (size > 2000000) throw Error('Provider route exceeds the import limit.'); chunks.push(part.value); } } finally { await reader.cancel(); }
   // Return only allowlisted permit fields. Provider credentials and executable content never leave this server adapter.
-  return parsePublicProvider(JSON.parse(await new Blob(chunks).text()));
+  const expectedState = url.hostname === 'webapps.dot.illinois.gov' ? 'IL' : url.pathname.split('/')[5];
+  return parsePublicProvider(JSON.parse(await new Blob(chunks).text()), expectedState);
 }
 export default async function handler(req, res) {
   if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); return send(res, 405, { error: 'Use POST.' }); }

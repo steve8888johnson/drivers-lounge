@@ -9,7 +9,7 @@ import { captureTripDraft, applyGeometryDraft, maneuverKey } from './drafts.mjs'
 import { walkthrough } from './walkthrough.mjs';
 import { walletLaunch } from './launch.mjs';
 import { planningPlaces, preparationStatus, applyPlanningHandoff } from './preparation.mjs';
-import { mergePermitIntake, createCameraSession } from './intake.mjs';
+import { previewPermitIntake, intakeContext, intakeContextMatches, createCameraSession } from './intake.mjs';
 import { createGuidanceSession, maneuverCue } from './guidance.mjs';
 import { createSpeech, speechPreferences, parkedInstruction } from './speech.mjs';
 
@@ -178,13 +178,23 @@ async function openTrip(value) { stopGuidance(); stopCamera(); trip = value; tri
 async function ensurePermit() { if (!currentPermit()) { captureDrafts(); edit(); const p = blankPermit(); trip.permits.push(p); selected = p.id; await persist(); renderList(); renderReview(); } return currentPermit(); }
 async function mergeImport(imported) {
   await ensurePermit(); captureDrafts(); const p = currentPermit();
-  const next = mergePermitIntake(p, imported); edit();
-  trip.permits[trip.permits.indexOf(p)] = next;
+  const preview = previewPermitIntake(p, imported), context = intakeContext(trip.id, p);
+  const dialog = $('#permit-import-review');
+  $('#import-change-summary').textContent = `${preview.changes.length} field group(s) change. Maneuvers: ${preview.geometryBefore} saved → ${preview.geometryAfter} after import${preview.geometryChanged ? ' (changed)' : ' (unchanged)'}. Original pages and saved QR references stay in this wallet.`;
+  $('#import-review-warnings').innerHTML = preview.warnings.map(w => `<p class="info">${esc(w)}</p>`).join('');
+  $('#import-field-changes').innerHTML = preview.changes.map(c => `<details ${c.field === 'routeText' || c.field === 'restrictions' ? 'open' : ''}><summary>${esc(c.label)}</summary><div class="import-comparison"><div><h3>Saved now</h3><pre>${esc(c.before)}</pre></div><div><h3>After applying</h3><pre>${esc(c.after)}</pre></div></div></details>`).join('') || '<p>No saved field text changes. Applying still requires a fresh original review.</p>';
+  dialog.returnValue = '';
+  const accepted = await new Promise(resolve => { dialog.addEventListener('close', () => resolve(dialog.returnValue === 'apply'), { once: true }); dialog.showModal(); });
+  if (!accepted) { status('Import cancelled. The proposed route changes were not applied.'); return; }
+  if (!intakeContextMatches(context, trip.id, currentPermit())) throw Error('The selected load or permit changed during review. Read the QR again; the proposed changes were not applied.');
+  edit(); trip.permits[trip.permits.indexOf(p)] = preview.next;
   await persist('Imported draft. Confirm every extracted field against the original.'); renderList(); renderReview();
 }
 async function handleQR(raw) {
   if (typeof raw !== 'string' || !raw.trim() || raw.length > 50000) throw Error('QR contents are empty or too large. Keep the original and enter its route manually.');
-  await ensurePermit(); captureDrafts(); const p = currentPermit(); edit();
+  await ensurePermit(); captureDrafts(); const p = currentPermit();
+  if (!p.qr.includes(raw) && p.qr.length >= 20) throw Error('This permit already has 20 saved QR references. No reference was discarded. Keep the original pages and review the existing references.');
+  edit();
   if (!p.qr.includes(raw)) p.qr.push(String(raw).slice(0, 50000)); p.review = null; p.geometryReview = null; await persist();
   renderQRCards(p); renderList(); status('QR saved on this device. Choose its import action, then compare with every original page.');
 }
@@ -198,7 +208,7 @@ function renderQRCards(p) {
   if (result.kind === 'encoded-route') { label = 'Use encoded route'; importer = async () => result.permit; }
   if (result.kind === 'public-url') { label = 'Import this public route'; importer = () => importPublicQR(result.url); }
   if (result.kind === 'public-provider') { label = 'Import issued route data'; importer = async () => { const response = await fetch('/api/permit-route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: result.url }), signal: AbortSignal.timeout(15000), cache: 'no-store' }); const data = await response.json(); if (!response.ok) throw Error(data.error || 'Public import unavailable. Use manual entry.'); return data.permit; }; }
-  if (importer) { const button = document.createElement('button'); button.textContent = label; button.onclick = safe(async () => { if (currentPermit()?.id !== p.id) throw Error('Select the original state permit before importing this QR.'); button.disabled = true; try { await mergeImport(await importer()); } finally { button.disabled = false; } }); el.append(button); }
+  if (importer) { const button = document.createElement('button'); button.textContent = label; button.onclick = safe(async () => { if (currentPermit()?.id !== p.id) throw Error('Select the original state permit before importing this QR.'); const context = intakeContext(trip.id, p); button.disabled = true; try { const imported = await importer(); if (!intakeContextMatches(context, trip.id, currentPermit())) throw Error('The load or permit changed while fetching this QR. The result was not applied.'); await mergeImport(imported); } finally { button.disabled = false; } }); el.append(button); }
   $('#qr-results').append(el);
   }
 }

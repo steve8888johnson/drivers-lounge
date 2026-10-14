@@ -13,7 +13,7 @@ function permit(state, from, to, start, end) {
 export function goodTrip() {
   const t = blankTrip(); t.name = 'Synthetic test only'; t.departure = '2026-09-24'; t.acknowledged = true;
   t.profile = { heightFt: '14', widthFt: '12', lengthFt: '90', weightLb: '110000', axles: '7', axleWeights: '', hazmat: '' };
-  t.permits = [permit('OH', 'PA', 'IN', -80, -80.002), permit('IN', 'OH', 'IL', -80.002, -80.004), permit('IL', 'IN', 'IA', -80.004, -80.006)]; return t;
+  t.permits = [permit('OH', '', 'IN', -80, -80.002), permit('IN', 'OH', 'IL', -80.002, -80.004), permit('IL', 'IN', '', -80.004, -80.006)]; return t;
 }
 const now = Date.parse('2026-09-24T15:00:00Z');
 test('Illinois photo route is retained verbatim, including toll ramp and printed mileage', () => {
