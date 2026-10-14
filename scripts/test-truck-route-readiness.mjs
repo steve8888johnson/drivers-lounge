@@ -1,0 +1,36 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import {readFileSync} from 'node:fs';
+const context=vm.createContext({URL});
+vm.runInContext(readFileSync('src/assets/truck-route-readiness.js','utf8'),context);
+const {assess,checks}=context.DLTruckRouteReadiness;
+function fixture(){
+ const profile={heightIn:162,widthIn:102,lengthFt:72,grossWeightLb:80000,axleCount:5,confirmed:true,oversize:false,hazmat:false,revision:'v1'};
+ const evidence=Object.fromEntries(checks.map(kind=>[kind,{status:'supported',sourceUrl:'https://example.gov/test-fixture',authority:'TEST ONLY',version:'fixture-v1',routeId:'r1',profileRevision:'v1',segmentId:'east-1',checkedAt:'2026-10-13T12:00:00Z',validFrom:'2026-10-13T00:00:00Z',validUntil:'2026-10-14T00:00:00Z'}]));
+ return {profile,now:Date.parse('2026-10-13T13:00:00Z'),route:{id:'r1',profileRevision:'v1',providerMode:'truck',departure:'2026-10-13T14:00:00Z',arrival:'2026-10-13T18:00:00Z',segments:[{id:'east-1',evidence}]}};
+}
+test('complete synthetic evidence still cannot authorize guidance',()=>{
+ const result=assess(fixture());assert.equal(result.status,'REVIEW_REQUIRED');assert.equal(result.guidanceAllowed,false);
+});
+test('every evidence category is required on every segment',()=>{
+ for(const kind of checks){const input=fixture();delete input.route.segments[0].evidence[kind];assert.equal(assess(input).status,'HOLD',kind);}
+ const input=fixture();input.route.segments.push({id:'last-mile'});assert.equal(assess(input).status,'HOLD');
+});
+test('changed vehicle, reroute, direction, conflicts and car fallback are held',()=>{
+ const mutations=[i=>i.profile.revision='v2',i=>i.route.id='rerouted',i=>i.route.segments[0].id='west-1',i=>i.route.providerMode='car',i=>i.route.segments[0].evidence.truckAccess.status='conflicting',i=>i.route.segments[0].evidence.weight.status='restricted',i=>i.route.segments.push(i.route.segments[0])];
+ for(const mutate of mutations){const input=fixture();mutate(input);assert.equal(assess(input).status,'HOLD');}
+});
+test('expired, future, timezone-free and mid-trip expiring evidence are held',()=>{
+ for(const [key,value] of [['validUntil','2026-10-13T17:00:00Z'],['validUntil','2026-10-13T18:00:00Z'],['checkedAt','2026-10-14T00:00:00Z'],['validFrom','2026-10-13T15:00:00Z'],['checkedAt','2026-10-13T12:00:00'],['validUntil','garbage']]){
+ const input=fixture();input.route.segments[0].evidence.clearance[key]=value;assert.equal(assess(input).status,'HOLD');}
+});
+test('bad measurements, unconfirmed presets, hazmat and oversize stay held',()=>{
+ for(const [key,value] of [['heightIn',0],['widthIn',NaN],['grossWeightLb','80000'],['lengthFt',-1],['axleCount',2.5],['confirmed',false],['hazmat',true],['oversize',true]]){
+ const input=fixture();input.profile[key]=value;assert.equal(assess(input).status,'HOLD');}
+ for(const input of [null,{},undefined])assert.equal(assess(input).status,'HOLD');
+});
+test('unattributed evidence and past trips stay held',()=>{
+ for(const mutate of [i=>i.route.segments[0].evidence.weight.sourceUrl='http://example.gov',i=>i.route.segments[0].evidence.weight.version='',i=>i.route.departure='2026-10-12T14:00:00Z',i=>i.route.arrival='2026-10-13T13:30:00Z']){
+ const input=fixture();mutate(input);assert.equal(assess(input).status,'HOLD');}
+});
