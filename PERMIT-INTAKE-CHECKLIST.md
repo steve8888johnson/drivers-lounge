@@ -17,6 +17,12 @@ Prepared October 14, 2026 for the expected October 15 Draper, Utah–Brunswick, 
 
 Wrong state or permit number; truncated/cropped/missing pages; amendments inconsistent with an earlier QR; limits inconsistent with the measured load; expired or ambiguous dates/windows; unverified entrances/road directions; missing or conflicting state connections; unsupported QR data; missing originals after device transfer. Preserve the evidence and obtain the corrected/missing information. Never generate an unapproved detour.
 
+## Observed information-only QR formats
+
+A separate supplied Kansas example contains identification and main dates in its QR, without roads, turns, restrictions or its shorter added-weight period. A supplied Texas example points to a permit-information webpage; the QR itself contains no route geometry. These are now labeled **Permit details only** / **Texas permit-information link**, with no route-import action. Pasting either recognized format as route text is rejected. References remain stored exactly and are not fetched or silently changed from HTTP to HTTPS. This identifies the payload format, not the authenticity or current validity of a permit.
+
+Check every page: route tables can continue onto the final page, and a separate weight authorization can expire before the main permit. Compare stated gross/axle weights and axle spacings across the full packet and against actual loaded measurements. Do not assume different figures are either automatically compatible or automatically invalid. Missing intervening state coverage cannot be filled with an ordinary route calculation. Real originals and identifying QR values used for this assessment remain local and are not test fixtures or public examples.
+
 ## Engineering evidence
 
 The October14 import-review pass adds whole-field rejection, expected-state validation for supported public responses, first/last-state coverage holds, full before/after import comparison and stale-result protection. Automated cases and synthetic local browser checks establish those software behaviors only. No actual new-load permit, road route, iPhone camera or field navigation has been validated by this pass.

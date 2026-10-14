@@ -196,7 +196,7 @@ async function handleQR(raw) {
   if (!p.qr.includes(raw) && p.qr.length >= 20) throw Error('This permit already has 20 saved QR references. No reference was discarded. Keep the original pages and review the existing references.');
   edit();
   if (!p.qr.includes(raw)) p.qr.push(String(raw).slice(0, 50000)); p.review = null; p.geometryReview = null; await persist();
-  renderQRCards(p); renderList(); status('QR saved on this device. Choose its import action, then compare with every original page.');
+  renderQRCards(p); renderList(); status(classifyQR(raw).kind === 'permit-info' ? 'Permit-information QR saved. It contains no embedded route; use the printed route and all condition pages.' : 'QR saved on this device. Choose its import action when available, then compare with every original page.');
 }
 function renderQRCards(p) {
   $('#qr-results').replaceChildren();

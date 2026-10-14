@@ -2,16 +2,24 @@ import { blankPermit, sanitizePermit, sourceText } from './core.mjs';
 import { publicProviderURL } from './provider.mjs';
 import { decodePhotoPixels } from './qr-scan.mjs';
 
+// Some issued QR codes carry identification only. Do not promote their dates to
+// movement authorization or their text to route instructions. No issuer is inferred.
+const identificationQR = raw => /^Permit No:\s*\d+\r?\nStart Date:\s*\d{2}\/\d{2}\/\d{4}\r?\nEnd Date:\s*\d{2}\/\d{2}\/\d{4}\r?\nDot No:\s*\d+\r?\nPlate No:\s*[^\r\n]+\r?\nVIN:\s*[A-Z0-9]+\r?\nPhone:\s*[+\d() .-]+$/i.test(raw);
+
 export function classifyQR(raw) {
   if (typeof raw !== 'string' || raw.length > 50000) return { kind: 'manual', message: 'Unsupported or oversized QR contents. Nothing was shortened or imported; keep the original.' };
   raw = raw.trim();
   if (!raw) return { kind: 'empty', message: 'No QR data found.' };
+  if (identificationQR(raw)) return { kind: 'permit-info', raw, message: 'Permit details only. This QR has identifiers and dates, but no roads, turns or movement conditions. Its dates may omit a shorter weight authorization. Keep every printed route and condition page; enter the issued route separately.' };
   try {
     const parsed = JSON.parse(raw);
     if (parsed.schema === 'dl-permit-route/v1') return { kind: 'encoded-route', permit: sanitizePermit(parsed.permit), raw };
   } catch (error) { if (raw.startsWith('{')) return { kind: 'manual', raw, message: 'The encoded route is not a supported valid permit package. Retain it and enter the issued route.' }; }
   try {
     const url = new URL(raw);
+    // The observed Texas information link is HTTP. Retain it exactly, without
+    // fetching it, silently upgrading its scheme or offering a route import.
+    if (['http:', 'https:'].includes(url.protocol) && url.hostname === 'txpros.txdmv.gov' && !url.port && !url.username && !url.password && !url.hash && url.pathname === '/PermitDetails02.aspx' && [...url.searchParams.keys()].sort().join(',') === 'PermitID,QRUSER' && /^\d+$/.test(url.searchParams.get('PermitID')) && url.searchParams.get('QRUSER') === '1') return { kind: 'permit-info', raw, message: 'Texas permit-information link. This QR points to a permit-details webpage; it does not embed turn-by-turn route data. Keep the printed route and condition pages. No webpage was fetched or route imported.' };
     if (url.protocol !== 'https:' || url.username || url.password || !/^[a-z0-9.-]+$/i.test(url.hostname) || !url.hostname.includes('.') || /(^|\.)(localhost|local|internal|test|invalid)$/.test(url.hostname) || /^\d/.test(url.hostname)) return { kind: 'manual', raw, message: 'This QR is not an eligible public HTTPS route. Retain it and transcribe the issued permit.' };
     if (publicProviderURL(raw)) return { kind: 'public-provider', raw, url: raw, message: 'Issued-permit navigation reference detected. Try a public-data import without signing in. If access is required, use the original permit.' };
     if (/promiles/i.test(url.hostname)) return { kind: 'proprietary', raw, message: 'Unrecognized ProMiles reference retained. No authenticated or proprietary service is accessed. Import authorized route data or transcribe the permit.' };
@@ -20,6 +28,7 @@ export function classifyQR(raw) {
 }
 
 export function parsePermitText(text) {
+  if (typeof text === 'string' && classifyQR(text).kind === 'permit-info') throw Error('This is permit information only, not the issued route. Save the QR reference and copy the full printed route and conditions instead.');
   const p = blankPermit(); p.routeText = sourceText(text);
   const illinois = /^\s*(?:STATE OF ILLINOIS|Illinois OS\/OW Permit)\s*$/im.test(text), ohio = /^\s*STATE OF OHIO\s*$/im.test(text);
   // Border names and destination cities do not establish the issuing state.

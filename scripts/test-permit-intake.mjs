@@ -10,6 +10,35 @@ import { readFileSync } from 'node:fs';
 import jsQR from '../src/assets/vendor/jsQR-1.4.0.js';
 import { decodePhotoPixels } from '../src/assets/permits/qr-scan.mjs';
 
+// Synthetic values only. Real carrier details and private permit references stay
+// outside the repository; these reproduce the observed structure, not the load.
+const infoQR = 'Permit No: 10000001\r\nStart Date: 10/14/2026\r\nEnd Date: 10/20/2026\r\nDot No: 1000000\r\nPlate No: TEST001\r\nVIN: 00001\r\nPhone: 5550100000';
+const texasInfoQR = 'http://txpros.txdmv.gov/PermitDetails02.aspx?PermitID=10000001&QRUSER=1';
+test('identification-only QR never supplies a route, issuer or movement dates', () => {
+  for (const text of [infoQR,infoQR.replaceAll('\r\n','\n')]) {
+    const result=classifyQR(text);
+    assert.equal(result.kind,'permit-info'); assert.equal(result.raw,text);
+    assert.equal(result.permit,undefined); assert.equal(result.url,undefined);
+    assert.match(result.message,/shorter weight authorization/);
+    assert.throws(()=>parsePermitText(text),/not the issued route/);
+  }
+  assert.equal(classifyQR(infoQR+'\nTurn left onto TEST ROAD').kind,'manual');
+});
+test('Texas permit-information references are preserved without a route import or scheme upgrade', async () => {
+  let requests=0;
+  for (const text of [texasInfoQR,texasInfoQR.replace('http:','https:')]) {
+    const result=classifyQR(text);
+    assert.equal(result.kind,'permit-info');assert.equal(result.raw,text);
+    assert.equal(result.permit,undefined);assert.equal(result.url,undefined);
+    assert.throws(()=>parsePermitText(text),/not the issued route/);
+    await assert.rejects(()=>importPublicQR(text,async()=>{requests++;return new Response('unexpected');}),/Only public HTTPS/);
+  }
+  assert.equal(requests,0);
+});
+test('lookalike hosts, credentials and altered information references are not the recognized Texas QR', () => {
+  for (const text of [texasInfoQR.replace('txpros.txdmv.gov','txpros.txdmv.gov.example.com'),texasInfoQR.replace('txpros.txdmv.gov','txpros.txdmv.gov@evil.example'),texasInfoQR+'&QRUSER=1',texasInfoQR+'&other=1',texasInfoQR+'#x',texasInfoQR.replace('10000001','not-an-id')]) assert.notEqual(classifyQR(text).kind,'permit-info');
+});
+
 test('a different state or permit ID cannot silently overwrite the selected permit', () => {
   const current = {...blankPermit(), state:'UT', number:'UT-TEST-1', routeText:'EXACT ORIGINAL ROAD'};
   const before = structuredClone(current);
