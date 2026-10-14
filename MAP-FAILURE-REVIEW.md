@@ -1,5 +1,7 @@
 # Map and location failure review — 2026-10-14
 
+Final release854bdab / dpl_CXgSwhKTA6DXvPfhD7jUxnUhAuT3 adds a responsive breakpoint fix after screenshot review caught a narrow-desktop overlap. Browser checks700px and either side of1040px confirm trip/safety panels no longer intersect. Final live CSS matches and gates remain closed;146 remote tests/build pass. Screenshots refreshed; synthetic profile values cleared and reload verified. The earlier303ec3c release below records the preceding map/location implementation.
+
 HIGH / contained locally: the prior UI called any returned browser coordinate “precise GPS” or “Wi-Fi” without checking reported accuracy or timestamp. A stale dot could remain usable as an origin. A tile loading completion event could leave missing map tiles with no warning.
 
 The planning UI now validates numeric coordinate bounds, timestamp and reported uncertainty. Readings at least 60 seconds old, future-dated, malformed or worse than 100 m are rejected. These are conservative product limits for planning, not legal standards or road/entrance certification. A valid reading gets an uncertainty circle and expires; both endpoint aliases and the marker are cleared on expiry. Returning from a suspended page and recentering recheck expiry. A denied permission never triggers a network fallback. Network-derived coordinates only show an approximate area and never become an origin. User edits during a location request cannot be overwritten by its late result.
