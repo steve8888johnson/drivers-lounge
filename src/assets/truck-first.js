@@ -19,11 +19,27 @@
  if(!root.document)return;
  const doc=root.document,byId=id=>doc.getElementById(id),button=byId('confirm-truck');
  if(!button)return;
- let confirmed=false,savedSetup=false,storage;
+ let confirmed=false,savedSetup=false,storage,edited=false;
  try{storage=root.localStorage;}catch{/* A blocked store cannot provide remembered measurements. */}
  const memory=root.DLTruckSetupMemory;
  root.DLTruckFirst.isConfirmed=()=>confirmed;
  const values=()=>Object.fromEntries([...fields,'trailer-type','oversize','hazmat'].map(id=>[id,byId(id).type==='checkbox'?byId(id).checked:byId(id).value]));
+ root.DLTruckFirst.values=values;
+ root.DLTruckFirst.edited=()=>edited;
+ root.DLTruckFirst.applyAccount=v=>{
+  if(validate(v).length)return false;
+  for(const id of [...fields,'trailer-type'])byId(id).value=v[id];
+  byId('oversize').checked=false;byId('hazmat').checked=false;
+  savedSetup=true;byId('saved-truck-summary').textContent=describe(v);reset(false);
+  doc.body.dataset.navScreen='trip';edited=false;return true;
+ };
+ root.DLTruckFirst.resetAccount=()=>{
+  confirmed=false;savedSetup=false;edited=false;
+  for(const id of [...fields,'trailer-type'])byId(id).value='';
+  byId('oversize').checked=false;byId('hazmat').checked=false;
+  byId('saved-truck-summary').textContent='';reset(false);doc.body.dataset.navScreen='truck';
+  byId('profile-summary-text').textContent='Enter loaded measurements';byId('profile-status').textContent='';
+ };
  function reset(forget=true){confirmed=false;if(forget){savedSetup=false;memory?.saveDraft(storage,'standard',values());}byId('saved-truck-card').hidden=!savedSetup;byId('truck-readiness-details').textContent='Confirm the loaded truck details first. Road restrictions have not been verified.';byId('trip-inputs').disabled=!savedSetup;byId('truck-confirmation').textContent='Confirm your loaded truck before entering a trip.';byId('why-profile').textContent='Loaded measurements have not been confirmed for this load.';}
  root.DLTruckFirst.invalidate=reset;
  root.DLTruckFirst.hasSavedSetup=()=>savedSetup;
@@ -35,14 +51,15 @@
   savedSetup=memory?.save(storage,'standard',v)===true;
   byId('saved-truck-card').hidden=true;
   byId('truck-readiness-details').textContent='Truck details confirmed. No truck-route candidate with complete road restriction evidence is connected.';
-  byId('truck-confirmation').textContent=savedSetup?'Setup saved on this device. Current load confirmed; road restrictions still need verification.':'Current load confirmed. This browser could not remember the setup; keep a separate record.';
+  byId('truck-confirmation').textContent=memory?.accountActive()?'Current load confirmed. Check the account sync status below for whether it saved.':savedSetup?'Setup saved on this device. Current load confirmed; road restrictions still need verification.':'Current load confirmed. This browser could not remember the setup; keep a separate record.';
   byId('why-profile').textContent=`Vehicle used for this check: ${v['truck-width-ft']} ft ${v['truck-width-in']} in wide; ${v['truck-height-ft']} ft ${v['truck-height-in']} in high; ${v['truck-length']} ft long; ${Number(v['truck-weight']).toLocaleString()} lb loaded; ${v['truck-axles']} axles. This does not establish road legality.`;
   byId('origin').focus();
+  root.dispatchEvent?.(new CustomEvent('dl-setup-confirmed'));
  }
  button.addEventListener('click',confirm);
  byId('reuse-truck').addEventListener('click',confirm);
  for(const id of [...fields,'trailer-type','oversize','hazmat','vehicle-preset']){
-  byId(id).addEventListener('input',()=>reset());byId(id).addEventListener('change',()=>reset());
+  byId(id).addEventListener('input',()=>{edited=true;reset();});byId(id).addEventListener('change',()=>{edited=true;reset();});
  }
  // Capture also blocks programmatic Enter/click paths while the profile is unconfirmed.
  byId('trip-inputs').addEventListener('keydown',e=>{if(!confirmed&&e.key==='Enter'){e.preventDefault();e.stopImmediatePropagation();}},true);

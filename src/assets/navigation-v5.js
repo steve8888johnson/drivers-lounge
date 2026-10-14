@@ -115,7 +115,7 @@ function profileSummary(){
  $('#oversize-fields').hidden=!$('#oversize').checked;$('#hazmat-fields').hidden=!$('#hazmat').checked;
  const errors=validateProfile();$('#profile-status').textContent=errors.length?errors.join(' '):'Profile saved. Commercial routing connection required before these restrictions can be applied.';$('#profile-status').dataset.bad=errors.length?'1':'0';
 }
-function saveProfile(){try{localStorage.setItem('dl-truck-profile',JSON.stringify(Object.fromEntries(profileFields.map(key=>{const el=document.getElementById(key);return[key,el.type==='checkbox'?el.checked:el.value]}))))}catch(_){toast('Truck profile could not be saved on this device.')}profileSummary();showTruckReadiness()}
+function saveProfile(){if(window.DLTruckSetupMemory?.accountActive()){profileSummary();showTruckReadiness();return;}try{localStorage.setItem('dl-truck-profile',JSON.stringify(Object.fromEntries(profileFields.map(key=>{const el=document.getElementById(key);return[key,el.type==='checkbox'?el.checked:el.value]}))))}catch(_){toast('Truck profile could not be saved on this device.')}profileSummary();showTruckReadiness()}
 function applyPreset(name){
  const presets={
   'standard-semi':{'truck-height-ft':13,'truck-height-in':6,'truck-width-ft':8,'truck-width-in':6,'truck-length':72,'trailer-length':53,'truck-weight':80000,'truck-axles':5,'trailer-type':'semi-53'},

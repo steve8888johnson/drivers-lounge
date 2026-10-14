@@ -1,3 +1,4 @@
+import { mountSetupAccount } from '../truck-setup-account.mjs';
 import { STATES, profileErrors, blankTrip, blankPermit, buildMaster, crewKey, geometryReviewed, reviewed, confirmPermit, confirmGeometry, locateOnMaster, warnings, sanitizePermit } from './core.mjs';
 import { classifyQR, parsePermitText, importPublicQR, scanImage } from './import.mjs';
 import { listTrips, saveTrip, addDocument, getDocument, deleteTrip, exportPacket, importPacket, verifyWallet } from './storage.mjs';
@@ -21,6 +22,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const crew = new Crew(window.DLBackend);
 const cameraSession = createCameraSession();
 const guidanceSession = createGuidanceSession();
+let setupAccount;
 let trip, selected, tab = 'load', dirty = false, watching = null, gpsWatch = null, progress, master, crewTimer, crewBusy = false, lastCrew = 0, camera, cameraTimer, activeState = '', objectURLs = [], guidanceVersion = 0;
 let savedTrip, walkthroughIndex = 0, mapFocus = false, guidancePause = '', spokenState = '';
 const speech = createSpeech({ synthesis: window.speechSynthesis, Utterance: window.SpeechSynthesisUtterance, visible: () => !document.hidden,
@@ -382,7 +384,7 @@ setupHazmat({ getTrip: () => trip, safe, capture: captureDrafts, routeConfirmed:
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
 for (const name of ['state', 'entry-state', 'exit-state']) $('#permit-form').elements[name].innerHTML = '<option value="">Select state / not a border</option>' + STATES.map(s => `<option>${s}</option>`).join('');
 for (const selector of ['#load-form', '#permit-form', '#geometry-json']) on(selector, 'input', e => { if (selector === '#load-form' && [...REUSABLE_MEASUREMENTS,'axleWeights','hazmat'].includes(e.target.name)) { $('#load-form').elements.acknowledged.checked = false; window.DLTruckSetupMemory?.forget(setupStore(), 'permit'); } edit(); status('Unsaved changes. Save and reconfirm any changed route before guidance.'); });
-on('#load-form', 'submit', async e => { e.preventDefault(); captureDrafts(); await persist('Load details saved on this device.'); if (rememberSetup()) status('Load saved. Measurements remembered for your next load on this device.'); renderLoad(); renderRoute(); });
+on('#load-form', 'submit', async e => { e.preventDefault(); captureDrafts(); await persist('Load details saved on this device.'); if (rememberSetup()) { status('Load saved. Measurements remembered for your next load; check account sync for cross-device saving.'); void setupAccount?.save(); } renderLoad(); renderRoute(); });
 on('#save-load-draft', 'click', async () => {
   captureDrafts();
   await persist('Draft saved on this device. Add the actual measurements and permits when available.');
@@ -457,3 +459,16 @@ async function launchWallet() {
 window.addEventListener('hashchange', safe(async () => { const params = new URLSearchParams(location.hash.slice(1)); if (!['trip','tab','new'].some(key => params.has(key))) return; if (await changeGuard()) await launchWallet(); else switchTab(tab); }));
 try { await launchWallet(); connection(); if ('serviceWorker' in navigator) void navigator.serviceWorker.register('/sw.js').catch(() => {}); }
 catch (e) { status(`Device storage unavailable: ${e.message}. Enable browser storage before using the permit wallet.`, true); document.querySelectorAll('button,input,select,textarea').forEach(el => el.disabled = true); }
+
+if (trip) setupAccount = mountSetupAccount({
+  element: $('#setup-account'), kind: 'permit',
+  read: () => Object.fromEntries(REUSABLE_MEASUREMENTS.map(key => [key, $('#load-form').elements[key].value])),
+  validate: profileErrors,
+  automatic: () => !dirty,
+  // Existing permits and load drafts keep their own values. The account is a default
+  // for a new empty load, never a remote edit to an active permit packet.
+  apply: values => {
+    if (dirty || trip.permits.length || Object.values(trip.profile).some(Boolean)) return false;
+    applySavedPermitSetup(trip, values); renderLoad(); edit(); return true;
+  }
+});

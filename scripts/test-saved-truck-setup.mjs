@@ -9,7 +9,7 @@ const values=()=>({'truck-height-ft':'13','truck-height-in':'6','truck-width-ft'
 function store(){const entries=new Map();return{getItem:k=>entries.get(k)||null,setItem:(k,v)=>entries.set(k,v),removeItem:k=>entries.delete(k)};}
 function browser(storage,data={}){
  const elements=new Map();const get=id=>{if(!elements.has(id))elements.set(id,{value:data[id]??'',checked:false,type:['oversize','hazmat'].includes(id)?'checkbox':'text',textContent:'',handlers:{},addEventListener(event,fn){(this.handlers[event]??=[]).push(fn)},focus(){}});return elements.get(id)};
- const c=vm.createContext({document:{getElementById:get},localStorage:storage});vm.runInContext(memory,c);vm.runInContext(truck,c);
+ const c=vm.createContext({document:{getElementById:get,body:{dataset:{}}},localStorage:storage});vm.runInContext(memory,c);vm.runInContext(truck,c);
  return{api:c.DLTruckFirst,memory:c.DLTruckSetupMemory,get,event:(id,event)=>get(id).handlers[event]?.forEach(fn=>fn({}))};
 }
 test('first setup is remembered; return opens a compact summary without treating the load as confirmed',()=>{
@@ -45,4 +45,10 @@ test('returning navigation bypasses the full editor but not the current-load gat
  const elements=new Map();const get=id=>{if(!elements.has(id))elements.set(id,{handlers:{},addEventListener(n,f){this.handlers[n]=f},focus(){}});return elements.get(id)};const body={dataset:{}},api={hasSavedSetup:()=>true,isConfirmed:()=>false,invalidate:()=>{}};
  vm.runInNewContext(readFileSync('src/assets/navigation-clean.js','utf8'),{document:{body,getElementById:get},window:{DLTruckFirst:api}});
  assert.equal(body.dataset.navScreen,'trip');get('reuse-truck').handlers.click();assert.notEqual(get('origin').focused,true);get('edit-truck').handlers.click();assert.equal(body.dataset.navScreen,'truck');
+});
+
+test('account restore revokes current-load approval; changing accounts clears form and summaries',()=>{
+ const h=browser(store(),values());h.event('confirm-truck','click');assert(h.api.isConfirmed());
+ assert(h.api.applyAccount({...values(),'trailer-length':'48'}));assert(!h.api.isConfirmed());assert(h.api.hasSavedSetup());assert.equal(h.get('trailer-length').value,'48');
+ h.api.resetAccount();assert(!h.api.isConfirmed());assert(!h.api.hasSavedSetup());assert.equal(h.get('truck-height-ft').value,'');assert.equal(h.get('saved-truck-summary').textContent,'');assert(h.get('trip-inputs').disabled);
 });
