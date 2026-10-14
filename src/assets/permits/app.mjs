@@ -12,14 +12,16 @@ import { planningPlaces, preparationStatus, applyPlanningHandoff } from './prepa
 import { previewPermitIntake, intakeContext, intakeContextMatches, createCameraSession } from './intake.mjs';
 import { createGuidanceSession, maneuverCue } from './guidance.mjs';
 import { createSpeech, speechPreferences, parkedInstruction } from './speech.mjs';
+import { createGuidanceWatch } from './gps-watch.mjs';
+import { routeSketch } from './route-sketch.mjs';
 
 const $ = selector => document.querySelector(selector);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const crew = new Crew(window.DLBackend);
 const cameraSession = createCameraSession();
 const guidanceSession = createGuidanceSession();
-let trip, selected, tab = 'load', dirty = false, watching = null, timer, lastFix, progress, master, crewTimer, crewBusy = false, lastCrew = 0, camera, cameraTimer, activeState = '', objectURLs = [], guidanceVersion = 0;
-let savedTrip, walkthroughIndex = 0, guidancePause = '', spokenState = '';
+let trip, selected, tab = 'load', dirty = false, watching = null, gpsWatch = null, progress, master, crewTimer, crewBusy = false, lastCrew = 0, camera, cameraTimer, activeState = '', objectURLs = [], guidanceVersion = 0;
+let savedTrip, walkthroughIndex = 0, mapFocus = false, guidancePause = '', spokenState = '';
 const speech = createSpeech({ synthesis: window.speechSynthesis, Utterance: window.SpeechSynthesisUtterance, visible: () => !document.hidden,
   onState: state => { $('#permit-speech-status').textContent = state.message; },
   onFailure: message => { if (watching !== null) stopGuidance('Spoken guidance failed. Stop when safe and check the device audio.'); $('#permit-speech-status').textContent = message; }
@@ -132,32 +134,26 @@ function captureDrafts() {
     if (draft.permits.some(p => p.id === selected)) applyGeometryDraft(readPermit(draft), $('#geometry-json').value);
   });
 }
-function mapMarkup(m) {
-  const points = m.segments.flatMap(s => [s.a, s.b]); if (!points.length) return '<text x="400" y="165" text-anchor="middle" fill="#627591" font-size="17">Awaiting verified route geometry</text><text x="400" y="195" text-anchor="middle" fill="#627591" font-size="12">Your permit instructions remain available in the wallet.</text>';
-  let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
-  for (const point of points) { minLat = Math.min(minLat, point[0]); maxLat = Math.max(maxLat, point[0]); minLng = Math.min(minLng, point[1]); maxLng = Math.max(maxLng, point[1]); }
-  const k = Math.cos((minLat + maxLat) / 2 * Math.PI / 180);
-  const scale = Math.min(700 / Math.max((maxLng - minLng) * k, .001), 240 / Math.max(maxLat - minLat, .001));
-  const xy = p => [400 + (p[1] - (minLng + maxLng) / 2) * k * scale, 170 - (p[0] - (minLat + maxLat) / 2) * scale];
-  let svg = '<path d="M0 85H800M0 170H800M0 255H800M200 0V340M400 0V340M600 0V340" stroke="#dde5f0" stroke-width="1"/>';
-  for (const [i, p] of m.permits.entries()) {
-    for (const step of p.steps) { if (!step.points?.length) continue; svg += `<polyline points="${step.points.map(pt => xy(pt).join(',')).join(' ')}" fill="none" stroke="${i % 2 ? '#b82935' : '#215bcc'}" stroke-width="5" stroke-linecap="round"/>`; }
-    const start = p.steps[0]?.points?.[0]; if (start) { const [x, y] = xy(start); svg += `<circle cx="${x}" cy="${y}" r="7" fill="white" stroke="#102443" stroke-width="3"/><text x="${x}" y="${y - 15}" text-anchor="middle" fill="#102443" font-size="13" font-weight="bold">${esc(p.state)}</text>`; }
-  }
-  return svg;
+function renderSketch(m) {
+  const sketch = routeSketch(m, walkthroughIndex, mapFocus, !dirty && watching === null);
+  $('#route-map').innerHTML = sketch.markup;
+  $('#route-map').setAttribute('aria-label', sketch.caption);
+  $('#map-caption').textContent = sketch.caption;
+  $('#map-selected').disabled = !sketch.selectable;
+  $('#map-selected').setAttribute('aria-pressed', String(sketch.focused));
+  $('#map-full').setAttribute('aria-pressed', String(!sketch.focused));
 }
 function renderRoute() {
   const m = buildMaster(trip, { geometry: true });
   $('#route-readiness').textContent = m.ready ? 'Ready for parked review' : 'Needs review';
   $('#state-chain').innerHTML = m.permits.map(p => `<div class="state-stop"><strong>${esc(p.state || '?')}</strong><small>${esc(p.number || 'Permit needed')}</small></div>`).join('<span aria-hidden="true">→</span>');
   $('#route-checks').innerHTML = m.issues.length ? `<p class="info"><strong>${m.issues.length} checks need attention before guidance.</strong><br>${esc(m.issues[0])}</p><details><summary>Review all required checks</summary><ul class="issue-list">${m.issues.map(issue => `<li>${esc(issue)}</li>`).join('')}</ul></details>` : '<p class="good">Saved permit order and geometry connections checked. Walk through the instructions below while parked. Road access and travel conditions still require verification.</p>';
-  $('#route-map').innerHTML = mapMarkup(m);
   $('#start-guidance').disabled = window.DRIVERS_LOUNGE_CONFIG?.permitGuidanceEnabled !== true || !m.ready || watching !== null;
-  $('#map-caption').textContent = 'Permit geometry and labeled state entries · no street basemap. ' + (m.meters ? `${(m.meters / 1609.344).toFixed(1)} mi of supplied geometry.` : 'Import detailed geometry for GPS guidance.');
   renderWalkthrough(m);
 }
 function renderWalkthrough(m = buildMaster(trip, { geometry: true })) {
   const view = walkthrough(m, walkthroughIndex, $('#crew-role').value);
+  renderSketch(m);
   $('#walkthrough-panel').hidden = watching !== null;
   $('#walkthrough-previous').disabled = dirty || !view.available || view.index === 0;
   $('#walkthrough-next').disabled = dirty || !view.available || view.index === view.total - 1;
@@ -174,7 +170,7 @@ function renderWallet() {
   wireDocuments($('#wallet'));
 }
 function render() { renderLoad(); renderList(); renderReview(); renderRoute(); renderHazmat(trip); if (tab === 'wallet') renderWallet(); }
-async function openTrip(value) { stopGuidance(); stopCamera(); trip = value; trip.hazmat ??= blankHazmat(); selected = trip.permits[0]?.id; dirty = false; walkthroughIndex = 0; $('#crew-role').value = trip.shared?.role || trip.localRole || 'driver'; $('#share-consent').checked = false; $('#conditions-checked').checked = false; $('#crew-members').textContent = ''; $('#crew-positions').textContent = ''; $('#invite-code').textContent = ''; $('#cache-status').textContent = ''; await persist(); try { localStorage.setItem('dl-last-permit-trip', JSON.stringify(trip.id)); } catch { /* The IndexedDB wallet remains usable without shortcut preferences. */ } render(); switchTab('load'); $('#crew-status').textContent = trip.shared ? 'Saved crew link. Reconnect before sharing location.' : 'Live sharing is off.'; }
+async function openTrip(value) { stopGuidance(); stopCamera(); trip = value; trip.hazmat ??= blankHazmat(); selected = trip.permits[0]?.id; dirty = false; walkthroughIndex = 0; mapFocus = false; $('#crew-role').value = trip.shared?.role || trip.localRole || 'driver'; $('#share-consent').checked = false; $('#conditions-checked').checked = false; $('#crew-members').textContent = ''; $('#crew-positions').textContent = ''; $('#invite-code').textContent = ''; $('#cache-status').textContent = ''; await persist(); try { localStorage.setItem('dl-last-permit-trip', JSON.stringify(trip.id)); } catch { /* The IndexedDB wallet remains usable without shortcut preferences. */ } render(); switchTab('load'); $('#crew-status').textContent = trip.shared ? 'Saved crew link. Reconnect before sharing location.' : 'Live sharing is off.'; }
 async function ensurePermit() { if (!currentPermit()) { captureDrafts(); edit(); const p = blankPermit(); trip.permits.push(p); selected = p.id; await persist(); renderList(); renderReview(); } return currentPermit(); }
 async function mergeImport(imported) {
   await ensurePermit(); captureDrafts(); const p = currentPermit();
@@ -253,15 +249,15 @@ function navAlert(message, key) { $('#nav-status').textContent = message; say(me
 function pauseFix(message, key) {
   if (guidancePause !== key) speech.stop();
   guidancePause = key;
-  navAlert(message, key); $('#maneuver').textContent = 'Guidance paused — verify route';
-  $('#next-maneuver').textContent = 'Follow the issued permit. No automatic reroute.';
-  $('#maneuver-distance').textContent = '—'; $('#remaining').textContent = '—'; $('#lane-info').textContent = 'Waiting for reliable GPS'; $('#nav-warnings').textContent = '';
+  navAlert(message, key); $('#maneuver').textContent = 'Guidance stopped — verify position';
+  $('#next-maneuver').textContent = 'Stop when safe, verify your position and restart deliberately. No automatic reroute.';
+  $('#maneuver-distance').textContent = '—'; $('#remaining').textContent = '—'; $('#lane-info').textContent = 'Position unconfirmed'; $('#nav-warnings').textContent = '';
 }
 function displayFix(fix) {
   if (watching === null) return;
   const result = locateOnMaster(master, fix, progress);
-  if (result.status !== 'on-route') { if (result.status !== 'gps-uncertain') stopGuidance(result.message); pauseFix(result.message, result.status); return; }
-  lastFix = fix; progress = result; guidancePause = ''; activeState = result.permit.id; const role = $('#crew-role').value, cue = maneuverCue(result);
+  if (result.status !== 'on-route') { stopGuidance(result.message); pauseFix(result.message, result.status); return; }
+  progress = result; guidancePause = ''; activeState = result.permit.id; const role = $('#crew-role').value, cue = maneuverCue(result);
   $('#active-permit').textContent = `${result.permit.state} · ${result.permit.number}`; $('#maneuver').textContent = result.step.text;
   $('#next-maneuver').textContent = result.nextStep ? `Next: ${result.nextStep.text}` : 'Final supplied segment. Follow permit destination instructions.';
   $('#maneuver-distance').textContent = distance(result.toManeuver); $('#remaining').textContent = distance(result.remaining);
@@ -327,28 +323,33 @@ async function startGuidance() {
   }
   if (!navigator.geolocation) throw Error('GPS is unavailable on this device. Your permit wallet remains available.');
   if (startVersion !== guidanceVersion || !guidanceSession.matches(token, trip) || dirty || document.hidden || !$('#conditions-checked').checked) throw Error('Trip or app state changed during preparation. Review the trip and restart when safely in the foreground.');
-  progress = null; lastFix = null; activeState = ''; spokenState = ''; speech.stop(); guidancePause = ''; spokenHazmat.clear(); spokenTimed.clear();
+  progress = null; activeState = ''; spokenState = ''; speech.stop(); guidancePause = ''; spokenHazmat.clear(); spokenTimed.clear();
   const current = () => {
     if (!guidanceSession.active(token)) return false;
     if (dirty || document.hidden || !$('#conditions-checked').checked || !guidanceSession.matches(token, trip)) { stopGuidance('Trip, permit or departure checks changed. Review before restarting.'); return false; }
     return true;
   };
-  watching = navigator.geolocation.watchPosition(position => { if (current()) displayFix({ point: [position.coords.latitude, position.coords.longitude], accuracy: position.coords.accuracy, timestamp: position.timestamp }); }, () => { if (current()) pauseFix('GPS unavailable. Guidance paused; follow the issued permit.', 'gps-error'); }, { enableHighAccuracy: true, maximumAge: 3000, timeout: 12000 });
+  gpsWatch = createGuidanceWatch({ geolocation: navigator.geolocation, isCurrent: current,
+    onFix: fix => { displayFix(fix); return watching !== null; },
+    onHold: message => { stopGuidance(message); pauseFix(message, 'gps-hold'); }
+  });
+  // Set session state before watchPosition: synchronous errors must clear it too.
+  watching = true;
   $('#stop-guidance').disabled = false; $('#start-guidance').disabled = true;
   $('#walkthrough-panel').hidden = true;
   $('#guidance-role').textContent = ({ driver: 'TRUCK DRIVER', lead: 'LEAD PILOT CAR', chase: 'CHASE PILOT CAR' })[$('#crew-role').value];
   navAlert('Permitted guidance started. Waiting for accurate GPS. Issued permits and restrictions control.', 'start');
   if (watching === null) return; // A synchronous speech failure may have stopped the session.
-  timer = setInterval(() => { if (current() && (!lastFix || Date.now() - lastFix.timestamp > 15000)) pauseFix('GPS is stale. Guidance paused; follow the issued permit.', 'stale'); }, 5000);
+  if (!gpsWatch.start() || watching === null) return;
   if (trip.shared) crewTimer = setInterval(() => void syncCrew(), 10000);
 }
 function stopGuidance(message = 'Guidance is off. Location sharing stopped.') {
   guidanceSession.cancel(); guidancePause = '';
   guidanceVersion += 1;
-  if (watching !== null) navigator.geolocation?.clearWatch(watching); watching = null; clearInterval(timer); clearInterval(crewTimer);
+  gpsWatch?.stop(); gpsWatch = null; watching = null; clearInterval(crewTimer);
   if (trip?.shared) void crew.stop(trip.shared).catch(() => {});
   speech.stop();
-  progress = null; lastFix = null; master = null; activeState = ''; spokenState = ''; spokenHazmat.clear(); spokenTimed.clear();
+  progress = null; master = null; activeState = ''; spokenState = ''; spokenHazmat.clear(); spokenTimed.clear();
   $('#active-permit').textContent = 'NO ACTIVE PERMIT'; $('#maneuver').textContent = 'Guidance is off';
   $('#next-maneuver').textContent = 'Review the current trip and restart when ready.';
   $('#maneuver-distance').textContent = '—'; $('#remaining').textContent = '—'; $('#lane-info').textContent = 'Not supplied'; $('#nav-warnings').textContent = '';
@@ -394,6 +395,7 @@ on('#import-originals', 'change', async e => { const files = [...e.target.files]
 on('#add-pages', 'change', async e => { const files = [...e.target.files]; e.target.value = ''; await attach(files); });
 on('#qr-photo', 'change', async e => { const files = [...e.target.files]; e.target.value = ''; await attach(files); });
 on('#camera-start', 'click', startCamera); on('#camera-stop', 'click', stopCamera);
+for (const [selector, focus] of [['#map-full', false], ['#map-selected', true]]) on(selector, 'click', () => { mapFocus = focus; renderWalkthrough(); });
 on('#start-guidance', 'click', startGuidance); on('#stop-guidance', 'click', () => stopGuidance());
 on('#conditions-checked', 'change', () => { if (!$('#conditions-checked').checked) stopGuidance('Departure checks withdrawn. Guidance is off.'); });
 on('#voice-enabled', 'change', () => { if (!$('#voice-enabled').checked) speech.stop(); });

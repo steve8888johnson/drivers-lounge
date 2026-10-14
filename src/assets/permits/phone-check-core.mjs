@@ -1,9 +1,11 @@
-export const PHONE_CHECK_VERSION = '2026-10-14.1';
+export const PHONE_CHECK_VERSION = '2026-10-14.2';
 export const DEMO_CUES = Object.freeze([
   { title: 'Approaching a turn', text: 'Parked test only. In one half mile, take the right exit shown in the test instruction. This is not your route.' },
   { title: 'Turn coming up', text: 'Parked test only. In five hundred feet, take the right exit shown in the test instruction. This is not your route.' },
   { title: 'State border hold', text: 'Parked test only. The next state permit is not currently valid. Guidance is paused. Verify the permit before crossing. No detour is suggested.' },
-  { title: 'GPS lost', text: 'Parked test only. GPS is unavailable. Guidance is paused. Follow the issued permit and stop when safe to verify your position.' },
+  { title: 'GPS lost', text: 'Parked test only. GPS is unavailable. Guidance is off. Follow the issued permit and stop when safe to verify your position before restarting.' },
+  { title: 'GPS returned after interruption', text: 'Parked test only. A returning GPS signal does not restart guidance. Stop when safe, verify your position and the current permit, then restart deliberately.' },
+  { title: 'GPS position jumped', text: 'Parked test only. GPS jumped farther than elapsed time can support. Guidance is off. Stop when safe and verify your position. No turns or detours are assumed.' },
   { title: 'Permit changed', text: 'Parked test only. The permit route changed. Guidance is off. Review the current permit before restarting.' }
 ]);
 

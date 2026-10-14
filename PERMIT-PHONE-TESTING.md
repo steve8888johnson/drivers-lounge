@@ -34,3 +34,10 @@ Still unverified: actual iPhone Safari audio, speaker/Bluetooth routing, physica
 - [Speech error events](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisUtterance/error_event): report failures and require manual retry.
 - [On-device voice indicator](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisVoice/localService): permit speech selects only voices reporting local service.
 - [Screen Wake Lock API](https://developer.mozilla.org/en-US/docs/Web/API/Screen_Wake_Lock_API): foreground/secure-context requirements and possible system release; no background-guidance promise.
+
+
+## GPS refinement rehearsal — October 14, version 2026-10-14.2
+
+In Test situation, try GPS returned after interruption and GPS position jumped. Confirm you hear that guidance stays off until a deliberate restart after safely checking position and the permit. These are prerecorded text examples using device speech, not simulated movement or an active navigation test. Do not test while driving. The optional GPS reception check remains separate.
+
+In a reviewed permit walkthrough, use Full route and Selected turn. A and B are endpoints of the selected supplied instruction; they do not establish arrival, road association or movement authority. Next/Previous changes the highlighted instruction. Missing reviews keep selection unavailable. Map and voice review remain preparatory while operational guidance is disabled.

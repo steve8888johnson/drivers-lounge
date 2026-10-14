@@ -19,6 +19,21 @@ function fixture(lines = [[[40, -100], [40, -99.996]]]) {
 const fix = (point, time = now, accuracy = 5) => ({ point, timestamp: time, accuracy });
 const locate = (m, point, seconds = 0, previous = null) => locateOnMaster(m, fix(point, now + seconds * 1000), previous, now + seconds * 1000);
 
+test('a physically implausible along-route GPS jump holds even on the same straight segment', () => {
+  const m=buildMaster(fixture(),{geometry:true});
+  const first=locate(m,[40,-99.9998]); assert.equal(first.status,'on-route');
+  const jump=locate(m,[40,-99.998],1,first);
+  assert.equal(jump.status,'position-jump'); assert.equal(jump.step,undefined);
+});
+
+test('ordinary forward movement and small position noise retain continuity', () => {
+  const m=buildMaster(fixture(),{geometry:true});
+  let previous=locate(m,[40,-99.9998]);
+  for(const [seconds,longitude] of [[1,-99.9995],[2,-99.9992],[3,-99.99925],[4,-99.9989]]) {
+    previous=locate(m,[40,longitude],seconds,previous); assert.equal(previous.status,'on-route');
+  }
+});
+
 test('guidance callbacks are bound to one complete trip and cancelled generations cannot revive', () => {
   const trip = fixture(), session = createGuidanceSession(), first = session.start(trip);
   assert(session.matches(first, trip)); session.cancel(); assert(!session.matches(first, trip));

@@ -147,14 +147,19 @@ export function locateOnMaster(master, fix, previous = null, now = Date.now()) {
   if (previous && fix.timestamp - previous.timestamp > 30000) return { status: 'ambiguous', message: 'GPS continuity was lost. Stop when safe, verify your position and restart guidance.' };
   const allCandidates = master.segments.map(s => project(fix.point, s));
   let candidates = allCandidates;
+  // Plausibility only: 45 m/s is a rejection bound, never a legal speed or ETA.
+  // Include both accuracy estimates; no fixed 200 m allowance for rapid fixes.
+  const maxAdvance = previous ? (fix.timestamp - previous.timestamp) / 1000 * 45 + previous.accuracy + fix.accuracy : Infinity;
   if (previous) {
     // Stay on the same ordered corridor at crossings and loops. Never jump ahead to a nearby later road.
-    const elapsed = Math.max(0, (fix.timestamp - previous.timestamp) / 1000);
-    candidates = candidates.filter(c => c.progress >= previous.progress - 80 && c.progress <= previous.progress + Math.max(200, elapsed * 45));
+    candidates = candidates.filter(c => c.progress >= previous.progress - 80 && c.progress <= previous.progress + maxAdvance);
   }
   candidates.sort((a, b) => a.distance - b.distance);
   const nearest = candidates[0], tolerance = Math.max(35, fix.accuracy * 1.5);
-  if (!nearest || nearest.distance > tolerance) return { status: 'deviation', message: 'Off the authorized route. Stop when safe and verify the permit. No automatic reroute.' };
+  if (!nearest || nearest.distance > tolerance) {
+    if (previous && allCandidates.some(c => c.distance <= tolerance && c.progress > previous.progress + maxAdvance)) return { status: 'position-jump', message: 'GPS jumped farther than elapsed time can support. Stop when safe and verify your position before restarting. No intervening turns are assumed.' };
+    return { status: 'deviation', message: 'Off the authorized route. Stop when safe and verify the permit. No automatic reroute.' };
+  }
   // Progress history cannot prove which road, ramp or level a nearby fix is on.
   // Check the entire line, including occurrences excluded by the progress filter.
   if (allCandidates.some(c => c.distance <= tolerance && Math.abs(c.progress - nearest.progress) > Math.max(80, tolerance * 2 + 20))) return { status: 'ambiguous', message: 'Location matches multiple parts of the route. Stop when safe and verify your position before guidance.' };

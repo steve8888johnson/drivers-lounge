@@ -1,5 +1,6 @@
-const CACHE='drivers-lounge-rc2-permit-info-qr-20261014';
+const CACHE='drivers-lounge-rc2-permit-gps-refinement-20261014';
 const PERMIT_SHELL=['/permitted-loads','/assets/permits/permit-trip.css','/assets/permits/app.mjs','/assets/permits/core.mjs','/assets/permits/drafts.mjs','/assets/permits/walkthrough.mjs','/assets/permits/hazmat.mjs','/assets/permits/hazmat-ui.mjs','/assets/permits/hazmat-sources.mjs','/assets/permits/import.mjs','/assets/permits/intake.mjs','/assets/permits/provider.mjs','/assets/permits/qr-scan.mjs','/assets/permits/qr-worker.mjs','/assets/permits/storage.mjs','/assets/permits/examples.mjs','/assets/permits/crew.mjs','/assets/vendor/jsQR-1.4.0.js','/assets/backend.js'];
+PERMIT_SHELL.push('/assets/permits/gps-watch.mjs','/assets/permits/route-sketch.mjs');
 const REFERENCE_SHELL=['/compliance','/assets/compliance/reference.css','/assets/compliance/app.mjs','/assets/compliance/core.mjs','/assets/compliance/glossary.mjs','/assets/compliance/rules.mjs','/assets/compliance/sources.mjs','/assets/compliance/states.mjs'];
 PERMIT_SHELL.push('/assets/permits/launch.mjs','/assets/permits/preparation.mjs','/assets/permits/guidance.mjs','/assets/trip-preparation.js');
 PERMIT_SHELL.push('/permit-phone-check','/assets/permits/speech.mjs','/assets/permits/phone-check.mjs','/assets/permits/phone-check-core.mjs','/assets/permits/phone-check.css');
