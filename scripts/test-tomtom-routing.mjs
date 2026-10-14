@@ -29,6 +29,20 @@ test('TomTom uses a fixed truck endpoint, measured metric dimensions, actual wei
  for(const [key,value] of Object.entries({travelMode:'truck',vehicleCommercial:'true',vehicleHeight:'4.12',vehicleWidth:'2.6',vehicleLength:'21.95',vehicleWeight:'35381',vehicleAxleWeight:'7485',vehicleNumberOfAxles:'5',departAt:'2026-10-13T13:00:00.000Z',maxAlternatives:'0',report:'effectiveSettings',sectionType:'travelMode'}))assert.equal(q.get(key),value,key);
  assert.deepEqual(q.getAll('avoid'),['unpavedRoads','ferries']);assert.equal(q.has('key'),false);assert.equal(r.guidanceAllowed,false);
 });
+
+test('accidental outer key whitespace is trimmed, while empty or internally split keys never send',async()=>{
+ let calls=0;
+ const fetchImpl=async url=>{calls++;assert.equal(url.searchParams.get('key'),'synthetic-test-only-secret');return Response.json(payload());};
+ for(const apiKey of [' synthetic-test-only-secret ','\r\nsynthetic-test-only-secret\t','\u00a0synthetic-test-only-secret\u00a0']){
+  const r=await requestTomTomCandidate(draft(),opts({apiKey,fetchImpl}));
+  assert.equal(r.structurePassed,true);assert.equal(r.guidanceAllowed,false);assert(!JSON.stringify(r).includes('synthetic-test-only-secret'));
+ }
+ assert.equal(calls,3);
+ for(const apiKey of [' \r\n\t','synthetic test-only-secret',null,{}]){
+  const r=await requestTomTomCandidate(draft(),opts({apiKey,fetchImpl}));assert(code(r,'PROVIDER_NOT_CONFIGURED'));
+ }
+ assert.equal(calls,3);
+});
 test('oversize, hazmat, unmeasured, stale and overloaded vehicles never reach TomTom',async()=>{
  let calls=0;const fetchImpl=async()=>{calls++;return Response.json(payload());};
  for(const change of [d=>d.vehicle.oversize=true,d=>d.vehicle.hazmat=true,d=>d.vehicle.heightCm=0,d=>d.vehicle.confirmed=false,d=>delete d.vehicle.axleMeasurement,d=>d.vehicle.axleMeasurement.unchangedSinceWeighing=false,d=>d.vehicle.axleMeasurement.measuredAt='2026-10-01T10:00:00.000Z',d=>delete d.vehicle.equipment,d=>d.vehicle.equipment.axles[0].gawrLb=11000,d=>d.departure='any',d=>d.origin.lat='32',d=>d.destination={...d.origin}]){

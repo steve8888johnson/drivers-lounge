@@ -10,7 +10,9 @@ export async function requestTomTomCandidate(input, {
 } = {}) {
   if (enabled !== true) return hold('CONNECTION_DISABLED');
   if (freePlanVerified !== true) return hold('FREE_PLAN_NOT_VERIFIED');
-  if (typeof apiKey !== 'string' || !apiKey.trim()) return hold('PROVIDER_NOT_CONFIGURED');
+  // Secret form pastes can include outer whitespace; never alter the key itself.
+  const normalizedKey = typeof apiKey === 'string' ? apiKey.trim() : '';
+  if (!normalizedKey || /\s/.test(normalizedKey)) return hold('PROVIDER_NOT_CONFIGURED');
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs<1 || timeoutMs>10000 || !Number.isSafeInteger(maxBytes) || maxBytes<1 || maxBytes>1048576) return hold('INVALID_SERVER_LIMITS');
   let prepared, fingerprint, trip, departure;
   const createdAt = clock();
@@ -21,7 +23,7 @@ export async function requestTomTomCandidate(input, {
   } catch { return hold('INVALID_TRUCK_OR_TRIP'); }
   const controller = new AbortController(); let timer;
   const run = async () => {
-    const url = new URL(prepared.endpoint); url.search = prepared.query; url.searchParams.set('key',apiKey);
+    const url = new URL(prepared.endpoint); url.search = prepared.query; url.searchParams.set('key',normalizedKey);
     const response = await fetchImpl(url,{method:'GET',redirect:'error',signal:controller.signal,headers:{Accept:'application/json'},cache:'no-store'});
     // No retry, alternate key, paid top-up or car fallback on exhausted free quota.
     if (response.status === 429) return hold('FREE_QUOTA_OR_RATE_LIMIT');
