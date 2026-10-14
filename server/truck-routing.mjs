@@ -7,9 +7,14 @@ export async function requestTruckCandidate(input,{enabled=false,apiKey,fetchImp
  if(enabled!==true)return hold('CONNECTION_DISABLED');
  if(typeof apiKey!=='string'||!apiKey.trim())return hold('PROVIDER_NOT_CONFIGURED');
  if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>10000||!Number.isSafeInteger(maxBytes)||maxBytes<1||maxBytes>1048576)return hold('INVALID_SERVER_LIMITS');
- let prepared,fingerprint;const createdAt=clock();
+ let prepared,fingerprint,trip;const createdAt=clock();
  const signature=x=>createHash('sha256').update(prepareHereRequest({...x,now:createdAt}).query).digest('hex');
- try{prepared=prepareHereRequest({...input,now:createdAt});fingerprint=signature(input);}catch{return hold('INVALID_TRUCK_OR_TRIP');}
+ try{
+  prepared=prepareHereRequest({...input,now:createdAt});fingerprint=signature(input);
+  // Snapshot from the validated outgoing request, not mutable browser-supplied review evidence.
+  const query=new URLSearchParams(prepared.query);
+  trip=Object.fromEntries(['origin','destination'].map(name=>{const [lat,lng]=query.get(name).split(',').map(Number);return [name,{lat,lng}];}));
+ }catch{return hold('INVALID_TRUCK_OR_TRIP');}
  const controller=new AbortController();let timer;
  const run=async()=>{
   const url=new URL(prepared.endpoint);url.search=prepared.query;url.searchParams.set('apiKey',apiKey);
@@ -21,9 +26,9 @@ export async function requestTruckCandidate(input,{enabled=false,apiKey,fetchImp
   if(!response.body)return hold('INVALID_PROVIDER_RESPONSE');
   const reader=response.body.getReader();const chunks=[];let size=0;
   try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>maxBytes){await reader.cancel();return hold('RESPONSE_TOO_LARGE');}chunks.push(value);}}finally{reader.releaseLock();}
-  let payload;try{payload=JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{return hold('INVALID_PROVIDER_RESPONSE');}
+  let payload;try{payload=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks)));}catch{return hold('INVALID_PROVIDER_RESPONSE');}
   let currentFingerprint;try{currentFingerprint=signature(currentInput());}catch{return hold('REQUEST_CHANGED');}
-  return reviewHereCandidate(payload,{fingerprint,transportMode:'truck',scope:'standard-nonhazmat',createdAt,expiresAt:createdAt+timeoutMs},{fingerprint:currentFingerprint,now:clock()});
+  return reviewHereCandidate(payload,{fingerprint,trip,transportMode:'truck',scope:'standard-nonhazmat',createdAt,expiresAt:createdAt+timeoutMs},{fingerprint:currentFingerprint,now:clock()});
  };
  try{return await Promise.race([run(),new Promise(resolve=>{timer=setTimeout(()=>{controller.abort();resolve(hold('PROVIDER_TIMEOUT'));},timeoutMs);})]);}
  catch{return hold('PROVIDER_UNAVAILABLE');}

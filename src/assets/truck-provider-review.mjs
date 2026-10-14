@@ -1,6 +1,7 @@
 // Offline review adapter. No requests, credentials, route activation or legal certification.
 // HERE documentation: https://docs.here.com/routing/docs/routing-v8-truck-routing
 // https://docs.here.com/routing/docs/routing-v8-admin-wide-restrictions
+import {inspectTruckGeometry} from './truck-route-geometry.mjs';
 export function prepareHereRequest(input) {
   const p = input?.vehicle;
   if (!p || p.confirmed !== true || p.oversize !== false || p.hazmat !== false)
@@ -74,11 +75,12 @@ export function reviewHereCandidate(payload, request, current) {
       inspectNotices(section?.notices, id);
     }
   }
+  reasons.push(...inspectTruckGeometry(sections, request?.trip).reasons);
   return {
     status: reasons.length ? 'HOLD' : 'REVIEW_REQUIRED',
     guidanceAllowed: false,
     reasons,
     // No geometry or maneuvers leave this reviewer. A clean response is not clearance.
-    remainingChecks: ['authenticated provider response', 'decoded geometry and endpoint continuity', 'complete current state and local restrictions', 'vehicle and axle-group compliance', 'destination access', 'field validation']
+    remainingChecks: ['authenticated provider response', 'geometry-to-road and direction verification', 'complete current state and local restrictions', 'vehicle and axle-group compliance', 'destination truck entrance and access', 'field validation']
   };
 }

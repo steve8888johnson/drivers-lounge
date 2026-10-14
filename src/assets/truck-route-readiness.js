@@ -2,7 +2,17 @@
   'use strict';
   // Diagnostic contract only. Caller-provided evidence is not authenticated authority.
   const checks = Object.freeze(['truckAccess', 'clearance', 'weight', 'dimensions', 'closures', 'destinationAccess']);
-  const timestamp = value => typeof value === 'string' && /(?:Z|[+-]\d{2}:\d{2})$/.test(value) ? Date.parse(value) : NaN;
+  function timestamp(value) {
+    // Date.parse alone normalizes impossible dates (e.g. February30) into a later month.
+    const match = typeof value === 'string' && value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(Z|([+-])(\d{2}):(\d{2}))$/);
+    if (!match) return NaN;
+    const [year, month, day, hour, minute, second] = match.slice(1, 7).map(Number);
+    const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+    const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if (month < 1 || month > 12 || day < 1 || day > days[month - 1] || hour > 23 || minute > 59 || second > 59) return NaN;
+    if (match[7] !== 'Z' && (Number(match[9]) > 14 || Number(match[10]) > 59 || (Number(match[9]) === 14 && Number(match[10]) !== 0) || match[7] === '-00:00')) return NaN;
+    return Date.parse(value);
+  }
   function assess(input = {}) {
     if (!input || typeof input !== 'object') input = {};
     const issues = [];
@@ -17,7 +27,7 @@
     if (profile.oversize !== false || profile.hazmat !== false) add('OUTSIDE_SCOPE', 'This first review supports standard, non-hazmat trucks only.');
     if (typeof profile.revision !== 'string' || !profile.revision.trim()) add('PROFILE_REVISION', 'Vehicle profile revision is missing.');
     const route = input.route;
-    if (!route || !Array.isArray(route.segments) || !route.segments.length) {
+    if (!route || !Array.isArray(route.segments) || !route.segments.length || route.segments.length > 1000) {
       add('NO_ROUTE_EVIDENCE', 'No truck-route candidate with complete road restriction evidence is connected.');
     } else {
       const departure = timestamp(route.departure), arrival = timestamp(route.arrival);

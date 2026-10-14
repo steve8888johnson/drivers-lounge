@@ -2,6 +2,8 @@
 
 Status: development changes only. Navigation is not certified for operational use.
 
+Latest routing pass October13 overnight: bounded geometry screening and strict evidence dates implemented locally;128 tests pass. See TRUCK-GEOMETRY-REVIEW.md. No provider connection, deployed change, route legality certification or gate activation. Risk HIGH/contained locally: nonempty strings no longer pass the shape check. CRITICAL/open: actual road access/clearance/weight coverage, trusted source freshness, directed topology, destination entrance and field evidence remain unverified.
+
 Implemented: ordinary OSRM routing remains planning-only; its driving and reroute entry points fail closed. Permit guidance holds for unreviewed masters, stale/inaccurate/out-of-order GPS and discontinuous fixes. An asynchronous preparation cannot restart guidance after stop/background/change. Both freight entry pages hand off to Highway Automation using an explicitly configured HTTPS destination. No documents or location are sent by that link.
 
 Required proof before operational guidance: independently transcribe and compare actual issued multi-state permits; validate QR provenance and every state crossing, route overlap/conflict, travel window/timezone, bridge/height/axle/gross weight/hazmat restriction and pilot-car revision. Demonstrate stale/ambiguous/missing permits stay on hold. Test real phones with screen lock, poor GPS, weak signal, service-worker update, storage eviction, original-document export/restore and pilot loss/rejoin. No live official restriction feed is connected in this source. Test passing is not authority to move a load.

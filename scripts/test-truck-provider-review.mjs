@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {reviewHereCandidate,prepareHereRequest} from '../src/assets/truck-provider-review.mjs';
-const request={fingerprint:'route-and-profile-v1',transportMode:'truck',scope:'standard-nonhazmat',createdAt:100,expiresAt:200};
+import {sectionFixture,tripFixture} from './fixtures/truck-geometry.mjs';
+const request={fingerprint:'route-and-profile-v1',trip:tripFixture(),transportMode:'truck',scope:'standard-nonhazmat',createdAt:100,expiresAt:200};
 const current={fingerprint:request.fingerprint,now:150};
-const candidate=()=>({routes:[{id:'r1',sections:[{id:'s1',transport:{mode:'truck'},polyline:'synthetic-not-decoded'}]}]});
+const candidate=()=>({routes:[{id:'r1',sections:[sectionFixture()]}]});
 const review=p=>reviewHereCandidate(p,request,current);
 const draft=()=>({vehicle:{confirmed:true,oversize:false,hazmat:false,heightCm:412,widthCm:260,lengthCm:2195,currentWeightKg:36000,grossWeightKg:40000,axleGroups:[{type:'single',weightKg:6000},{type:'tandem',weightKg:15000},{type:'tandem',weightKg:15000}]},origin:{lat:32,lng:-102},destination:{lat:33,lng:-84},departure:'2026-10-15T12:00:00.000Z',now:Date.parse('2026-10-13T12:00:00Z')});
 test('request preparation preserves explicit dimensions and distinct weight meanings',()=>{

@@ -34,3 +34,15 @@ test('unattributed evidence and past trips stay held',()=>{
  for(const mutate of [i=>i.route.segments[0].evidence.weight.sourceUrl='http://example.gov',i=>i.route.segments[0].evidence.weight.version='',i=>i.route.departure='2026-10-12T14:00:00Z',i=>i.route.arrival='2026-10-13T13:30:00Z']){
  const input=fixture();mutate(input);assert.equal(assess(input).status,'HOLD');}
 });
+test('impossible calendar dates, ambiguous times and unbounded evidence stay held',()=>{
+ for(const invalid of ['2026-02-30T12:00:00Z','2026-02-29T12:00:00Z','2026-04-31T12:00:00Z','2026-10-13T24:00:00Z','2026-10-13T12:00:00-00:00','2026-10-13T12:00:00+14:01','October 13, 2026 12:00:00Z']){
+  const input=fixture();input.route.segments[0].evidence.clearance.checkedAt=invalid;
+  assert.equal(assess(input).status,'HOLD',invalid);
+ }
+ const input=fixture();input.route.segments=Array(1001).fill(input.route.segments[0]);
+ assert.equal(assess(input).status,'HOLD');
+});
+test('equivalent explicit UTC offsets remain comparable without host timezone assumptions',()=>{
+ const input=fixture();input.route.departure='2026-10-13T08:00:00-06:00';input.route.arrival='2026-10-13T14:00:00-04:00';
+ assert.equal(assess(input).status,'REVIEW_REQUIRED');
+});
