@@ -1,0 +1,52 @@
+/* Navigation is a parked planning flow. No operational driving controls. */
+.nav5-body{overflow:auto;background:#eef2f6;color:#172638}
+.nav5-app{display:block;height:auto;min-height:0}
+.nav5-stage{position:relative;display:block;min-height:calc(100dvh - 120px);background:#e9eef3}
+.route-hold{padding:12px 24px;background:#fff3d5;color:#594210;font-size:14px;line-height:1.5}
+.route-hold a{color:#594210;font-weight:700;margin-left:12px}
+.nav5-trip,.nav5-copilot{color:#182b3e;background:#fff;border:0;overflow:visible;transform:none!important}
+.nav5-trip{position:absolute;top:76px;left:24px;width:370px;z-index:700;border-radius:22px;box-shadow:0 6px 30px #10243c22}
+.nav5-map{height:calc(100dvh - 165px);min-height:580px}
+.nav5-map #truck-map{height:100%}
+.nav5-copilot{position:absolute;bottom:24px;left:24px;width:370px;z-index:700;padding:0;border-radius:22px;box-shadow:0 6px 30px #10243c22;max-height:42%;overflow:auto;display:block}
+.trip-block{padding:24px;border:0}
+.trip-entry h1{font-size:30px;letter-spacing:-1px;margin:20px 0}
+.truck-chip{width:100%;border:1px solid #d3dee8;background:#f1f6fb;color:#253c52;border-radius:12px;padding:12px;font-size:14px;text-align:left;line-height:1.5;cursor:pointer}
+.route-box{border:1px solid #bacbdb;background:#f7f9fc;padding:0 14px;border-radius:12px;min-height:56px}
+.route-box input{color:#172638;font-size:18px;padding:16px 0}
+.route-box input::placeholder{color:#64758a}
+.use-location{font-size:14px;color:#175cc6;min-height:44px}
+.trip-buttons button,#confirm-truck{background:#2467e8;color:#fff;border-radius:12px;min-height:52px;font-size:16px;padding:14px;cursor:pointer}
+.trip-buttons button+button{background:#edf3fa;color:#28455f}
+#route-status{font-size:14px;color:#53667a;line-height:1.5}
+.truck-why{margin:0;border:0;padding:22px;background:#fff;color:#263b50;border-radius:22px}
+.truck-why h3{font-size:22px;margin-bottom:12px}.truck-why p,.truck-why li{font-size:15px}.truck-why strong{color:#263b50}
+#route-evidence summary{color:#195cca;font-size:16px;font-weight:700;padding:12px 0;cursor:pointer;min-height:44px}
+#route-evidence:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #1768e9;outline-offset:3px}
+.truck-setup,.permit-promo,.camera-journal-card,.nav5-trip>.quick,.nav5-trip>.trip-block:has(#theme-toggle),.nav5-trip>.trip-block:has(#truck-readiness-details),.nav5-copilot>:not(.truck-why),.nav-hud,.nav-ahead,.nav-bottom-hud,.layer-bar,.truck-center,.collapse,.start-navigation-note,.nav5-app>footer{display:none!important}
+.map-actions{top:20px;right:20px}.map-actions button{height:48px;width:48px;background:#fff;color:#1a3650;border-color:#ccd6e0;box-shadow:0 3px 10px #15253922}
+[data-nav-screen="truck"] .nav5-trip{position:relative;top:auto;left:auto;width:min(700px,calc(100% - 32px));margin:28px auto;box-shadow:0 8px 40px #152c4314}
+[data-nav-screen="truck"] .truck-setup{display:block!important;padding:32px}
+[data-nav-screen="truck"] .trip-entry,[data-nav-screen="truck"] .nav5-map,[data-nav-screen="truck"] .nav5-copilot{display:none!important}
+.setup-step{color:#2467c7;font-size:13px;font-weight:800;letter-spacing:1.5px;margin:0 0 10px}
+.truck-setup h1{font-size:34px;letter-spacing:-1px;margin:0 0 10px}.setup-intro{font-size:18px;line-height:1.5;color:#53667a}
+#profile-toggle,#profile-status{display:none}
+.setup-hint{font-size:14px;line-height:1.6;color:#53667a;padding:16px;background:#f0f5fa;border-radius:12px}
+.profile-wide{display:grid;gap:8px;font-size:15px;font-weight:600}
+.profile-grid{gap:16px;margin:20px 0}.profile-grid label{font-size:14px;color:#364d63;text-transform:none;gap:8px}
+.profile-grid input,.profile-grid select,.profile-wide select{background:#fff;color:#172638;border:1px solid #aebfce;border-radius:10px;padding:12px;font-size:18px;min-height:50px;width:100%}
+.profile-section{background:#f6f8fb;border:1px solid #d5dfe8;color:#263d50;padding:16px;font-size:16px}
+.profile-section input[type="checkbox"],.flags input{width:20px;height:20px;flex-shrink:0}
+.flags{display:flex;flex-wrap:wrap;gap:16px;color:#364d63;font-size:14px;margin:20px 0}.flags label{display:flex;align-items:center;gap:8px}
+#truck-confirmation{font-size:15px;color:#66501f;line-height:1.5}#trip-inputs:disabled{opacity:.6}
+@media(max-width:700px){.route-hold{padding:10px 16px;font-size:13px}.route-hold a{display:inline-block;margin-left:0}.nav5-stage{min-height:0}.nav5-map{height:65dvh;min-height:380px}.nav5-trip{position:relative;top:auto;left:auto;width:100%;border-radius:0;box-shadow:none}.trip-block{padding:20px}.nav5-copilot{position:relative;bottom:auto;left:auto;width:100%;max-height:none;border-radius:0;box-shadow:none}.truck-why{border-radius:0;padding:20px}.nav5-map{order:initial}.nav5-trip{order:initial}.nav5-copilot{order:initial}[data-nav-screen="truck"] .nav5-trip{width:100%;margin:0;border-radius:0}[data-nav-screen="truck"] .truck-setup{padding:24px 20px}.truck-setup h1{font-size:30px}.profile-grid{gap:14px 12px}.profile-grid label{font-size:14px}.nav5-map .map-actions{top:16px;right:16px}}
+/* Override shared dark-site form and heading rules inside the light navigation workspace. */
+.nav5-stage h1,.nav5-stage h2,.nav5-stage h3{color:#172638!important}
+.nav5-stage input:not([type="checkbox"]),.nav5-stage select,.nav5-stage textarea{background:#fff!important;color:#172638!important;border-color:#aebfce!important}
+.nav5-stage label{color:#364d63!important}
+.nav5-stage .truck-chip{background:#f1f6fb!important;color:#253c52!important}
+@media(min-width:701px){.nav5-copilot{left:auto;right:24px;width:340px}.nav5-map{min-height:550px}.nav5-trip{max-height:calc(100% - 96px);overflow:auto}}
+#trip-inputs legend{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+
+
+@media(min-width:701px){.nav5-map .leaflet-control-zoom{margin-right:380px}}
