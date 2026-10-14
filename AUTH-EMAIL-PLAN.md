@@ -25,3 +25,7 @@ Alternative: Brevo Free offers 300/day, with mandatory Brevo branding. Over-limi
 - https://resend.com/docs/send-with-supabase-smtp — integration requirements/settings.
 - https://help.brevo.com/hc/en-us/articles/208580669-FAQs-What-are-the-limits-of-the-Free-plan — daily quota, branding and queue behavior.
 - https://supabase.com/docs/guides/auth/auth-smtp — default sender unsuitable for public production; separate authentication sending domain guidance.
+
+## Setup started
+Owner authorized Resend Free setup and functioning signup/recovery with no charges. Signup opened with steve@atlasdigital.dev, marketing unchecked; password entry and signup terms left to owner. Awaiting dashboard handoff. Vercel confirmed authoritative for both domains. Driverslounge.app has only five existing web/CAA records; auth subdomain has no explicit email records. Atlasdigital.dev Google MX/SPF/DKIM/DMARC verified and recorded in outputs/RESEND-DNS-BEFORE.json. No DNS mutation yet; provider-generated verification values unavailable until account creation. Production account activation remains held.
+
