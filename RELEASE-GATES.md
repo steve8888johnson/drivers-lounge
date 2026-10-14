@@ -38,3 +38,7 @@ Additional server-only transport module is local, NOT part of this deployed comm
 ## Backend access recovered — October 13, 2026
 Supabase SQL now responds and dashboard reports Healthy. Live rollback-only two-user tests passed for profiles, passports, admin/billing tampering, private rooms and support validation; zero fixture users remain. Auth callbacks still target old Vercel domains; exact driverslounge.app callbacks prepared but not saved pending approval. Custom SMTP disabled: public signup/confirmation/reset delivery remains blocked. No persistent schema/data changes or account activation. See work/drivers-lounge/BACKEND-ACCESS-AUDIT.md. This supersedes earlier hibernation/sign-in blocker.
 
+
+## Production authentication links saved — October 13, 2026
+Owner approved exact driverslounge.app callbacks and default Site URL. Saved both confirmation/recovery URLs and Site URL, verified persistence after reload; six total callbacks, old entries retained. Email research recommends Resend Free for controlled beta (3,000/month,100/day); Brevo Free alternative300/day with branding and over-limit queue. Provider account/credential/DNS and delivery tests still pending. No charges or DNS changes. See AUTH-EMAIL-PLAN.md and BACKEND-ACCESS-AUDIT.md in work/drivers-lounge.
+

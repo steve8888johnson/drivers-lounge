@@ -14,11 +14,11 @@ Project opwaikfrnpvovnaslvfz. Owner signed into the connected Supabase dashboard
 
 ## Blockers and limits
 
-- Auth Site URL remains https://drivers-lounge.vercel.app; four existing callbacks point to old production/preview hosts. Exact callbacks https://driverslounge.app/account?flow=recovery and https://driverslounge.app/account?confirmed=1 are prepared in the dashboard but NOT saved, pending authentication-destination approval. Proposed default Site URL: https://driverslounge.app. No wildcard proposed.
+- Owner approved production callbacks. Saved and verified after dashboard reload: Site URL https://driverslounge.app; callbacks https://driverslounge.app/account?flow=recovery and https://driverslounge.app/account?confirmed=1. Four existing callbacks retained, six total. No wildcard added. Evidence: outputs/supabase-production-redirects-saved.png in the parent workspace.
 - Custom SMTP is disabled. Supabase default SMTP only sends to project-team addresses and is not a public-production email service: https://supabase.com/docs/guides/auth/auth-smtp . Existing Google Workspace mailbox setup does not establish this application sender configuration. Provider/credentials/domain verification and real confirmation/reset delivery still needed.
 - No end-to-end real-user signup, confirmation, recovery, account deletion processing or native callback test yet. Account deletion request creation is not proof of completed deletion.
 - Advisor still flags extension function exposure and disabled leaked-password protection; deny-all legacy tables are not automatically defects. Broad TRUNCATE/REFERENCES/TRIGGER grants warrant separate least-privilege review; no claim of an exposed HTTP exploit established.
 - Legacy Highway tables/auth trigger are present. Do not enable the separate freight service on this database.
 - Website remains read-only; navigation and payments remain held. No persistent database data/schema changes, credentials, DNS changes, fees or store submissions in this audit.
 
-Next: approved callback update; production email sender; isolated preview with account-only scope; real signup/recovery/deletion and two-device tests before enabling public accounts. Native build/signing/device tests and Apple enrollment remain separate gates.
+Next: production email sender (see AUTH-EMAIL-PLAN.md); isolated preview with account-only scope; real signup/recovery/deletion and two-device tests before enabling public accounts. Native build/signing/device tests and Apple enrollment remain separate gates.
