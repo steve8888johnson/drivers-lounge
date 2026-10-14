@@ -17,3 +17,7 @@ Next gates:
 3. Apple completes enrollment; owner pays fee if requested. Build/sign on authorized Mac or approved build service, then TestFlight/device QA.
 4. Complete listing artwork, actual-build data safety/privacy labels, content rating, app access/reviewer notes and review submission. Publication tonight cannot be guaranteed.
 5. Truck provider contract/access, coverage and safety tests before operational routing activation.
+
+## Backend access recovered — October 13, 2026
+Supabase SQL now responds and dashboard reports Healthy. Live rollback-only two-user tests passed for profiles, passports, admin/billing tampering, private rooms and support validation; zero fixture users remain. Auth callbacks still target old Vercel domains; exact driverslounge.app callbacks prepared but not saved pending approval. Custom SMTP disabled: public signup/confirmation/reset delivery remains blocked. No persistent schema/data changes or account activation. See work/drivers-lounge/BACKEND-ACCESS-AUDIT.md. This supersedes earlier hibernation/sign-in blocker.
+
