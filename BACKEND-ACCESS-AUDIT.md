@@ -15,7 +15,7 @@ Project opwaikfrnpvovnaslvfz. Owner signed into the connected Supabase dashboard
 ## Blockers and limits
 
 - Owner approved production callbacks. Saved and verified after dashboard reload: Site URL https://driverslounge.app; callbacks https://driverslounge.app/account?flow=recovery and https://driverslounge.app/account?confirmed=1. Four existing callbacks retained, six total. No wildcard added. Evidence: outputs/supabase-production-redirects-saved.png in the parent workspace.
-- Custom SMTP is disabled. Supabase default SMTP only sends to project-team addresses and is not a public-production email service: https://supabase.com/docs/guides/auth/auth-smtp . Existing Google Workspace mailbox setup does not establish this application sender configuration. Provider/credentials/domain verification and real confirmation/reset delivery still needed.
+- Custom SMTP is now enabled with Resend and a verified sending domain. The real recovery test failed with SMTP535 invalid credentials; a restricted replacement key is prepared for owner handoff. Actual confirmation/reset delivery remains blocked. See the latest evidence at the end and AUTH-EMAIL-PLAN.md.
 - No end-to-end real-user signup, confirmation, recovery, account deletion processing or native callback test yet. Account deletion request creation is not proof of completed deletion.
 - Advisor still flags extension function exposure and disabled leaked-password protection; deny-all legacy tables are not automatically defects. Broad TRUNCATE/REFERENCES/TRIGGER grants warrant separate least-privilege review; no claim of an exposed HTTP exploit established.
 - Legacy Highway tables/auth trigger are present. Do not enable the separate freight service on this database.
@@ -29,3 +29,12 @@ Created auth.driverslounge.app (Resend domain f6b72ea7-1943-4004-b95f-af8e11f2f8
 Prepared but DID NOT create sending-only key named Drivers Lounge Supabase Auth scoped to auth.driverslounge.app. Prepared but DID NOT save Supabase SMTP: no-reply@auth.driverslounge.app, Drivers Lounge, smtp.resend.com,465,resend,60-second user interval. Password blank. Owner asked to create/copy key directly into Supabase Password and save, per browser credential handoff rule. No secret read/stored/logged; no email sent yet. Website remains read-only, so this is not functional signup/recovery completion.
 Nine existing auth/read-only source tests passed. Actual email receipt, reset completion, abuse limits, public account enablement and native behavior remain unverified. Next turn inspect saved SMTP and run authorized delivery tests, then safely enable account UI only when associated gates pass.
 Evidence in parent outputs: resend-free-plan.png,resend-domain-verified.png,resend-key-prepared.png,supabase-smtp-prepared.png,RESEND-DNS-BEFORE.json.
+## SMTP saved, delivery blocked by invalid credential — October 13, 2026, 10:14pm MDT
+
+Owner saved custom SMTP. An independent fresh dashboard tab confirmed enabled with sender no-reply@auth.driverslounge.app, name Drivers Lounge, host smtp.resend.com, port465, username resend and60-second minimum interval. Stored password is hidden; no secret inspected. The confirmation template uses {{ .ConfirmationURL }}.
+
+One password-recovery test for the owner's existing confirmed account failed at2026-10-14T04:14:27Z. Supabase auth logs recorded HTTP500 and SMTP535 "Authentication credentials invalid"; Resend shows no sent emails and the existing domain-restricted key has0 uses. Do not retry unchanged credentials. Browser-redacted input values initially misled a comparison check; sender and username were confirmed correct, with no changes saved.
+
+Prepared replacement "Drivers Lounge Supabase Auth v2", Sending access only, scoped to auth.driverslounge.app. Not created by agent. Owner must click Add, copy the complete key immediately (not the shortened detail-page token), enter it in Supabase Password and save. No key copied to chat/source/screenshots. Evidence: outputs/supabase-smtp-saved.png and outputs/resend-key-v2-prepared.png in the parent workspace.
+
+Resend Free remains selected with paid overages off. Verified domain/DNS unchanged. Website remains read-only. Successful delivery, actual confirmation/reset callbacks, completed password reset, signup and account-deletion workflows remain unverified; SMTP saved is not functional completion.

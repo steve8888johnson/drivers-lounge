@@ -25,3 +25,12 @@ Supabase SQL now responds and dashboard reports Healthy. Live rollback-only two-
 ## Production authentication links saved — October 13, 2026
 Owner approved exact driverslounge.app callbacks and default Site URL. Saved both confirmation/recovery URLs and Site URL, verified persistence after reload; six total callbacks, old entries retained. Email research recommends Resend Free for controlled beta (3,000/month,100/day); Brevo Free alternative300/day with branding and over-limit queue. Provider account/credential/DNS and delivery tests still pending. No charges or DNS changes. See AUTH-EMAIL-PLAN.md and BACKEND-ACCESS-AUDIT.md in work/drivers-lounge.
 
+## SMTP saved, delivery blocked by invalid credential — October 13, 2026, 10:14pm MDT
+
+Owner saved custom SMTP. An independent fresh dashboard tab confirmed enabled with sender no-reply@auth.driverslounge.app, name Drivers Lounge, host smtp.resend.com, port465, username resend and60-second minimum interval. Stored password is hidden; no secret inspected. The confirmation template uses {{ .ConfirmationURL }}.
+
+One password-recovery test for the owner's existing confirmed account failed at2026-10-14T04:14:27Z. Supabase auth logs recorded HTTP500 and SMTP535 "Authentication credentials invalid"; Resend shows no sent emails and the existing domain-restricted key has0 uses. Do not retry unchanged credentials. Browser-redacted input values initially misled a comparison check; sender and username were confirmed correct, with no changes saved.
+
+Prepared replacement "Drivers Lounge Supabase Auth v2", Sending access only, scoped to auth.driverslounge.app. Not created by agent. Owner must click Add, copy the complete key immediately (not the shortened detail-page token), enter it in Supabase Password and save. No key copied to chat/source/screenshots. Evidence: outputs/supabase-smtp-saved.png and outputs/resend-key-v2-prepared.png in the parent workspace.
+
+Resend Free remains selected with paid overages off. Verified domain/DNS unchanged. Website remains read-only. Successful delivery, actual confirmation/reset callbacks, completed password reset, signup and account-deletion workflows remain unverified; SMTP saved is not functional completion.
