@@ -1,8 +1,9 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {requestTruckCandidate} from '../server/truck-routing.mjs';
 import {sectionFixture,tripFixture} from './fixtures/truck-geometry.mjs';
+import {vehicleFixture} from './fixtures/truck-axles.mjs';
 const now=Date.parse('2026-10-13T12:00:00Z');
-const draft=()=>({vehicle:{confirmed:true,oversize:false,hazmat:false,heightCm:412,widthCm:260,lengthCm:2195,currentWeightKg:36000,grossWeightKg:40000,axleGroups:[{type:'single',weightKg:6000},{type:'tandem',weightKg:15000},{type:'tandem',weightKg:15000}]},...tripFixture(),departure:'2026-10-15T12:00:00.000Z'});
+const draft=()=>({vehicle:vehicleFixture(),...tripFixture(),departure:'2026-10-15T12:00:00.000Z'});
 const payload=()=>({routes:[{id:'r',sections:[sectionFixture()]}]});
 const opts=extra=>({enabled:true,apiKey:'test-only',clock:()=>now,fetchImpl:async()=>Response.json(payload()),...extra});
 test('server connection is off by default and invalid profiles never send',async()=>{let calls=0;const fetchImpl=async()=>{calls++;throw Error('no');};assert.equal((await requestTruckCandidate(draft(),{fetchImpl})).status,'HOLD');await requestTruckCandidate({},opts({fetchImpl}));assert.equal(calls,0);});
@@ -26,4 +27,12 @@ test('malformed UTF-8 is not repaired into a valid provider response',async()=>{
  const index=data.indexOf(Buffer.from('"id":"r"'))+6;data[index]=255;
  const result=await requestTruckCandidate(draft(),opts({fetchImpl:async()=>new Response(data,{headers:{'content-type':'application/json'}})}));
  assert.equal(result.status,'HOLD');assert.equal(result.reasons[0].code,'INVALID_PROVIDER_RESPONSE');
+});
+test('missing axle evidence never sends; changed axle spacing invalidates a late response',async()=>{
+ let calls=0;const bad=draft();delete bad.vehicle.axleMeasurement;
+ const result=await requestTruckCandidate(bad,opts({fetchImpl:async()=>{calls++;return Response.json(payload());}}));
+ assert.equal(result.status,'HOLD');assert.equal(calls,0);
+ const changed=draft();changed.vehicle.axleMeasurement.axles[4].positionIn+=12;
+ const late=await requestTruckCandidate(draft(),opts({currentInput:()=>changed}));
+ assert.equal(late.status,'HOLD');assert.equal(late.reasons[0].code,'REQUEST_CHANGED');
 });

@@ -1,5 +1,7 @@
 # Truck provider evaluation — October 13, 2026
 
+October14 update: request preparation now requires measured individual axles, complete supported single/tandem grouping and federal baseline review; group weights are derived, not caller-supplied labels. Gross/current weight meanings remain distinct. Exact local spacing/revision is included in server binding. Bounded geometry decoding and consistency checks are implemented. See TRUCK-AXLE-REVIEW.md and TRUCK-GEOMETRY-REVIEW.md. This supersedes the earlier missing-geometry and group-total-only implementation below; real provider access, authority, coverage and field validation remain missing.
+
 RouteXL reviewed: https://www.routexl.com/blog/api/ and https://docs.routexl.com/Options . Documented API is multi-stop ordering/time-window optimization. Vehicle choice exists, but inspected documentation does not establish complete US height, axle/bridge, length, or local truck restriction coverage. Not selected as truck-legality authority. If Steve meant a different product, obtain its exact listing.
 
 HERE candidate, not a commercial commitment:

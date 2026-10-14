@@ -2,6 +2,8 @@
 
 Status: development changes only. Navigation is not certified for operational use.
 
+October14 axle pass: individual measurement model and all-consecutive-group federal baseline diagnostics added locally, including validated provider grouping and spacing-aware request binding.138 tests pass. See TRUCK-AXLE-REVIEW.md for narrow scope/exclusions. Public axle-entry UI, manufacturer/tire limits, state/local/posted limits, evidence provenance/freshness and real-load tests remain open. No deployment/provider traffic/gate activation. Do not treat REVIEW_REQUIRED as legal clearance.
+
 Latest routing pass October13 overnight: bounded geometry screening and strict evidence dates implemented locally;128 tests pass. See TRUCK-GEOMETRY-REVIEW.md. No provider connection, deployed change, route legality certification or gate activation. Risk HIGH/contained locally: nonempty strings no longer pass the shape check. CRITICAL/open: actual road access/clearance/weight coverage, trusted source freshness, directed topology, destination entrance and field evidence remain unverified.
 
 Implemented: ordinary OSRM routing remains planning-only; its driving and reroute entry points fail closed. Permit guidance holds for unreviewed masters, stale/inaccurate/out-of-order GPS and discontinuous fixes. An asynchronous preparation cannot restart guidance after stop/background/change. Both freight entry pages hand off to Highway Automation using an explicitly configured HTTPS destination. No documents or location are sent by that link.

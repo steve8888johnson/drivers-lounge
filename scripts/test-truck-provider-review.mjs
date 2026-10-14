@@ -2,19 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {reviewHereCandidate,prepareHereRequest} from '../src/assets/truck-provider-review.mjs';
 import {sectionFixture,tripFixture} from './fixtures/truck-geometry.mjs';
+import {vehicleFixture} from './fixtures/truck-axles.mjs';
 const request={fingerprint:'route-and-profile-v1',trip:tripFixture(),transportMode:'truck',scope:'standard-nonhazmat',createdAt:100,expiresAt:200};
 const current={fingerprint:request.fingerprint,now:150};
 const candidate=()=>({routes:[{id:'r1',sections:[sectionFixture()]}]});
 const review=p=>reviewHereCandidate(p,request,current);
-const draft=()=>({vehicle:{confirmed:true,oversize:false,hazmat:false,heightCm:412,widthCm:260,lengthCm:2195,currentWeightKg:36000,grossWeightKg:40000,axleGroups:[{type:'single',weightKg:6000},{type:'tandem',weightKg:15000},{type:'tandem',weightKg:15000}]},origin:{lat:32,lng:-102},destination:{lat:33,lng:-84},departure:'2026-10-15T12:00:00.000Z',now:Date.parse('2026-10-13T12:00:00Z')});
+const draft=()=>({vehicle:vehicleFixture(),origin:{lat:32,lng:-102},destination:{lat:33,lng:-84},departure:'2026-10-15T12:00:00.000Z',now:Date.parse('2026-10-13T12:00:00Z')});
 test('request preparation preserves explicit dimensions and distinct weight meanings',()=>{
  const result=prepareHereRequest(draft()),q=new URLSearchParams(result.query);
- assert.equal(q.get('vehicle[currentWeight]'),'36000');assert.equal(q.get('vehicle[grossWeight]'),'40000');
- assert.equal(q.get('vehicle[weightPerAxleGroup]'),'single:6000,tandem:15000');assert.equal(q.get('transportMode'),'truck');
+ assert.equal(q.get('vehicle[currentWeight]'),'35381');assert.equal(q.get('vehicle[grossWeight]'),'40000');
+ assert.equal(q.get('vehicle[weightPerAxleGroup]'),'single:5444,tandem:14969');assert.equal(q.get('transportMode'),'truck');
  assert.equal(q.has('apiKey'),false);assert.equal(result.networkEnabled,false);
 });
 test('request preparation rejects defaults, inconsistent axle groups and timeless routes',()=>{
- for(const mutate of [i=>delete i.vehicle.heightCm,i=>i.vehicle.widthCm='260',i=>i.vehicle.axleGroups[0].weightKg=1,i=>i.vehicle.hazmat=true,i=>i.vehicle.currentWeightKg=50000,i=>i.departure='any',i=>i.departure='2026-02-30T12:00:00.000Z',i=>i.origin.lat=NaN]){
+ for(const mutate of [i=>delete i.vehicle.heightCm,i=>i.vehicle.widthCm='260',i=>i.vehicle.lengthCm=100,i=>i.vehicle.axleMeasurement.axles[0].weightLb=1,i=>i.vehicle.hazmat=true,i=>i.vehicle.currentWeightKg=50000,i=>i.departure='any',i=>i.departure='2026-02-30T12:00:00.000Z',i=>i.origin.lat=NaN]){
  const i=draft();mutate(i);assert.throws(()=>prepareHereRequest(i));}
 });
 test('provider route never grants driving authorization or returns geometry',()=>{

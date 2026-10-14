@@ -2,6 +2,7 @@
 // HERE documentation: https://docs.here.com/routing/docs/routing-v8-truck-routing
 // https://docs.here.com/routing/docs/routing-v8-admin-wide-restrictions
 import {inspectTruckGeometry} from './truck-route-geometry.mjs';
+import {prepareMeasuredAxleParameters} from './truck-axle-review.mjs';
 export function prepareHereRequest(input) {
   const p = input?.vehicle;
   if (!p || p.confirmed !== true || p.oversize !== false || p.hazmat !== false)
@@ -12,17 +13,10 @@ export function prepareHereRequest(input) {
     params.set(`vehicle[${parameter}]`,String(p[field]));
   }
   if (p.currentWeightKg > p.grossWeightKg) throw Error('Current weight exceeds declared maximum loaded weight.');
-  if (!Array.isArray(p.axleGroups) || !p.axleGroups.length) throw Error('Measured axle groups required.');
-  const maximums = {};
-  let total = 0;
-  for (const group of p.axleGroups) {
-    if (!['single','tandem','triple'].includes(group?.type) || !Number.isSafeInteger(group.weightKg) || group.weightKg <= 0)
-      throw Error('Unsupported or unmeasured axle group.');
-    total += group.weightKg;
-    maximums[group.type] = Math.max(maximums[group.type] || 0,group.weightKg);
-  }
-  if (total !== p.currentWeightKg) throw Error('Axle group weights must sum to current loaded weight.');
-  params.set('vehicle[weightPerAxleGroup]',Object.entries(maximums).sort().map(([type,weight])=>`${type}:${weight}`).join(','));
+  const measuredAxles = prepareMeasuredAxleParameters(p.axleMeasurement);
+  if (p.currentWeightKg !== measuredAxles.currentWeightKg) throw Error('Current weight must match the measured loaded total, rounded up to kilograms.');
+  if (p.axleMeasurement.axles.at(-1).positionIn * 2.54 > p.lengthCm) throw Error('Measured axle span exceeds total vehicle length.');
+  params.set('vehicle[weightPerAxleGroup]',measuredAxles.weightPerAxleGroup);
   for (const endpoint of ['origin','destination']) {
     const point = input[endpoint];
     if (!point || typeof point.lat !== 'number' || typeof point.lng !== 'number' || !Number.isFinite(point.lat) || !Number.isFinite(point.lng) || Math.abs(point.lat)>90 || Math.abs(point.lng)>180)
@@ -34,7 +28,7 @@ export function prepareHereRequest(input) {
   if (!Number.isFinite(input.now) || !Number.isFinite(departure) || new Date(departure).toISOString() !== input.departure || departure < input.now)
     throw Error('Future canonical UTC departure required.');
   params.set('departureTime',input.departure);
-  return {endpoint:'https://router.hereapi.com/v8/routes',query:params.toString(),networkEnabled:false,guidanceAllowed:false};
+  return {endpoint:'https://router.hereapi.com/v8/routes',query:params.toString(),vehicleReviewBinding:measuredAxles.binding,networkEnabled:false,guidanceAllowed:false};
 }
 export function reviewHereCandidate(payload, request, current) {
   const reasons = [];

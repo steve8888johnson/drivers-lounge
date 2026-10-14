@@ -8,7 +8,7 @@ export async function requestTruckCandidate(input,{enabled=false,apiKey,fetchImp
  if(typeof apiKey!=='string'||!apiKey.trim())return hold('PROVIDER_NOT_CONFIGURED');
  if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>10000||!Number.isSafeInteger(maxBytes)||maxBytes<1||maxBytes>1048576)return hold('INVALID_SERVER_LIMITS');
  let prepared,fingerprint,trip;const createdAt=clock();
- const signature=x=>createHash('sha256').update(prepareHereRequest({...x,now:createdAt}).query).digest('hex');
+ const signature=x=>{const candidate=prepareHereRequest({...x,now:createdAt});return createHash('sha256').update(JSON.stringify([candidate.query,candidate.vehicleReviewBinding])).digest('hex');};
  try{
   prepared=prepareHereRequest({...input,now:createdAt});fingerprint=signature(input);
   // Snapshot from the validated outgoing request, not mutable browser-supplied review evidence.
