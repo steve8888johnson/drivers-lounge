@@ -9,10 +9,12 @@ import { captureTripDraft, applyGeometryDraft, maneuverKey } from './drafts.mjs'
 import { walkthrough } from './walkthrough.mjs';
 import { walletLaunch } from './launch.mjs';
 import { planningPlaces, preparationStatus, applyPlanningHandoff } from './preparation.mjs';
+import { mergePermitIntake, createCameraSession } from './intake.mjs';
 
 const $ = selector => document.querySelector(selector);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const crew = new Crew(window.DLBackend);
+const cameraSession = createCameraSession();
 let trip, selected, tab = 'load', dirty = false, watching = null, timer, lastFix, progress, master, crewTimer, crewBusy = false, lastCrew = 0, camera, cameraTimer, activeState = '', spoken = '', objectURLs = [], guidanceVersion = 0;
 let savedTrip, walkthroughIndex = 0;
 const currentPermit = () => trip?.permits.find(p => p.id === selected);
@@ -36,6 +38,7 @@ function confirmAction(message, action = 'Continue') {
   });
 }
 function switchTab(next) {
+  if (next !== 'review') void stopCamera();
   tab = next;
   document.querySelectorAll('[data-tab]').forEach(b => { if (b.dataset.tab === next) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   document.querySelectorAll('.panel').forEach(p => p.hidden = p.id !== `panel-${next}`);
@@ -100,7 +103,7 @@ function renderReview() {
   $('#geometry-json').value = JSON.stringify(p.steps, null, 2); $('#geometry-checked').checked = false;
   $('#geometry-state').textContent = geometryReviewed(p) ? 'Geometry confirmed against this permit revision.' : 'GPS guidance remains blocked until all route geometry is confirmed.';
   $('#review-documents').innerHTML = documentRows(p) || '<p class="muted">Add all original route and restriction pages.</p>'; wireDocuments($('#review-documents'));
-  $('#qr-contents').value = ''; $('#permit-text').value = ''; $('#qr-results').innerHTML = '';
+  $('#qr-contents').value = ''; $('#permit-text').value = ''; renderQRCards(p);
 }
 function readPermit(target) {
   const p = target.permits.find(p => p.id === selected); if (!p) throw Error('Add a state permit first.'); const f = new FormData($('#permit-form'));
@@ -160,43 +163,60 @@ function render() { renderLoad(); renderList(); renderReview(); renderRoute(); r
 async function openTrip(value) { stopGuidance(); stopCamera(); trip = value; trip.hazmat ??= blankHazmat(); selected = trip.permits[0]?.id; dirty = false; walkthroughIndex = 0; $('#crew-role').value = trip.shared?.role || trip.localRole || 'driver'; $('#share-consent').checked = false; $('#conditions-checked').checked = false; $('#crew-members').textContent = ''; $('#crew-positions').textContent = ''; $('#invite-code').textContent = ''; $('#cache-status').textContent = ''; await persist(); try { localStorage.setItem('dl-last-permit-trip', JSON.stringify(trip.id)); } catch { /* The IndexedDB wallet remains usable without shortcut preferences. */ } render(); switchTab('load'); $('#crew-status').textContent = trip.shared ? 'Saved crew link. Reconnect before sharing location.' : 'Live sharing is off.'; }
 async function ensurePermit() { if (!currentPermit()) { captureDrafts(); edit(); const p = blankPermit(); trip.permits.push(p); selected = p.id; await persist(); renderList(); renderReview(); } return currentPermit(); }
 async function mergeImport(imported) {
-  await ensurePermit(); captureDrafts(); const p = currentPermit(); edit();
-  for (const key of ['state', 'number', 'kind', 'validFrom', 'validTo', 'timeZone', 'routeText', 'restrictions']) if (imported[key]) p[key] = imported[key];
-  for (const side of ['entry', 'exit']) for (const field of ['label', 'state', 'road']) if (imported[side]?.[field]) p[side][field] = imported[side][field];
-  if (imported.steps?.length) { p.steps = imported.steps; p.geometrySource = imported.geometrySource; } p.confidence = imported.confidence; p.complete = false; p.review = null; p.geometryReview = null;
-  if (imported.travelWindow) p.travelWindow = imported.travelWindow;
-  if (Object.keys(imported.limits || {}).length) p.limits = imported.limits;
+  await ensurePermit(); captureDrafts(); const p = currentPermit();
+  const next = mergePermitIntake(p, imported); edit();
+  trip.permits[trip.permits.indexOf(p)] = next;
   await persist('Imported draft. Confirm every extracted field against the original.'); renderList(); renderReview();
 }
 async function handleQR(raw) {
-  await ensurePermit(); captureDrafts(); const p = currentPermit(); edit(); const result = classifyQR(raw);
+  if (typeof raw !== 'string' || !raw.trim() || raw.length > 50000) throw Error('QR contents are empty or too large. Keep the original and enter its route manually.');
+  await ensurePermit(); captureDrafts(); const p = currentPermit(); edit();
   if (!p.qr.includes(raw)) p.qr.push(String(raw).slice(0, 50000)); p.review = null; p.geometryReview = null; await persist();
-  if (result.kind === 'encoded-route') await mergeImport(result.permit);
-  const el = document.createElement('div'); el.className = 'info'; const text = document.createElement('p'); text.textContent = result.message || 'Encoded permit route imported; confirmation required.'; el.append(text);
+  renderQRCards(p); renderList(); status('QR saved on this device. Choose its import action, then compare with every original page.');
+}
+function renderQRCards(p) {
+  $('#qr-results').replaceChildren();
+  for (const [index, raw] of p.qr.entries()) {
+  const result = classifyQR(raw);
+  const el = document.createElement('div'); el.className = 'info'; const text = document.createElement('p'); text.textContent = `Saved QR ${index + 1} · ` + (result.message || 'Encoded permit route ready to import; not yet confirmed.'); el.append(text);
   const code = document.createElement('pre'); code.className = 'qr-data'; code.textContent = raw; el.append(code);
-  if (result.kind === 'public-url') { const button = document.createElement('button'); button.textContent = 'Import this public route'; button.onclick = safe(async () => { button.disabled = true; try { await mergeImport(await importPublicQR(result.url)); } finally { button.disabled = false; } }); el.append(button); }
-  if (result.kind === 'public-provider') { const button = document.createElement('button'); button.textContent = 'Import issued route data'; button.onclick = safe(async () => { button.disabled = true; try { const response = await fetch('/api/permit-route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: result.url }), signal: AbortSignal.timeout(15000), cache: 'no-store' }); const data = await response.json(); if (!response.ok) throw Error(data.error || 'Public import unavailable. Use manual entry.'); await mergeImport(sanitizePermit(data.permit)); } finally { button.disabled = false; } }); el.append(button); }
-  $('#qr-results').append(el); status(result.message || 'Route imported. Review before confirming.'); renderList();
+  let importer, label;
+  if (result.kind === 'encoded-route') { label = 'Use encoded route'; importer = async () => result.permit; }
+  if (result.kind === 'public-url') { label = 'Import this public route'; importer = () => importPublicQR(result.url); }
+  if (result.kind === 'public-provider') { label = 'Import issued route data'; importer = async () => { const response = await fetch('/api/permit-route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: result.url }), signal: AbortSignal.timeout(15000), cache: 'no-store' }); const data = await response.json(); if (!response.ok) throw Error(data.error || 'Public import unavailable. Use manual entry.'); return data.permit; }; }
+  if (importer) { const button = document.createElement('button'); button.textContent = label; button.onclick = safe(async () => { if (currentPermit()?.id !== p.id) throw Error('Select the original state permit before importing this QR.'); button.disabled = true; try { await mergeImport(await importer()); } finally { button.disabled = false; } }); el.append(button); }
+  $('#qr-results').append(el);
+  }
 }
 async function attach(files, split = false) {
   if (!files.length) return; edit(); captureDrafts();
+  let found = 0, withoutQR = 0, scanFailures = 0, pdfs = 0;
+  // Every selection is pages of ONE permit, never one inferred state per page.
+  if (split) { const p = blankPermit(); trip.permits.push(p); selected = p.id; renderReview(); }
   for (const file of files) {
-    let p; if (split) { p = blankPermit(); trip.permits.push(p); selected = p.id; } else p = await ensurePermit();
+    const p = await ensurePermit();
     await addDocument(trip, p, file); renderReview();
-    if (file.type.startsWith('image/')) { status('Original saved. Scanning QR codes on this device…'); const codes = await scanImage(file); for (const code of codes) await handleQR(code); if (!codes.length) status('Original saved. QR could not be decoded; try a closer photo or enter the route manually.'); }
-    else status('PDF original saved. Copy its route text or add a QR photo for decoding.');
+    if (file.type.startsWith('image/')) { status('Original saved. Scanning QR codes on this device…'); let codes; try { codes = await scanImage(file); } catch { scanFailures++; codes = null; } if (codes) { for (const code of codes) await handleQR(code); found += codes.length; if (!codes.length) withoutQR++; } }
+    else pdfs++;
   }
   await persist(); renderList(); switchTab('review');
+  status(`${files.length} original page(s) saved for this permit. ${found} QR result(s) retained. ${withoutQR ? `${withoutQR} photo(s) had no readable QR. ` : ''}${scanFailures ? `${scanFailures} photo scan(s) failed; originals are saved. Try a closer QR photo. ` : ''}${pdfs ? 'PDFs are saved; add a QR photo or paste their route text. ' : ''}Choose a saved QR import action and check every original page.`);
 }
-async function stopCamera() { clearTimeout(cameraTimer); camera?.getTracks().forEach(track => track.stop()); camera = null; $('#qr-video').srcObject = null; $('#qr-video').hidden = true; $('#camera-stop').hidden = true; $('#camera-start').disabled = false; }
+async function stopCamera() { cameraSession.cancel(); clearTimeout(cameraTimer); camera?.getTracks().forEach(track => track.stop()); camera = null; $('#qr-video').srcObject = null; $('#qr-video').hidden = true; $('#camera-stop').hidden = true; $('#camera-start').disabled = false; }
 async function startCamera() {
   await ensurePermit(); if (!navigator.mediaDevices?.getUserMedia) throw Error('Camera is unavailable here. Use Scan QR photo instead.');
-  camera = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
-  const video = $('#qr-video'); video.srcObject = camera; video.hidden = false; $('#camera-stop').hidden = false; $('#camera-start').disabled = true; await video.play();
+  const token = cameraSession.start(trip.id, selected);
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false }); }
+  catch { await stopCamera(); throw Error('Camera access was not available. Use Scan QR photo or paste the QR contents instead.'); }
+  if (!cameraSession.current(token, trip.id, selected)) { stream.getTracks().forEach(track => track.stop()); return; }
+  camera = stream;
+  const video = $('#qr-video'); video.srcObject = camera; video.hidden = false; $('#camera-stop').hidden = false; $('#camera-start').disabled = true;
+  try { await video.play(); } catch { await stopCamera(); throw Error('Camera preview could not start. Use Scan QR photo instead.'); }
   const scan = async () => {
-    if (!camera) return;
-    try { const canvas = document.createElement('canvas'); canvas.width = Math.min(1280, video.videoWidth); canvas.height = Math.round(video.videoHeight * canvas.width / video.videoWidth); if (canvas.width && canvas.height) { canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height); const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png')); const codes = await scanImage(blob); if (!camera) return; if (codes.length) { const file = new File([blob], 'permit-qr-capture.png', { type: 'image/png' }); await stopCamera(); await safe(() => attach([file]))({type:'capture'}); return; } } }
-    catch (e) { await stopCamera(); status(e.message, true); return; }
+    if (!camera || !cameraSession.current(token, trip.id, selected)) return;
+    try { const canvas = document.createElement('canvas'); canvas.width = Math.min(1280, video.videoWidth); canvas.height = Math.round(video.videoHeight * canvas.width / video.videoWidth); if (canvas.width && canvas.height) { canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height); const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png')); const codes = await scanImage(blob); if (!camera || !cameraSession.current(token, trip.id, selected)) return; if (codes.length) { const file = new File([blob], 'permit-qr-capture.png', { type: 'image/png' }); await stopCamera(); await safe(() => attach([file]))({type:'capture'}); return; } } }
+    catch (e) { if (cameraSession.current(token, trip.id, selected)) { await stopCamera(); status(e.message, true); } return; }
     cameraTimer = setTimeout(scan, 800);
   }; void scan();
 }
