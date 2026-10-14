@@ -11,18 +11,25 @@ import { walletLaunch } from './launch.mjs';
 import { planningPlaces, preparationStatus, applyPlanningHandoff } from './preparation.mjs';
 import { mergePermitIntake, createCameraSession } from './intake.mjs';
 import { createGuidanceSession, maneuverCue } from './guidance.mjs';
+import { createSpeech, speechPreferences, parkedInstruction } from './speech.mjs';
 
 const $ = selector => document.querySelector(selector);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const crew = new Crew(window.DLBackend);
 const cameraSession = createCameraSession();
 const guidanceSession = createGuidanceSession();
-let trip, selected, tab = 'load', dirty = false, watching = null, timer, lastFix, progress, master, crewTimer, crewBusy = false, lastCrew = 0, camera, cameraTimer, activeState = '', spoken = '', objectURLs = [], guidanceVersion = 0;
-let savedTrip, walkthroughIndex = 0, guidancePause = '';
+let trip, selected, tab = 'load', dirty = false, watching = null, timer, lastFix, progress, master, crewTimer, crewBusy = false, lastCrew = 0, camera, cameraTimer, activeState = '', objectURLs = [], guidanceVersion = 0;
+let savedTrip, walkthroughIndex = 0, guidancePause = '', spokenState = '';
+const speech = createSpeech({ synthesis: window.speechSynthesis, Utterance: window.SpeechSynthesisUtterance, visible: () => !document.hidden,
+  onState: state => { $('#permit-speech-status').textContent = state.message; },
+  onFailure: message => { if (watching !== null) stopGuidance('Spoken guidance failed. Stop when safe and check the device audio.'); $('#permit-speech-status').textContent = message; }
+});
+function voiceSettings() { try { return speechPreferences(localStorage); } catch { return speechPreferences(null); } }
 const currentPermit = () => trip?.permits.find(p => p.id === selected);
 function status(text, error = false) { $('#status').textContent = text; $('#status').dataset.error = String(error); }
 let working = false;
 const spokenHazmat = new Set();
+const spokenTimed = new Set();
 function safe(fn) { return async event => {
   const lock = event?.type !== 'input'; if (lock && working) return;
   if (lock) { working = true; document.querySelectorAll('.layout,.trip-toolbar,.heading').forEach(el => el.inert = true); }
@@ -40,6 +47,7 @@ function confirmAction(message, action = 'Continue') {
   });
 }
 function switchTab(next) {
+  if (next !== 'route') { speech.stop(); if (watching !== null) stopGuidance('Guidance stopped while leaving the route view.'); }
   if (next !== 'review') void stopCamera();
   tab = next;
   document.querySelectorAll('[data-tab]').forEach(b => { if (b.dataset.tab === next) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
@@ -49,6 +57,7 @@ function switchTab(next) {
 }
 async function persist(message) { await saveTrip(trip); savedTrip = structuredClone(trip); dirty = false; await renderPicker(); if (message) status(message); }
 function edit() {
+  speech.stop('Trip changed. Read the updated instruction only after saving and review.');
   guidanceSession.cancel(); guidanceVersion++;
   if (watching !== null) stopGuidance('Route or load changed. Review and restart guidance.');
   dirty = true; trip.revision += 1; $('#conditions-checked').checked = false;
@@ -152,6 +161,7 @@ function renderWalkthrough(m = buildMaster(trip, { geometry: true })) {
   $('#walkthrough-panel').hidden = watching !== null;
   $('#walkthrough-previous').disabled = dirty || !view.available || view.index === 0;
   $('#walkthrough-next').disabled = dirty || !view.available || view.index === view.total - 1;
+  $('#walkthrough-speak').disabled = dirty || !view.available || watching !== null;
   if (dirty || !view.available) { $('#walkthrough-content').textContent = dirty ? 'Save changes and complete the current route reviews first.' : view.reason; return; }
   walkthroughIndex = view.index;
   $('#walkthrough-content').innerHTML = `<p class="eyebrow">MANEUVER ${view.index + 1} OF ${view.total} · ${esc($('#crew-role').selectedOptions[0].textContent)}</p><h3>${esc(view.step.text)}</h3><p><strong>${view.enteringState ? 'State entry · ' : ''}${esc(view.permit.state)} · ${esc(view.permit.number)}</strong><br>${esc(view.step.road || 'Road not supplied')} · ${esc(view.step.lane || 'Lane guidance not supplied')}<br>${distance(view.meters)} along supplied geometry</p><div class="maneuver-source"><strong>Compare with saved route · line ${view.step.routeLine}</strong><blockquote>${esc(view.source)}</blockquote><p>Saved text must match the original permit. A matching line alone does not verify a turn.</p></div><p>${view.next ? `Next${view.next.permit.id !== view.permit.id ? ' · ' + esc(view.next.permit.state) + ' state entry' : ''}: ${esc(view.next.step.text)}` : 'Final supplied maneuver. Check the permit destination instructions; the end of a line does not confirm site access.'}</p>${view.border ? `<div class="border-review"><h4>Before entering ${esc(view.border.permit.state)}</h4><p>${esc(view.permit.exit.road)} → ${esc(view.border.permit.entry.road)}<br>Next permit: ${esc(view.border.permit.number)}<br>Effective ${esc(view.border.permit.validFrom)} through ${esc(view.border.permit.validTo)} · ${esc(view.border.permit.timeZone)}</p><p>${esc(view.border.clockMessage)}</p><p>${esc(view.border.windowText)}</p><p>${esc(view.border.permit.restrictions || 'No restriction notes copied. Read every original condition page.')}</p><button id="walkthrough-next-original">Open next state's original</button></div>` : ''}${view.alerts.map(a => `<p class="walkthrough-warning">${esc(a)}</p>`).join('')}<button id="walkthrough-original">Open this state in wallet</button>`;
@@ -224,14 +234,14 @@ async function startCamera() {
     cameraTimer = setTimeout(scan, 800);
   }; void scan();
 }
-function say(message, key = message) {
-  if (!$('#voice-enabled').checked || !('speechSynthesis' in window) || key === spoken) return;
-  spoken = key; speechSynthesis.cancel(); const utterance = new SpeechSynthesisUtterance(message); utterance.rate = .95; speechSynthesis.speak(utterance);
+function say(message, key = message, priority = 0) {
+  if (!$('#voice-enabled').checked) return false;
+  return speech.play(message, { ...voiceSettings(), key, priority });
 }
 function distance(m) { return m < 160 ? `${Math.round(m * 3.28084 / 10) * 10} ft` : `${(m / 1609.344).toFixed(1)} mi`; }
-function navAlert(message, key) { $('#nav-status').textContent = message; say(message, key); }
+function navAlert(message, key) { $('#nav-status').textContent = message; say(message, key, 3); }
 function pauseFix(message, key) {
-  if (guidancePause !== key) { if ('speechSynthesis' in window) speechSynthesis.cancel(); spoken = ''; }
+  if (guidancePause !== key) speech.stop();
   guidancePause = key;
   navAlert(message, key); $('#maneuver').textContent = 'Guidance paused — verify route';
   $('#next-maneuver').textContent = 'Follow the issued permit. No automatic reroute.';
@@ -241,9 +251,9 @@ function displayFix(fix) {
   if (watching === null) return;
   const result = locateOnMaster(master, fix, progress);
   if (result.status !== 'on-route') { if (result.status !== 'gps-uncertain') stopGuidance(result.message); pauseFix(result.message, result.status); return; }
-  lastFix = fix; progress = result; guidancePause = ''; const role = $('#crew-role').value, cue = maneuverCue(result);
+  lastFix = fix; progress = result; guidancePause = ''; activeState = result.permit.id; const role = $('#crew-role').value, cue = maneuverCue(result);
   $('#active-permit').textContent = `${result.permit.state} · ${result.permit.number}`; $('#maneuver').textContent = result.step.text;
-  $('#next-maneuver').textContent = result.nextStep ? `Next: ${result.nextStep.text}` : 'Final authorized segment. Follow permit destination instructions.';
+  $('#next-maneuver').textContent = result.nextStep ? `Next: ${result.nextStep.text}` : 'Final supplied segment. Follow permit destination instructions.';
   $('#maneuver-distance').textContent = distance(result.toManeuver); $('#remaining').textContent = distance(result.remaining);
   $('#lane-info').textContent = `${result.step.road || 'Road not supplied'} · ${result.step.lane || 'Lane guidance not supplied'}`;
   const ahead = result.toManeuver < 800 && result.nextStep ? master.permits.find(p=>p.id===result.nextPermitId) : null;
@@ -251,9 +261,9 @@ function displayFix(fix) {
   const newHazmat = alerts.filter(a=>a.includes('Hazmat route alert:')&&!spokenHazmat.has(`${result.permit.id}-${result.step.routeLine}-${a}`));
   const timed = alerts.find(a => /movement window closes/.test(a));
   $('#nav-status').textContent = `GPS near supplied route · ±${Math.round(fix.accuracy)} m · road position not independently verified${navigator.onLine ? '' : ' · offline; crew progress unavailable'}`;
-  if (activeState !== result.permit.id) { activeState = result.permit.id; say(`Active permit ${result.permit.state} ${result.permit.number}. ${alerts.join(' ')}. ${result.step.text}`, `state-${activeState}`); }
-  else if (newHazmat.length) { newHazmat.forEach(a=>spokenHazmat.add(`${result.permit.id}-${result.step.routeLine}-${a}`)); say(newHazmat.join(' '), `hazmat-${result.permit.id}-${result.step.routeLine}-${newHazmat.join()}`); }
-  else if (timed) say(timed, `curfew-${result.permit.id}`);
+  if (spokenState !== result.permit.id) { if (say(`Active permit ${result.permit.state} ${result.permit.number}. ${result.step.text}. Follow the original permit conditions.`, `state-${result.permit.id}`, 1)) spokenState = result.permit.id; }
+  else if (newHazmat.length) { if (say(newHazmat.join(' '), `hazmat-${result.permit.id}-${result.step.routeLine}-${newHazmat.join()}`, 2)) newHazmat.forEach(a=>spokenHazmat.add(`${result.permit.id}-${result.step.routeLine}-${a}`)); }
+  else if (timed && !spokenTimed.has(result.permit.id)) { if (say(timed, `curfew-${result.permit.id}`, 2)) spokenTimed.add(result.permit.id); }
   else say(`${cue.current}. ${distance(result.toManeuver)} to ${cue.next || 'the end of the supplied route'}.`, cue.key);
   if (trip.shared && $('#share-consent').checked && Date.now() - lastCrew > 7000) { lastCrew = Date.now(); void syncCrew(fix, result); }
 }
@@ -307,7 +317,7 @@ async function startGuidance() {
   }
   if (!navigator.geolocation) throw Error('GPS is unavailable on this device. Your permit wallet remains available.');
   if (startVersion !== guidanceVersion || !guidanceSession.matches(token, trip) || dirty || document.hidden || !$('#conditions-checked').checked) throw Error('Trip or app state changed during preparation. Review the trip and restart when safely in the foreground.');
-  progress = null; lastFix = null; activeState = ''; spoken = ''; guidancePause = ''; spokenHazmat.clear();
+  progress = null; lastFix = null; activeState = ''; spokenState = ''; speech.stop(); guidancePause = ''; spokenHazmat.clear(); spokenTimed.clear();
   const current = () => {
     if (!guidanceSession.active(token)) return false;
     if (dirty || document.hidden || !$('#conditions-checked').checked || !guidanceSession.matches(token, trip)) { stopGuidance('Trip, permit or departure checks changed. Review before restarting.'); return false; }
@@ -318,6 +328,7 @@ async function startGuidance() {
   $('#walkthrough-panel').hidden = true;
   $('#guidance-role').textContent = ({ driver: 'TRUCK DRIVER', lead: 'LEAD PILOT CAR', chase: 'CHASE PILOT CAR' })[$('#crew-role').value];
   navAlert('Permitted guidance started. Waiting for accurate GPS. Issued permits and restrictions control.', 'start');
+  if (watching === null) return; // A synchronous speech failure may have stopped the session.
   timer = setInterval(() => { if (current() && (!lastFix || Date.now() - lastFix.timestamp > 15000)) pauseFix('GPS is stale. Guidance paused; follow the issued permit.', 'stale'); }, 5000);
   if (trip.shared) crewTimer = setInterval(() => void syncCrew(), 10000);
 }
@@ -326,8 +337,8 @@ function stopGuidance(message = 'Guidance is off. Location sharing stopped.') {
   guidanceVersion += 1;
   if (watching !== null) navigator.geolocation?.clearWatch(watching); watching = null; clearInterval(timer); clearInterval(crewTimer);
   if (trip?.shared) void crew.stop(trip.shared).catch(() => {});
-  if ('speechSynthesis' in window) speechSynthesis.cancel();
-  progress = null; lastFix = null; master = null; activeState = ''; spoken = ''; spokenHazmat.clear();
+  speech.stop();
+  progress = null; lastFix = null; master = null; activeState = ''; spokenState = ''; spokenHazmat.clear(); spokenTimed.clear();
   $('#active-permit').textContent = 'NO ACTIVE PERMIT'; $('#maneuver').textContent = 'Guidance is off';
   $('#next-maneuver').textContent = 'Review the current trip and restart when ready.';
   $('#maneuver-distance').textContent = '—'; $('#remaining').textContent = '—'; $('#lane-info').textContent = 'Not supplied'; $('#nav-warnings').textContent = '';
@@ -375,11 +386,18 @@ on('#qr-photo', 'change', async e => { const files = [...e.target.files]; e.targ
 on('#camera-start', 'click', startCamera); on('#camera-stop', 'click', stopCamera);
 on('#start-guidance', 'click', startGuidance); on('#stop-guidance', 'click', () => stopGuidance());
 on('#conditions-checked', 'change', () => { if (!$('#conditions-checked').checked) stopGuidance('Departure checks withdrawn. Guidance is off.'); });
-on('#voice-enabled', 'change', () => { if (!$('#voice-enabled').checked && 'speechSynthesis' in window) { speechSynthesis.cancel(); spoken = ''; } });
-for (const [selector, delta] of [['#walkthrough-previous', -1], ['#walkthrough-next', 1]]) on(selector, 'click', () => { if (dirty || watching !== null) throw Error('Park and save changes before reviewing maneuvers.'); walkthroughIndex += delta; renderWalkthrough(); });
+on('#voice-enabled', 'change', () => { if (!$('#voice-enabled').checked) speech.stop(); });
+for (const [selector, delta] of [['#walkthrough-previous', -1], ['#walkthrough-next', 1]]) on(selector, 'click', () => { if (dirty || watching !== null) throw Error('Park and save changes before reviewing maneuvers.'); speech.stop(); walkthroughIndex += delta; renderWalkthrough(); });
+on('#walkthrough-speak', 'click', () => {
+  if (dirty || watching !== null) throw Error('Park, save and review the current route before reading a maneuver.');
+  const text = parkedInstruction(walkthrough(buildMaster(trip, { geometry: true }), walkthroughIndex, $('#crew-role').value));
+  if (!text) throw Error('Complete the permit and geometry checks first.');
+  speech.play(text, { ...voiceSettings(), key: 'parked-maneuver', repeat: true });
+});
+on('#stop-permit-speech', 'click', () => speech.stop());
 on('#finish-trip', 'click', async () => { if (dirty) throw Error('Save or discard changes before completing this move.'); if (!await confirmAction('Mark this permitted move complete? A single-trip permit cannot be used for a second move.', 'Mark complete')) return; stopGuidance('Permitted move marked complete.'); trip.completedAt = new Date().toISOString(); await persist('Move complete. Original permits remain in the inspection wallet.'); if (trip.shared?.owner) await crew.close(trip.shared); renderRoute(); });
-on('#read-warnings', 'click', () => { const p = progress?.permit || currentPermit(); if (!p) throw Error('Choose a state permit first.'); spoken = ''; say([...warnings(p, trip.profile, $('#crew-role').value), ...hazmatWarnings(trip, p)].join(' ') || 'No restrictions entered. Consult the original permit.'); });
-on('#active-wallet', 'click', e => { e.preventDefault(); switchTab('wallet'); if (activeState) document.getElementById(`wallet-${activeState}`)?.scrollIntoView({ behavior: 'smooth' }); });
+on('#read-warnings', 'click', () => { if (watching !== null || dirty) throw Error('Park and save changes before reviewing notes aloud.'); const p = currentPermit(); if (!p) throw Error('Choose a state permit first.'); speech.play('Parked review of saved notes. ' + ([...warnings(p, trip.profile, $('#crew-role').value), ...hazmatWarnings(trip, p)].join(' ') || 'No restrictions entered. Consult the original permit.'), { ...voiceSettings(), key: 'parked-notes', repeat: true }); });
+on('#active-wallet', 'click', e => { e.preventDefault(); const permitId = activeState; switchTab('wallet'); if (permitId) document.getElementById(`wallet-${permitId}`)?.scrollIntoView({ behavior: 'smooth' }); });
 on('#cache-trip', 'click', prepareOffline);
 on('#export-trip', 'click', async () => { if (dirty) throw Error('Save changes before exporting.'); const packet = await exportPacket(trip), url = URL.createObjectURL(new Blob([JSON.stringify(packet)], { type: 'application/json' })); objectURLs.push(url); const a = document.createElement('a'); a.href = url; a.download = `permitted-load-${trip.id}.json`; a.click(); status('Trip packet exported. It includes private permits; share only with your trip crew.'); });
 on('#import-packet', 'change', async e => { const file = e.target.files[0]; e.target.value = ''; if (!file) return; if (!await changeGuard()) return; if (file.size > 65000000) throw Error('Trip packet exceeds 65 MB.'); const imported = await importPacket(JSON.parse(await file.text())); await openTrip(imported); status('Trip and originals imported. Confirm each permit and geometry on this device.'); });
@@ -397,7 +415,7 @@ on('#close-crew', 'click', async () => { if (!trip.shared?.owner) throw Error('O
 on('#refresh-crew', 'click', refreshCrew);
 function connection() { $('#connection').textContent = navigator.onLine ? 'Device wallet · online' : 'Offline · device wallet'; if (!navigator.onLine) { $('#crew-status').textContent = 'Offline — crew positions are unavailable.'; $('#crew-positions').textContent = ''; } }
 window.addEventListener('online', connection); window.addEventListener('offline', connection);
-document.addEventListener('visibilitychange', () => { if (document.hidden) { void stopCamera(); if (watching !== null) stopGuidance('Guidance paused while app was hidden. Restart when safely in the foreground.'); } });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { speech.stop('Page hidden. Speech stopped; tap to read again when parked.'); void stopCamera(); if (watching !== null) stopGuidance('Guidance paused while app was hidden. Restart when safely in the foreground.'); } });
 window.addEventListener('pagehide', () => { stopGuidance(); void stopCamera(); objectURLs.forEach(URL.revokeObjectURL); });
 window.addEventListener('beforeunload', event => { if (dirty) { event.preventDefault(); event.returnValue = ''; } });
 async function launchWallet() {

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#102443"><title>iPhone & Voice Check | Drivers Lounge</title><meta name="description" content="A parked iPhone Safari check for permit voice review, GPS reception and screen interruptions. Driving guidance is unavailable."><link rel="stylesheet" href="/assets/permits/phone-check.css"><script type="module" src="/assets/permits/phone-check.mjs"></script></head>
+<body>
+<a class="skip" href="#main">Skip to phone checks</a>
+<header><a href="/permitted-loads">← Permit wallet</a><strong>DRIVERS LOUNGE</strong><span>Parked phone check</span></header>
+<main id="main">
+  <p class="eyebrow">IPHONE · SAFARI</p><h1>Hear it clearly.<br>Check it while parked.</h1>
+  <p class="intro">Open this page in Safari on your iPhone. Test your speaker first, then truck Bluetooth if you use it. Every example is a test; your actual permit route stays separate.</p>
+  <div class="notice"><strong>TEST MODE · DRIVING GUIDANCE IS OFF</strong><p>This page does not guide a trip or approve a route. Keep the phone in front of you while parked. Returning from a lock or another app requires a new tap.</p></div>
+  <button id="stop-all" class="stop">Stop all checks</button><p id="lifecycle-status" class="status" role="status">Ready when you are. No checks start automatically.</p>
+  <section aria-labelledby="voice-title"><span class="number">1</span><h2 id="voice-title">Check the voice</h2><p>Turn up media volume and check the selected audio output. Permit text uses an on-device voice.</p>
+    <div class="settings"><label>Device voice<select id="voice-choice"><option value="">Loading device voices…</option></select></label><label>Speaking speed<select id="voice-rate"><option value="0.85">Slower</option><option value="0.95" selected>Normal</option><option value="1.1">Faster</option></select></label></div>
+    <p id="voice-availability" class="hint"></p><button id="play-sound" class="primary">Play sound check</button><button id="stop-voice">Stop voice</button>
+    <p id="speech-status" class="status" role="status">Sound has not been tested on this phone.</p>
+    <fieldset><legend>What did you hear?</legend><label><input id="heard-speaker" type="checkbox">I heard the test clearly through the phone speaker.</label><label><input id="heard-bluetooth" type="checkbox">I heard the test clearly through truck Bluetooth.</label></fieldset>
+  </section>
+  <section aria-labelledby="demo-title"><span class="number">2</span><h2 id="demo-title">Rehearse the prompts</h2><p>Tap each example. The spoken and displayed instructions must agree.</p>
+    <label>Test situation<select id="demo-choice"></select></label>
+    <div class="prompt"><span>TEST INSTRUCTION</span><h3 id="demo-heading"></h3><p id="demo-text"></p></div>
+    <button id="play-demo" class="primary">Hear this example</button><button id="next-demo">Next example</button>
+    <p class="hint">Your issued instructions can be read aloud from the permit wallet’s parked walkthrough after review. No example is copied into your load.</p>
+  </section>
+  <section aria-labelledby="gps-title"><span class="number">3</span><h2 id="gps-title">Check GPS reception</h2><p>Optional: allow location for a check lasting up to 20 seconds. Coordinates stay in the browser and are discarded; only accuracy estimates enter your test record.</p>
+    <button id="start-gps" class="primary">Test GPS while parked</button><button id="stop-gps">Stop GPS check</button><p id="gps-status" class="status" role="status">GPS has not been tested.</p>
+    <p class="hint">A good accuracy estimate does not prove which road or lane you are on.</p>
+  </section>
+  <section aria-labelledby="screen-title"><span class="number">4</span><h2 id="screen-title">Check interruptions</h2><p>Play an example, then lock and unlock your phone or switch apps. Speech should stop. Return to Safari and tap to play again. Repeat with Bluetooth and an incoming call when convenient.</p>
+    <button id="start-screen">Try keep-screen-on</button><button id="stop-screen">Release screen</button><p id="screen-status" class="status" role="status">Keep-screen-on has not been tested.</p>
+    <label class="check"><input id="checked-lock" type="checkbox">I physically locked or left Safari, returned, and confirmed no old instruction resumed.</label>
+    <p class="hint">Keep-screen-on may be declined or released by the phone. This page does not promise background or lock-screen guidance.</p>
+  </section>
+  <section aria-labelledby="record-title"><span class="number">5</span><h2 id="record-title">Keep the result</h2><p>Your confirmations are separate from browser-reported results. Saving this record does not unlock navigation.</p>
+    <p id="record-summary" class="status"></p><button id="save-record">Save phone-check record</button><p id="save-status" role="status"></p><p class="hint">This record contains no permit documents or coordinates. Results last for this page visit unless you save them. Changing the voice or speed clears your earlier hearing confirmations.</p>
+    <a class="button-link" href="/permitted-loads">Open permit wallet →</a><p class="hint">The wallet belongs to this browser. Export the trip and originals from your other device, then import that packet here.</p>
+  </section>
+</main><footer>Drivers Lounge · <a href="/privacy">Privacy</a> · <a href="/support">Support</a></footer>
+</body></html>
