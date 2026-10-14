@@ -1,6 +1,8 @@
 # Release gates and recovery
 
-Status: development changes only. Navigation is not certified for operational use.
+Status: public planning UI released; operational navigation is not certified or enabled.
+
+Verified release 2026-10-14 06:33UTC: source303ec3c973a26b21e25992af6c2483b5067216f5 deployed to existing Drivers Lounge project, deploymentdpl_6veu2opasqhYYz84LXXySqzmiurS READY/production at driverslounge.app. Remote build pipeline passed. Live assets match tested source; readOnlyBeta=true, permitGuidanceEnabled=false, backend browser keys absent. Live browser verifies truck setup, map status and HOLD without directions; test measurements removed afterward. No credential, DNS, payment or database changes. No runtime error/fatal entries reported for this deployment in the immediate10-minute query; this is not sustained monitoring or field testing. The map/location UI fix is live; server routing transport remains disconnected, and published validation modules do not authorize travel.
 
 October14 map/source pass: inaccurate or stale browser locations rejected; uncertainty shown, expired markers cleared, network fallback never used as an origin, and late lookups cannot overwrite typed origins. Persistent offline/tile-error messages and explicit retry verified in local desktop/390px browser, including injected tile failures.146 tests pass;111 syntax files+4inline,807 links. See MAP-FAILURE-REVIEW.md and TRUCK-ROUTING-SOURCE-REGISTER.md. HIGH/contained in tested source: misleading precise-location claim and silent missing-map state. CRITICAL/open: all 51 directory jurisdictions still have unknown segment coverage; five reviewed TX/GA/NYC references are not a connected routing feed. Release preparation only at this entry; no accounts/guidance enabled. Verify deployment record before calling these changes live.
 
