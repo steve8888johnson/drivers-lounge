@@ -43,4 +43,24 @@ for (const s of STATE_DIRECTORY) {
   sources.push(source(`state-${s.code}`, `${s.name} — official permits and provisions`, s.permit, 'state directory', 'FHWA directory with updated agency links. Confirm current legal limits, road jurisdiction and permit conditions with the issuing office.'+(s.code==='CO'?' Automated access was unavailable when indexed; use the FHWA contact directory if this site cannot be opened.':'')));
   sources.push(source(`hazmat-${s.code}`, `${s.name} — FMCSA hazmat route registry`, s.hazmat, 'state route directory', 'Registry publication may predate this index. Check current state/tribal/local restrictions and exceptions.'));
 }
+// This is a research inventory. A reviewed web page is NOT connected road coverage.
+const routingReview=(id,label,url,kind,authority,jurisdiction,scope,limitations,access='page-read')=>({
+ ...source(id,label,url,kind,limitations),indexedOn:'2026-10-14',
+ routingReview:{reviewedOn:'2026-10-14',authority,jurisdiction,scope,access,
+  roadDataConnected:false,coverage:'unknown',reusePermission:'not-established',guidanceAllowed:false}
+});
+sources.push(
+ routingReview('tx-permit-restrictions','Texas — district permit restrictions','https://www.txdmv.gov/motor-carriers/permit-restrictions','permit restriction directory','Texas Department of Motor Vehicles / TxDOT','TX','Oversize/overweight permit restrictions by TxDOT district','Permit-specific directory; not a complete standard-truck road graph. Current district restrictions and actual permit conditions must be checked.'),
+ routingReview('tx-local-contacts','Texas — local jurisdiction restriction contacts','https://www.txdmv.gov/motor-carriers/oversize-overweight-permits/permit-contacts-for-city-county-and-txdot-offices','local authority directory','Texas Department of Motor Vehicles','TX','Known local jurisdictions requiring notification before permitted movement','The agency says the list is incomplete. A missing county is not clearance; local access and non-state roads remain unverified.'),
+ routingReview('ga-posted-bridges','Georgia — posted and restricted bridges','https://www.dot.ga.gov/GDOT/Pages/PostedBridges.aspx','bridge restriction map entry point','Georgia Department of Transportation','GA','Vehicle-type bridge load postings','Search-index content reviewed; direct page request rejected. Published instructions mention a 2020 emergency order, which is not proof of a current exception. No current route-specific load limits or update guarantee verified.','search-index-only; direct-request-rejected'),
+ routingReview('ga-bridge-layer','Georgia — bridge service metadata','https://enterprisegis.dot.ga.gov/hosting/rest/services/RestrictedBridges/MapServer/1','GIS schema reference','Georgia Department of Transportation','GA','Open Bridges layer schema and coded statuses','The layer includes new structures not open to traffic and other restrictions. Its name is not permission to cross. Maximum records 2000, pagination unsupported; completeness, load-limit joins, effective dates and reuse terms require validation.'),
+ routingReview('nyc-truck-routes','New York City — local and through truck routes','https://www.nyc.gov/html/dot/html/motorist/truckrouting.shtml','local truck access rules','New York City Department of Transportation','NY','NYC local/through network and destination access','Local versus through eligibility depends on the trip. Off-network destination access has conditions. This NYC source covers neither the rest of New York nor all clearance, closure or weight restrictions.')
+);
 export const SOURCES = Object.fromEntries(sources.map(s=>[s.id,s]));
+// Reuse the 50-state + DC directory. No jurisdiction has validated segment coverage.
+export const ROUTING_JURISDICTIONS = STATE_DIRECTORY.map(state=>({
+ code:state.code,name:state.name,entryPointSourceId:`state-${state.code}`,
+ reviewedSourceIds:sources.filter(s=>s.routingReview?.jurisdiction===state.code).map(s=>s.id),
+ coverage:{truckAccess:'unknown',clearance:'unknown',weights:'unknown',dimensions:'unknown',closures:'unknown',destinationAccess:'unknown'},
+ roadDataConnected:false,guidanceAllowed:false
+}));
