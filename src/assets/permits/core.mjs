@@ -65,13 +65,14 @@ export function geometryErrors(p) {
   if (!Array.isArray(p.steps) || !p.steps.length) return [`${label}: reviewed route geometry is needed for GPS guidance.`];
   if (p.steps.length > 1000) return [`${label}: too many maneuvers.`];
   p.steps.forEach((s, i) => {
-    if (!s.text || !Number.isInteger(s.routeLine) || s.routeLine < 1 || s.routeLine > p.routeText.split('\n').length) e.push(`${label}: maneuver ${i + 1} needs an instruction and a source route line.`);
+    if (!s.text?.trim() || !Number.isInteger(s.routeLine) || s.routeLine < 1 || s.routeLine > p.routeText.split('\n').length || !p.routeText.split('\n')[s.routeLine - 1]?.trim()) e.push(`${label}: maneuver ${i + 1} needs an instruction and a source route line.`);
     if (!Array.isArray(s.points) || s.points.length < 2 || s.points.length > 20000 || !s.points.every(pointOK)) e.push(`${label}: maneuver ${i + 1} needs detailed latitude/longitude geometry.`);
     else {
       // A sparse line across miles of terrain is not road geometry.
       // Issuer-delivered encoded lines simplify long straight roads. Retain them
       // exactly, with a larger sanity bound; never densify or route between points.
       const maxSpacing = p.geometrySource?.format === 'promiles-public-json/v1' ? 5000 : 500;
+      if (!s.points.some((pt, n) => n && meters(s.points[n - 1], pt) >= .01)) e.push(`${label}: maneuver ${i + 1} has no usable route length.`);
       if (s.points.some((pt, n) => n && meters(s.points[n - 1], pt) > maxSpacing)) e.push(`${label}: maneuver ${i + 1} geometry is too sparse (over ${maxSpacing} m between points).`);
       if (i && pointOK(p.steps[i - 1].points?.at(-1)) && meters(p.steps[i - 1].points.at(-1), s.points[0]) > 25) e.push(`${label}: geometry gap before maneuver ${i + 1}.`);
     }
@@ -122,7 +123,7 @@ export function buildMaster(trip, { date = trip.departure, geometry = false } = 
       }
     }
   });
-  return { permits: sorted.permits, issues: [...new Set(issues)], ready: issues.length === 0, segments, boundaries, meters: offset, trip };
+  return { permits: sorted.permits, issues: [...new Set(issues)], ready: issues.length === 0, geometryChecked: geometry === true, segments, boundaries, meters: offset, trip };
 }
 function project(point, segment) {
   const k = Math.cos(point[0] * Math.PI / 180), a = [segment.a[0] - point[0], (segment.a[1] - point[1]) * k], b = [segment.b[0] - point[0], (segment.b[1] - point[1]) * k];
@@ -130,11 +131,13 @@ function project(point, segment) {
   return { distance: Math.hypot(a[0] + t * d[0], a[1] + t * d[1]) * 111195, progress: segment.start + t * (segment.end - segment.start), segment };
 }
 export function locateOnMaster(master, fix, previous = null, now = Date.now()) {
-  if (!master?.ready) return { status: 'route-hold', message: 'Route review is incomplete. Guidance paused; verify every issued permit.' };
-  if (!pointOK(fix.point) || !Number.isFinite(fix.accuracy) || fix.accuracy < 0 || fix.accuracy > 50 || !Number.isFinite(fix.timestamp) || now - fix.timestamp > 15000 || fix.timestamp > now + 5000) return { status: 'gps-uncertain', message: 'GPS is stale or inaccurate. Guidance paused; follow the issued permit.' };
+  if (!master?.ready || master.geometryChecked !== true) return { status: 'route-hold', message: 'Route review is incomplete. Guidance paused; verify every issued permit.' };
+  if (!fix || !Number.isFinite(now) || !pointOK(fix.point) || !Number.isFinite(fix.accuracy) || fix.accuracy < 0 || fix.accuracy > 50 || !Number.isFinite(fix.timestamp) || now - fix.timestamp > 15000 || fix.timestamp > now + 5000) return { status: 'gps-uncertain', message: 'GPS is stale or inaccurate. Guidance paused; follow the issued permit.' };
+  if (previous && (previous.status !== 'on-route' || !Number.isFinite(previous.progress) || !Number.isFinite(previous.timestamp) || !Number.isFinite(previous.highWater) || !Number.isFinite(previous.accuracy))) return { status: 'route-hold', message: 'Route progress cannot be verified. Stop when safe and review your position before restarting.' };
   if (previous && fix.timestamp <= previous.timestamp) return { status: 'gps-uncertain', message: 'GPS update is out of order. Guidance paused; follow the issued permit.' };
   if (previous && fix.timestamp - previous.timestamp > 30000) return { status: 'ambiguous', message: 'GPS continuity was lost. Stop when safe, verify your position and restart guidance.' };
-  let candidates = master.segments.map(s => project(fix.point, s));
+  const allCandidates = master.segments.map(s => project(fix.point, s));
+  let candidates = allCandidates;
   if (previous) {
     // Stay on the same ordered corridor at crossings and loops. Never jump ahead to a nearby later road.
     const elapsed = Math.max(0, (fix.timestamp - previous.timestamp) / 1000);
@@ -143,8 +146,15 @@ export function locateOnMaster(master, fix, previous = null, now = Date.now()) {
   candidates.sort((a, b) => a.distance - b.distance);
   const nearest = candidates[0], tolerance = Math.max(35, fix.accuracy * 1.5);
   if (!nearest || nearest.distance > tolerance) return { status: 'deviation', message: 'Off the authorized route. Stop when safe and verify the permit. No automatic reroute.' };
-  if (!previous && candidates.some(c => c.distance < tolerance && Math.abs(c.progress - nearest.progress) > 300)) return { status: 'ambiguous', message: 'Location matches multiple parts of the route. Verify your position before guidance.' };
+  // Progress history cannot prove which road, ramp or level a nearby fix is on.
+  // Check the entire line, including occurrences excluded by the progress filter.
+  if (allCandidates.some(c => c.distance <= tolerance && Math.abs(c.progress - nearest.progress) > Math.max(80, tolerance * 2 + 20))) return { status: 'ambiguous', message: 'Location matches multiple parts of the route. Stop when safe and verify your position before guidance.' };
   const { segment, progress } = nearest;
+  if (previous && previous.highWater - progress > Math.max(35, previous.accuracy + fix.accuracy)) return { status: 'direction-hold', message: 'GPS progress conflicts with the issued direction. Stop when safe and verify the road and direction. No U-turn or detour is suggested.' };
+  if (previous) {
+    const crossed = master.segments.filter((s, i, list) => i && s.start > previous.progress && s.start <= progress && (s.permitId !== list[i - 1].permitId || s.stepIndex !== list[i - 1].stepIndex));
+    if (crossed.length > 1) return { status: 'continuity-hold', message: 'GPS skipped more than one supplied maneuver. Stop when safe and verify the intervening turns before restarting.' };
+  }
   const permit = master.permits.find(p => p.id === segment.permitId);
   const localDate = new Intl.DateTimeFormat('en-CA', { timeZone: permit.timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(now));
   if (localDate < permit.validFrom || localDate > permit.validTo) return { status: 'expired', message: `${permit.state} permit is outside its effective dates. Guidance paused.` };
@@ -152,8 +162,19 @@ export function locateOnMaster(master, fix, previous = null, now = Date.now()) {
   if (hazmatIssues.length) return { status: 'hazmat-hold', message: hazmatIssues[0] };
   const window = movementWindow(permit, now);
   if (!window.allowed) return { status: 'curfew', message: window.message };
+  const border = master.boundaries.find(b => b.at >= progress && b.permitId !== permit.id);
+  const nextPermit = border && master.permits.find(p => p.id === border.permitId);
+  const upcomingBorder = nextPermit ? { permit: nextPermit, distance: border.at - progress, ...permitClock(nextPermit, now) } : null;
+  if (upcomingBorder && upcomingBorder.distance <= 800 && !upcomingBorder.allowed) return { status: 'border-hold', message: `Upcoming ${nextPermit.state} border: ${upcomingBorder.message} Stop at a lawful safe place before the border; no detour is suggested.` };
+  if (master.meters - progress <= Math.max(10, fix.accuracy)) return { status: 'end-of-geometry', message: 'End of supplied route geometry. Stop when safe and check the permit destination instructions. Arrival and site access are not confirmed.' };
   const stepEnd = master.segments.find(s => s.start >= segment.start && (s.permitId !== segment.permitId || s.stepIndex !== segment.stepIndex));
-  return { status: 'on-route', permit, step: segment.step, progress, timestamp: fix.timestamp, remaining: master.meters - progress, toManeuver: (stepEnd?.start ?? master.meters) - progress, nextStep: stepEnd?.step || null, nextPermitId: stepEnd?.permitId || null, distance: nearest.distance };
+  return { status: 'on-route', permit, step: segment.step, stepIndex: segment.stepIndex, progress, highWater: Math.max(previous?.highWater ?? 0, progress), accuracy: fix.accuracy, timestamp: fix.timestamp, remaining: master.meters - progress, toManeuver: (stepEnd?.start ?? master.meters) - progress, nextStep: stepEnd?.step || null, nextPermitId: stepEnd?.permitId || null, upcomingBorder, distance: nearest.distance };
+}
+// Current-time checks only; this does not predict permission at arrival.
+export function permitClock(permit, now = Date.now()) {
+  const localDate = new Intl.DateTimeFormat('en-CA', { timeZone: permit.timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(now));
+  if (localDate < permit.validFrom || localDate > permit.validTo) return { allowed: false, message: `${permit.state} permit is outside its effective dates in ${permit.timeZone}.` };
+  return movementWindow(permit, now);
 }
 export function warnings(permit, profile, role = 'driver', now = Date.now()) {
   const alerts = [];

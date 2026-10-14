@@ -10,13 +10,15 @@ import { walkthrough } from './walkthrough.mjs';
 import { walletLaunch } from './launch.mjs';
 import { planningPlaces, preparationStatus, applyPlanningHandoff } from './preparation.mjs';
 import { mergePermitIntake, createCameraSession } from './intake.mjs';
+import { createGuidanceSession, maneuverCue } from './guidance.mjs';
 
 const $ = selector => document.querySelector(selector);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const crew = new Crew(window.DLBackend);
 const cameraSession = createCameraSession();
+const guidanceSession = createGuidanceSession();
 let trip, selected, tab = 'load', dirty = false, watching = null, timer, lastFix, progress, master, crewTimer, crewBusy = false, lastCrew = 0, camera, cameraTimer, activeState = '', spoken = '', objectURLs = [], guidanceVersion = 0;
-let savedTrip, walkthroughIndex = 0;
+let savedTrip, walkthroughIndex = 0, guidancePause = '';
 const currentPermit = () => trip?.permits.find(p => p.id === selected);
 function status(text, error = false) { $('#status').textContent = text; $('#status').dataset.error = String(error); }
 let working = false;
@@ -47,6 +49,7 @@ function switchTab(next) {
 }
 async function persist(message) { await saveTrip(trip); savedTrip = structuredClone(trip); dirty = false; await renderPicker(); if (message) status(message); }
 function edit() {
+  guidanceSession.cancel(); guidanceVersion++;
   if (watching !== null) stopGuidance('Route or load changed. Review and restart guidance.');
   dirty = true; trip.revision += 1; $('#conditions-checked').checked = false;
 }
@@ -136,9 +139,9 @@ function mapMarkup(m) {
 }
 function renderRoute() {
   const m = buildMaster(trip, { geometry: true });
-  $('#route-readiness').textContent = m.ready ? 'Ready for departure checks' : 'Needs review';
+  $('#route-readiness').textContent = m.ready ? 'Ready for parked review' : 'Needs review';
   $('#state-chain').innerHTML = m.permits.map(p => `<div class="state-stop"><strong>${esc(p.state || '?')}</strong><small>${esc(p.number || 'Permit needed')}</small></div>`).join('<span aria-hidden="true">→</span>');
-  $('#route-checks').innerHTML = m.issues.length ? `<p class="info"><strong>${m.issues.length} checks need attention before guidance.</strong><br>${esc(m.issues[0])}</p><details><summary>Review all required checks</summary><ul class="issue-list">${m.issues.map(issue => `<li>${esc(issue)}</li>`).join('')}</ul></details>` : '<p class="good">Permit order and route connections checked. Verify current travel conditions before starting.</p>';
+  $('#route-checks').innerHTML = m.issues.length ? `<p class="info"><strong>${m.issues.length} checks need attention before guidance.</strong><br>${esc(m.issues[0])}</p><details><summary>Review all required checks</summary><ul class="issue-list">${m.issues.map(issue => `<li>${esc(issue)}</li>`).join('')}</ul></details>` : '<p class="good">Saved permit order and geometry connections checked. Walk through the instructions below while parked. Road access and travel conditions still require verification.</p>';
   $('#route-map').innerHTML = mapMarkup(m);
   $('#start-guidance').disabled = window.DRIVERS_LOUNGE_CONFIG?.permitGuidanceEnabled !== true || !m.ready || watching !== null;
   $('#map-caption').textContent = 'Permit geometry and labeled state entries · no street basemap. ' + (m.meters ? `${(m.meters / 1609.344).toFixed(1)} mi of supplied geometry.` : 'Import detailed geometry for GPS guidance.');
@@ -151,8 +154,9 @@ function renderWalkthrough(m = buildMaster(trip, { geometry: true })) {
   $('#walkthrough-next').disabled = dirty || !view.available || view.index === view.total - 1;
   if (dirty || !view.available) { $('#walkthrough-content').textContent = dirty ? 'Save changes and complete the current route reviews first.' : view.reason; return; }
   walkthroughIndex = view.index;
-  $('#walkthrough-content').innerHTML = `<p class="eyebrow">MANEUVER ${view.index + 1} OF ${view.total} · ${esc($('#crew-role').selectedOptions[0].textContent)}</p><h3>${esc(view.step.text)}</h3><p><strong>${view.enteringState ? 'State entry · ' : ''}${esc(view.permit.state)} · ${esc(view.permit.number)}</strong><br>${esc(view.step.road || 'Road not supplied')} · ${esc(view.step.lane || 'Lane guidance not supplied')}<br>${distance(view.meters)} along supplied geometry · source line ${view.step.routeLine}</p><p>${view.next ? `Next${view.next.permit.id !== view.permit.id ? ' · ' + esc(view.next.permit.state) + ' state entry' : ''}: ${esc(view.next.step.text)}` : 'Final supplied maneuver. Check the permit destination instructions.'}</p>${view.alerts.map(a => `<p class="walkthrough-warning">${esc(a)}</p>`).join('')}<button id="walkthrough-original">Open this state in wallet</button>`;
+  $('#walkthrough-content').innerHTML = `<p class="eyebrow">MANEUVER ${view.index + 1} OF ${view.total} · ${esc($('#crew-role').selectedOptions[0].textContent)}</p><h3>${esc(view.step.text)}</h3><p><strong>${view.enteringState ? 'State entry · ' : ''}${esc(view.permit.state)} · ${esc(view.permit.number)}</strong><br>${esc(view.step.road || 'Road not supplied')} · ${esc(view.step.lane || 'Lane guidance not supplied')}<br>${distance(view.meters)} along supplied geometry</p><div class="maneuver-source"><strong>Compare with saved route · line ${view.step.routeLine}</strong><blockquote>${esc(view.source)}</blockquote><p>Saved text must match the original permit. A matching line alone does not verify a turn.</p></div><p>${view.next ? `Next${view.next.permit.id !== view.permit.id ? ' · ' + esc(view.next.permit.state) + ' state entry' : ''}: ${esc(view.next.step.text)}` : 'Final supplied maneuver. Check the permit destination instructions; the end of a line does not confirm site access.'}</p>${view.border ? `<div class="border-review"><h4>Before entering ${esc(view.border.permit.state)}</h4><p>${esc(view.permit.exit.road)} → ${esc(view.border.permit.entry.road)}<br>Next permit: ${esc(view.border.permit.number)}<br>Effective ${esc(view.border.permit.validFrom)} through ${esc(view.border.permit.validTo)} · ${esc(view.border.permit.timeZone)}</p><p>${esc(view.border.clockMessage)}</p><p>${esc(view.border.windowText)}</p><p>${esc(view.border.permit.restrictions || 'No restriction notes copied. Read every original condition page.')}</p><button id="walkthrough-next-original">Open next state's original</button></div>` : ''}${view.alerts.map(a => `<p class="walkthrough-warning">${esc(a)}</p>`).join('')}<button id="walkthrough-original">Open this state in wallet</button>`;
   $('#walkthrough-original').onclick = () => { switchTab('wallet'); document.getElementById(`wallet-${view.permit.id}`)?.scrollIntoView({ behavior: 'smooth' }); };
+  if (view.border) $('#walkthrough-next-original').onclick = () => { switchTab('wallet'); document.getElementById(`wallet-${view.border.permit.id}`)?.scrollIntoView({ behavior: 'smooth' }); };
 }
 function renderWallet() {
   $('#hazmat-wallet').innerHTML = hazmatActive(trip) ? '<article class="wallet-card"><h3>Hazmat cargo &amp; route references</h3><p>Shipping papers: '+esc(trip.hazmat.shippingPaperRef)+'<br>Emergency contact: '+esc(trip.hazmat.emergencyContact)+'</p>'+trip.hazmat.materials.map(m=>'<p><strong>'+esc(m.unNumber)+' · '+esc(m.shippingName)+'</strong><br>Class/division '+esc(m.division)+' · subsidiary '+esc(m.subsidiary||'none entered')+' · packing group '+esc(m.packingGroup)+' · '+esc(m.quantity)+' '+esc(m.unit)+' · '+esc(m.packaging)+'</p>').join('')+'<p>Written route plan: '+esc(trip.hazmat.writtenPlanRef||'not entered')+'</p>'+trip.permits.map(p=>'<details><summary>'+esc(p.state)+' hazmat review</summary><p>'+esc(p.hazmatRoute?.notes||'Not reviewed')+'</p><p>Review through '+esc(p.hazmatRoute?.validThrough||'unconfirmed')+'</p></details>').join('')+'<p class="muted">Retain the actual shipping papers and required originals. These saved references do not replace them.</p></article>' : '';
@@ -227,15 +231,17 @@ function say(message, key = message) {
 function distance(m) { return m < 160 ? `${Math.round(m * 3.28084 / 10) * 10} ft` : `${(m / 1609.344).toFixed(1)} mi`; }
 function navAlert(message, key) { $('#nav-status').textContent = message; say(message, key); }
 function pauseFix(message, key) {
+  if (guidancePause !== key) { if ('speechSynthesis' in window) speechSynthesis.cancel(); spoken = ''; }
+  guidancePause = key;
   navAlert(message, key); $('#maneuver').textContent = 'Guidance paused — verify route';
   $('#next-maneuver').textContent = 'Follow the issued permit. No automatic reroute.';
   $('#maneuver-distance').textContent = '—'; $('#remaining').textContent = '—'; $('#lane-info').textContent = 'Waiting for reliable GPS'; $('#nav-warnings').textContent = '';
 }
 function displayFix(fix) {
   if (watching === null) return;
-  lastFix = fix; const result = locateOnMaster(master, fix, progress);
+  const result = locateOnMaster(master, fix, progress);
   if (result.status !== 'on-route') { if (result.status !== 'gps-uncertain') stopGuidance(result.message); pauseFix(result.message, result.status); return; }
-  progress = result; const role = $('#crew-role').value;
+  lastFix = fix; progress = result; guidancePause = ''; const role = $('#crew-role').value, cue = maneuverCue(result);
   $('#active-permit').textContent = `${result.permit.state} · ${result.permit.number}`; $('#maneuver').textContent = result.step.text;
   $('#next-maneuver').textContent = result.nextStep ? `Next: ${result.nextStep.text}` : 'Final authorized segment. Follow permit destination instructions.';
   $('#maneuver-distance').textContent = distance(result.toManeuver); $('#remaining').textContent = distance(result.remaining);
@@ -244,11 +250,11 @@ function displayFix(fix) {
   const alerts = [...warnings(result.permit, trip.profile, role), ...hazmatWarnings(trip, result.permit, result.step.routeLine), ...(ahead ? hazmatWarnings(trip,ahead,result.nextStep.routeLine).filter(a=>a.startsWith('Hazmat route alert:')).map(a=>'Upcoming '+a) : [])]; $('#nav-warnings').innerHTML = alerts.map(a => `<div class="warning">${esc(a)}</div>`).join('');
   const newHazmat = alerts.filter(a=>a.includes('Hazmat route alert:')&&!spokenHazmat.has(`${result.permit.id}-${result.step.routeLine}-${a}`));
   const timed = alerts.find(a => /movement window closes/.test(a));
-  $('#nav-status').textContent = `On reviewed route · GPS ±${Math.round(fix.accuracy)} m${navigator.onLine ? '' : ' · offline; crew progress unavailable'}`;
+  $('#nav-status').textContent = `GPS near supplied route · ±${Math.round(fix.accuracy)} m · road position not independently verified${navigator.onLine ? '' : ' · offline; crew progress unavailable'}`;
   if (activeState !== result.permit.id) { activeState = result.permit.id; say(`Active permit ${result.permit.state} ${result.permit.number}. ${alerts.join(' ')}. ${result.step.text}`, `state-${activeState}`); }
   else if (newHazmat.length) { newHazmat.forEach(a=>spokenHazmat.add(`${result.permit.id}-${result.step.routeLine}-${a}`)); say(newHazmat.join(' '), `hazmat-${result.permit.id}-${result.step.routeLine}-${newHazmat.join()}`); }
   else if (timed) say(timed, `curfew-${result.permit.id}`);
-  else say(`${result.step.text}. ${distance(result.toManeuver)} to ${result.nextStep?.text || 'the authorized destination'}.`, `${result.permit.id}-${result.step.routeLine}-${result.toManeuver < 150 ? 'near' : result.toManeuver < 800 ? 'approach' : 'far'}`);
+  else say(`${cue.current}. ${distance(result.toManeuver)} to ${cue.next || 'the end of the supplied route'}.`, cue.key);
   if (trip.shared && $('#share-consent').checked && Date.now() - lastCrew > 7000) { lastCrew = Date.now(); void syncCrew(fix, result); }
 }
 async function syncCrew(fix, result) {
@@ -286,11 +292,12 @@ async function refreshCrew() {
 }
 async function startGuidance() {
   if (window.DRIVERS_LOUNGE_CONFIG?.permitGuidanceEnabled !== true) throw Error('Operational guidance is not available in this beta. Use the permit wallet for preparation while parked.');
-  if (window.DRIVERS_LOUNGE_CONFIG?.permitGuidanceEnabled !== true) throw Error('Operational guidance is not available in this beta. Use the permit wallet for preparation while parked.');
+  if (watching !== null) stopGuidance();
   const startVersion = ++guidanceVersion;
   if (dirty) throw Error('Save your changes before starting guidance.');
   if (!$('#conditions-checked').checked) throw Error('Confirm current restrictions, travel windows and escort arrangements before departure.');
-  master = buildMaster(trip, { geometry: true }); if (!master.ready) throw Error(master.issues[0]);
+  const token = guidanceSession.start(trip);
+  master = buildMaster(token.snapshot, { geometry: true }); if (!master.ready) throw Error(master.issues[0]);
   await verifyWallet(trip);
   if (trip.shared) {
     await crew.ready(); const remote = await crew.read(trip.shared.id);
@@ -299,17 +306,23 @@ async function startGuidance() {
     if (!trip.shared.owner) await crew.accept(trip.shared);
   }
   if (!navigator.geolocation) throw Error('GPS is unavailable on this device. Your permit wallet remains available.');
-  if (startVersion !== guidanceVersion || dirty || document.hidden) throw Error('Trip or app state changed during preparation. Review the trip and restart when safely in the foreground.');
-  progress = null; lastFix = null; activeState = ''; spoken = ''; spokenHazmat.clear();
-  watching = navigator.geolocation.watchPosition(position => displayFix({ point: [position.coords.latitude, position.coords.longitude], accuracy: position.coords.accuracy, timestamp: position.timestamp }), () => pauseFix('GPS unavailable. Guidance paused; follow the issued permit.', 'gps-error'), { enableHighAccuracy: true, maximumAge: 3000, timeout: 12000 });
+  if (startVersion !== guidanceVersion || !guidanceSession.matches(token, trip) || dirty || document.hidden || !$('#conditions-checked').checked) throw Error('Trip or app state changed during preparation. Review the trip and restart when safely in the foreground.');
+  progress = null; lastFix = null; activeState = ''; spoken = ''; guidancePause = ''; spokenHazmat.clear();
+  const current = () => {
+    if (!guidanceSession.active(token)) return false;
+    if (dirty || document.hidden || !$('#conditions-checked').checked || !guidanceSession.matches(token, trip)) { stopGuidance('Trip, permit or departure checks changed. Review before restarting.'); return false; }
+    return true;
+  };
+  watching = navigator.geolocation.watchPosition(position => { if (current()) displayFix({ point: [position.coords.latitude, position.coords.longitude], accuracy: position.coords.accuracy, timestamp: position.timestamp }); }, () => { if (current()) pauseFix('GPS unavailable. Guidance paused; follow the issued permit.', 'gps-error'); }, { enableHighAccuracy: true, maximumAge: 3000, timeout: 12000 });
   $('#stop-guidance').disabled = false; $('#start-guidance').disabled = true;
   $('#walkthrough-panel').hidden = true;
   $('#guidance-role').textContent = ({ driver: 'TRUCK DRIVER', lead: 'LEAD PILOT CAR', chase: 'CHASE PILOT CAR' })[$('#crew-role').value];
   navAlert('Permitted guidance started. Waiting for accurate GPS. Issued permits and restrictions control.', 'start');
-  timer = setInterval(() => { if (!lastFix || Date.now() - lastFix.timestamp > 15000) pauseFix('GPS is stale. Guidance paused; follow the issued permit.', 'stale'); }, 5000);
+  timer = setInterval(() => { if (current() && (!lastFix || Date.now() - lastFix.timestamp > 15000)) pauseFix('GPS is stale. Guidance paused; follow the issued permit.', 'stale'); }, 5000);
   if (trip.shared) crewTimer = setInterval(() => void syncCrew(), 10000);
 }
 function stopGuidance(message = 'Guidance is off. Location sharing stopped.') {
+  guidanceSession.cancel(); guidancePause = '';
   guidanceVersion += 1;
   if (watching !== null) navigator.geolocation?.clearWatch(watching); watching = null; clearInterval(timer); clearInterval(crewTimer);
   if (trip?.shared) void crew.stop(trip.shared).catch(() => {});
@@ -361,6 +374,8 @@ on('#add-pages', 'change', async e => { const files = [...e.target.files]; e.tar
 on('#qr-photo', 'change', async e => { const files = [...e.target.files]; e.target.value = ''; await attach(files); });
 on('#camera-start', 'click', startCamera); on('#camera-stop', 'click', stopCamera);
 on('#start-guidance', 'click', startGuidance); on('#stop-guidance', 'click', () => stopGuidance());
+on('#conditions-checked', 'change', () => { if (!$('#conditions-checked').checked) stopGuidance('Departure checks withdrawn. Guidance is off.'); });
+on('#voice-enabled', 'change', () => { if (!$('#voice-enabled').checked && 'speechSynthesis' in window) { speechSynthesis.cancel(); spoken = ''; } });
 for (const [selector, delta] of [['#walkthrough-previous', -1], ['#walkthrough-next', 1]]) on(selector, 'click', () => { if (dirty || watching !== null) throw Error('Park and save changes before reviewing maneuvers.'); walkthroughIndex += delta; renderWalkthrough(); });
 on('#finish-trip', 'click', async () => { if (dirty) throw Error('Save or discard changes before completing this move.'); if (!await confirmAction('Mark this permitted move complete? A single-trip permit cannot be used for a second move.', 'Mark complete')) return; stopGuidance('Permitted move marked complete.'); trip.completedAt = new Date().toISOString(); await persist('Move complete. Original permits remain in the inspection wallet.'); if (trip.shared?.owner) await crew.close(trip.shared); renderRoute(); });
 on('#read-warnings', 'click', () => { const p = progress?.permit || currentPermit(); if (!p) throw Error('Choose a state permit first.'); spoken = ''; say([...warnings(p, trip.profile, $('#crew-role').value), ...hazmatWarnings(trip, p)].join(' ') || 'No restrictions entered. Consult the original permit.'); });
