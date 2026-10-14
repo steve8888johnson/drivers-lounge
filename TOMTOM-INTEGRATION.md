@@ -1,6 +1,6 @@
 # TomTom evaluation connection — October 14, 2026
 
-Status: account setup reached Freemium; server adapter implemented and tested locally. **No live TomTom routing request, public endpoint, deployment or operational navigation has been enabled.** The current production release remains cb3a647 / dpl_GCaNktsd5PRkiDkV8nF5GKb8HsBM.
+Status: Freemium dashboard and Preview Secret saved. A single private build-time request reached TomTom and returned **401 Unauthorized** on October 14 at approximately15:51UTC. The credential is not working; do not retry unchanged credentials. **No public routing endpoint or operational navigation has been enabled.** The current production release remains cb3a647 / dpl_GCaNktsd5PRkiDkV8nF5GKb8HsBM.
 
 ## Account and cost evidence
 
@@ -13,7 +13,7 @@ Official sources checked October 14:
 - [Calculate Route](https://docs.tomtom.com/routing-api/documentation/tomtom-maps/v1/calculate-route): truck mode, commercial vehicle settings, dimensions in meters, weight and axle weight in kilograms, polyline points and effective settings. Restriction coverage is incomplete in some areas; default mode is car, so explicit truck mode is mandatory.
 - [API-key setup](https://docs.tomtom.com/platform/documentation/my-tomtom/how-to-get-a-tomtom-api-key): account provides a default API key. The key ID is not the secret key.
 
-Vercel owner handoff is prepared for project drivers-lounge, team steves-projects-c46af6ff: `TOMTOM_API_KEY`, type **Secret**, **Preview only**. Value remains blank at the last agent observation; owner save and live authentication have not been verified. Never use a public-prefixed variable, browser configuration, source file, clipboard dump, chat or log for the key. Preview secret is not available to production, and setting a secret alone does not activate this adapter.
+Owner save was verified in the actual Vercel dashboard for project drivers-lounge, team steves-projects-c46af6ff: `TOMTOM_API_KEY`, type **Secret**, **Preview only**. The private authentication test rejected the credential; the edit Value field is now open for owner correction, with its stored value hidden. Click the shortened key in TomTom to copy the full credential, rather than copying its ID or shortened text. Never use a public-prefixed variable, browser configuration, source file, clipboard dump, chat or log for the key. Preview secret is not available to production, and setting a secret alone does not activate this adapter.
 
 ## Implemented locally
 
@@ -27,10 +27,16 @@ The response must still match the current trip, vehicle, weighing and equipment 
 
 ## Validation and remaining gates
 
-- 208 tests passed, including 12 new TomTom tests covering valid synthetic mapping and failure paths; no real API traffic. Saved output: parent workspace `outputs/tomtom-tests-20261014.txt`.
-- Syntax check now covers server modules too: 131 files plus four inline scripts passed. Existing tracked dist files were not rebuilt or changed by this work.
-- Before a live evaluation: owner secret save, exact free billing policy confirmed for the active key, protected server execution and abuse/aggregate quota controls, redacted logging, representative authorized fixtures and provider contract checks. Never enable from a client-supplied boolean.
+- 211 tests passed, including 12 adapter and three build-evaluation tests. Saved output: parent workspace `outputs/tomtom-tests-20261014.txt`. These local tests use fake credentials and network responses.
+- Syntax check covers server modules too:133files plus four inline scripts passed; the added packaging script separately passed syntax. Existing57tracked dist files were not rebuilt or changed by this work.
+- Before further live evaluation: owner corrects credential, verify current free plan and keep the single-request build restriction. Before an ongoing service: protected server execution and abuse/aggregate quota controls, redacted logging, representative fixtures and provider contract checks. Never enable from a client-supplied boolean.
 - Before public route display or driving guidance: verified vehicle-to-road association, authoritative current restrictions and facility entrances, conflict/expiry policy, actual route comparisons, phone/GPS/offline failure testing and explicit release review. No nationwide legality claim.
 - Draper, Utah to Brunswick, Georgia is an **overdimensional load with unknown dimensions and no uploaded permits**. It stays in its incomplete permit draft. TomTom cannot authorize a replacement route or infer intermediate states. Obtain measured dimensions/weights and all issued permits/QR/conditions pages first.
 
 Risks: CRITICAL/open — road coverage, entrance and permit authority; HIGH/open — live provider authentication and behavior, server authentication/abuse controls, exact account quota and production licensing scope; HIGH/contained locally — car fallback, stale input reuse, unsupported loads, malformed provider output and credential exposure in returned diagnostics.
+
+## Private connection evaluation,15:51UTC
+
+Source10b8d52 packages only the probe and its local dependencies into an isolated Preview deployment on the existing project. It does not deploy the main website or API handlers. Vercel API uses target `staging` for Preview; the initial request with target `preview` was rejected before creating a build. Corrected deployment **dpl_7nxk4tBniWDKGPeuMcZpDtzhvbAF** executed exactly one request and stopped with build status ERROR because authentication returned401. No retry, no completed route and no public output was published. Private logs contain only HTTP status, fixed reason codes and HOLD; no key, request URL or geometry. Redacted record: parent workspace `outputs/tomtom-connection-result-20261014.json`.
+
+The probe uses a synthetic standard truck and public Los Angeles/San Diego city coordinates, unrelated to the owner's oversize load. Its approvals expire at18:00UTC October14; it rejects production, another project, missing approval/credential, a UUID key-ID mistake and repeated use in the same process. The default site build does not call the probe. TomTom API key-management documentation confirms that clicking a shortened displayed key copies the full value; key ID only identifies it for support. No new credential was generated/read by the agent. No paid plan/top-up/card purchase or production redeploy was made. Operational routing remains closed.
