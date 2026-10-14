@@ -11,3 +11,5 @@ dialog{max-width:min(520px,calc(100vw - 32px));border:1px solid var(--line);bord
 
 .map-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px;background:#fff;border-bottom:1px solid #d5dfed}.map-toolbar strong{margin-right:auto;font-size:15px}.map-toolbar button{min-height:48px;font-size:14px}.map-toolbar button[aria-pressed="true"]{background:#102443;color:#fff;border-color:#102443}.map-toolbar button:focus-visible{outline:3px solid #b65c00;outline-offset:3px}@media(max-width:480px){.map-toolbar strong{width:100%}.map-toolbar button{flex:1}}
 @media(max-width:520px){#route-map .sketch-marker{r:38px}#route-map .sketch-label{font-size:38px}}
+
+#load-measurements{margin:16px 0;border:1px solid #cbd8e6;border-radius:12px;padding:12px}#load-measurements>summary{min-height:48px;display:list-item;line-height:1.6;padding:10px 4px;font-weight:700;cursor:pointer}#load-measurements .form-grid{margin-top:16px}

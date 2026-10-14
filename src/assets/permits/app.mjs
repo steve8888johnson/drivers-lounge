@@ -1,4 +1,4 @@
-import { STATES, blankTrip, blankPermit, buildMaster, crewKey, geometryReviewed, reviewed, confirmPermit, confirmGeometry, locateOnMaster, warnings, sanitizePermit } from './core.mjs';
+import { STATES, profileErrors, blankTrip, blankPermit, buildMaster, crewKey, geometryReviewed, reviewed, confirmPermit, confirmGeometry, locateOnMaster, warnings, sanitizePermit } from './core.mjs';
 import { classifyQR, parsePermitText, importPublicQR, scanImage } from './import.mjs';
 import { listTrips, saveTrip, addDocument, getDocument, deleteTrip, exportPacket, importPacket, verifyWallet } from './storage.mjs';
 import { exampleTrip } from './examples.mjs';
@@ -14,6 +14,7 @@ import { createGuidanceSession, maneuverCue } from './guidance.mjs';
 import { createSpeech, speechPreferences, parkedInstruction } from './speech.mjs';
 import { createGuidanceWatch } from './gps-watch.mjs';
 import { routeSketch } from './route-sketch.mjs';
+import { applySavedPermitSetup, REUSABLE_MEASUREMENTS } from './saved-setup.mjs';
 
 const $ = selector => document.querySelector(selector);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -73,6 +74,12 @@ async function changeGuard() {
 async function renderPicker() {
   const all = await listTrips(); $('#trip-picker').innerHTML = all.map(t => `<option value="${esc(t.id)}">${esc(t.name || 'Untitled permitted load')}</option>`).join(''); $('#trip-picker').value = trip.id;
 }
+function setupStore() { try { return localStorage; } catch { return null; } }
+function newDeviceTrip() { return applySavedPermitSetup(blankTrip(), window.DLTruckSetupMemory?.read(setupStore(), 'permit')); }
+function rememberSetup() {
+  if (!trip.acknowledged || profileErrors(trip.profile).length) return false;
+  return window.DLTruckSetupMemory?.save(setupStore(), 'permit', trip.profile) === true;
+}
 function renderLoad() {
   const form = $('#load-form');
   for (const key of ['name', 'departure']) form.elements[key].value = trip[key];
@@ -80,6 +87,10 @@ function renderLoad() {
   for (const key of ['origin', 'destination']) form.elements[`planning-${key}`].value = places[key];
   for (const [key, value] of Object.entries(trip.profile)) if (form.elements[key]) form.elements[key].value = value;
   form.elements.acknowledged.checked = trip.acknowledged;
+  const complete = !profileErrors(trip.profile).length;
+  $('#load-measurements').open = !complete || (!trip.acknowledged && !trip.profileFromSavedSetup);
+  $('#load-measurements-summary').textContent = complete ? `${trip.profile.heightFt} ft high · ${trip.profile.widthFt} ft wide · ${trip.profile.lengthFt} ft long · ${Number(trip.profile.weightLb).toLocaleString()} lb · ${trip.profile.axles} axles — Change` : 'Truck & loaded measurements';
+  $('#saved-setup-note').textContent = trip.profileFromSavedSetup ? 'Starting values from your saved setup. Check them for this load; measured axle data, permits and approvals do not carry over.' : 'We remember these measurements on this device after you confirm a complete load. Update them when the truck, trailer or load changes.';
   $('#load-preparation-status').textContent = preparationStatus(trip).message;
 }
 function readLoad(target) {
@@ -370,8 +381,8 @@ async function prepareOffline() {
 setupHazmat({ getTrip: () => trip, safe, capture: captureDrafts, routeConfirmed: p => reviewed(p) && geometryReviewed(p), onChange: () => { edit(); status('Hazmat changed. Save and reconfirm cargo and route reviews.'); }, save: async message => { await persist(message); renderRoute(); } });
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
 for (const name of ['state', 'entry-state', 'exit-state']) $('#permit-form').elements[name].innerHTML = '<option value="">Select state / not a border</option>' + STATES.map(s => `<option>${s}</option>`).join('');
-for (const selector of ['#load-form', '#permit-form', '#geometry-json']) on(selector, 'input', () => { edit(); status('Unsaved changes. Save and reconfirm any changed route before guidance.'); });
-on('#load-form', 'submit', async e => { e.preventDefault(); captureDrafts(); await persist('Load details saved on this device.'); renderLoad(); renderRoute(); });
+for (const selector of ['#load-form', '#permit-form', '#geometry-json']) on(selector, 'input', e => { if (selector === '#load-form' && [...REUSABLE_MEASUREMENTS,'axleWeights','hazmat'].includes(e.target.name)) { $('#load-form').elements.acknowledged.checked = false; window.DLTruckSetupMemory?.forget(setupStore(), 'permit'); } edit(); status('Unsaved changes. Save and reconfirm any changed route before guidance.'); });
+on('#load-form', 'submit', async e => { e.preventDefault(); captureDrafts(); await persist('Load details saved on this device.'); if (rememberSetup()) status('Load saved. Measurements remembered for your next load on this device.'); renderLoad(); renderRoute(); });
 on('#save-load-draft', 'click', async () => {
   captureDrafts();
   await persist('Draft saved on this device. Add the actual measurements and permits when available.');
@@ -379,7 +390,7 @@ on('#save-load-draft', 'click', async () => {
 });
 on('#permit-form', 'submit', async e => { e.preventDefault(); captureDrafts(); await persist('Permit details saved. Confirmation is required after changes.'); renderList(); renderReview(); });
 on('#save-trip', 'click', async () => { captureDrafts(); await persist('Trip saved on this device.'); render(); });
-on('#new-trip', 'click', async () => { if (await changeGuard()) await openTrip(blankTrip()); });
+on('#new-trip', 'click', async () => { if (await changeGuard()) await openTrip(newDeviceTrip()); });
 on('#trip-picker', 'change', async e => { if (!await changeGuard()) { e.target.value = trip.id; return; } const all = await listTrips(); await openTrip(all.find(t => t.id === e.target.value)); });
 on('#examples', 'click', async () => { if (!await changeGuard()) return; await openTrip(exampleTrip()); status('Photo-reference example loaded. Originals, Ohio route remainder, Indiana permit, load dimensions and geometry must be supplied.'); switchTab('route'); });
 on('#add-permit', 'click', async () => { if (!await changeGuard()) return; edit(); const p = blankPermit(); trip.permits.push(p); selected = p.id; await persist(); renderList(); renderReview(); switchTab('review'); });
@@ -435,7 +446,7 @@ async function launchWallet() {
   const launch = walletLaunch(await listTrips(), location.hash, lastId);
   const params = new URLSearchParams(location.hash.slice(1));
   const handoff = params.get('new') === '1' && params.get('prepare') === '1';
-  const next = launch.trip || blankTrip();
+  const next = launch.trip || newDeviceTrip();
   if (handoff) {
     let places = {}; try { places = window.DLTripPreparation?.load(sessionStorage) || {}; } catch { /* Empty draft remains usable. */ }
     applyPlanningHandoff(next, places);
