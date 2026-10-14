@@ -1,6 +1,6 @@
 # Load measurements and axle entry — October 14, 2026
 
-Status: tested source prepared for the public planning UI. Consult RELEASE-GATES.md for the eventual production commit. No driving guidance or provider connection is enabled.
+Status: released at driverslounge.app/navigation in source4b8d06d, deploymentdpl_5PYCyFsQVjbpfTDWqAT4coNm9BVB READY. Remote build and live asset/config checks passed; see RELEASE-GATES.md. No driving guidance or provider connection is enabled.
 
 The clean truck-first form now contains a collapsed advanced axle section. Drivers can enter individual measured whole-pound weights, center positions in inches from the front axle, configuration, internal load reference and weighing time with explicit UTC offset. These fields feed the existing ordinary federal Interstate baseline diagnostic, including every consecutive group. The result states its exclusions and appears under Why this route. Basic map planning does not require these advanced measurements; operational routing remains unavailable for everyone.
 
