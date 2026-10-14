@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Drivers Lounge</string>
+    <string name="title_activity_main">Drivers Lounge</string>
+    <string name="package_name">app.driverslounge.mobile</string>
+    <string name="custom_url_scheme">app.driverslounge.mobile</string>
+</resources>
