@@ -7,7 +7,7 @@ const request={fingerprint:'route-and-profile-v1',trip:tripFixture(),transportMo
 const current={fingerprint:request.fingerprint,now:150};
 const candidate=()=>({routes:[{id:'r1',sections:[sectionFixture()]}]});
 const review=p=>reviewHereCandidate(p,request,current);
-const draft=()=>({vehicle:vehicleFixture(),origin:{lat:32,lng:-102},destination:{lat:33,lng:-84},departure:'2026-10-15T12:00:00.000Z',now:Date.parse('2026-10-13T12:00:00Z')});
+const draft=()=>({vehicle:vehicleFixture(),origin:{lat:32,lng:-102},destination:{lat:33,lng:-84},departure:'2026-10-13T13:00:00.000Z',now:Date.parse('2026-10-13T12:00:00Z')});
 test('request preparation preserves explicit dimensions and distinct weight meanings',()=>{
  const result=prepareHereRequest(draft()),q=new URLSearchParams(result.query);
  assert.equal(q.get('vehicle[currentWeight]'),'35381');assert.equal(q.get('vehicle[grossWeight]'),'40000');
@@ -20,6 +20,10 @@ test('request preparation rejects defaults, inconsistent axle groups and timeles
 });
 test('provider route never grants driving authorization or returns geometry',()=>{
  const result=review(candidate());assert.equal(result.status,'REVIEW_REQUIRED');assert.equal(result.guidanceAllowed,false);assert.equal(result.polyline,undefined);
+});
+test('expired load reviews or departures outside the review window cannot prepare a request',()=>{
+ for(const change of [i=>delete i.vehicle.axleMeasurement.measuredAt,i=>i.vehicle.axleMeasurement.measurementKind='grouped',i=>i.vehicle.axleMeasurement.unchangedSinceWeighing=false,i=>i.departure='2026-10-14T10:00:00.000Z',i=>i.now=Date.parse('2026-10-14T10:00:00Z')]){const d=draft();change(d);assert.throws(()=>prepareHereRequest(d));}
+ const d=draft(),initial=prepareHereRequest(d);d.vehicle.axleMeasurement.loadReference='other-load';assert.notEqual(prepareHereRequest(d).vehicleReviewBinding,initial.vehicleReviewBinding);
 });
 test('info-severity state-wide violation blocks the candidate',()=>{
  const p=candidate();p.routes[0].sections[0].notices=[{code:'violatedAdminWideVehicleRestriction',severity:'info'}];

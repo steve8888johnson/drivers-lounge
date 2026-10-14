@@ -3,6 +3,7 @@
 // https://docs.here.com/routing/docs/routing-v8-admin-wide-restrictions
 import {inspectTruckGeometry} from './truck-route-geometry.mjs';
 import {prepareMeasuredAxleParameters} from './truck-axle-review.mjs';
+import {reviewLoadMeasurement} from './truck-load-measurement.mjs';
 export function prepareHereRequest(input) {
   const p = input?.vehicle;
   if (!p || p.confirmed !== true || p.oversize !== false || p.hazmat !== false)
@@ -13,6 +14,8 @@ export function prepareHereRequest(input) {
     params.set(`vehicle[${parameter}]`,String(p[field]));
   }
   if (p.currentWeightKg > p.grossWeightKg) throw Error('Current weight exceeds declared maximum loaded weight.');
+  const loadReview=reviewLoadMeasurement(p.axleMeasurement,{now:input.now,departure:Date.parse(input.departure)});
+  if(loadReview.status==='HOLD')throw Error('Current load measurements and weighing time require review.');
   const measuredAxles = prepareMeasuredAxleParameters(p.axleMeasurement);
   if (p.currentWeightKg !== measuredAxles.currentWeightKg) throw Error('Current weight must match the measured loaded total, rounded up to kilograms.');
   if (p.axleMeasurement.axles.at(-1).positionIn * 2.54 > p.lengthCm) throw Error('Measured axle span exceeds total vehicle length.');
@@ -28,7 +31,7 @@ export function prepareHereRequest(input) {
   if (!Number.isFinite(input.now) || !Number.isFinite(departure) || new Date(departure).toISOString() !== input.departure || departure < input.now)
     throw Error('Future canonical UTC departure required.');
   params.set('departureTime',input.departure);
-  return {endpoint:'https://router.hereapi.com/v8/routes',query:params.toString(),vehicleReviewBinding:measuredAxles.binding,networkEnabled:false,guidanceAllowed:false};
+  return {endpoint:'https://router.hereapi.com/v8/routes',query:params.toString(),vehicleReviewBinding:JSON.stringify([measuredAxles.binding,loadReview.binding]),networkEnabled:false,guidanceAllowed:false};
 }
 export function reviewHereCandidate(payload, request, current) {
   const reasons = [];

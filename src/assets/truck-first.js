@@ -22,6 +22,7 @@
  root.DLTruckFirst.isConfirmed=()=>confirmed;
  const values=()=>Object.fromEntries([...fields,'trailer-type','oversize','hazmat'].map(id=>[id,byId(id).type==='checkbox'?byId(id).checked:byId(id).value]));
  function reset(){confirmed=false;byId('truck-readiness-details').textContent='Confirm the loaded truck details first. Road restrictions have not been verified.';byId('trip-inputs').disabled=true;byId('truck-confirmation').textContent='Confirm your loaded truck before entering a trip.';byId('why-profile').textContent='Truck details have not been confirmed for this session.';}
+ root.DLTruckFirst.invalidate=reset;
  button.addEventListener('click',()=>{
   const v=values(),issues=validate(v);
   if(issues.length){reset();byId('truck-confirmation').textContent=issues.join(' ');return;}

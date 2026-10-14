@@ -1,0 +1,17 @@
+#axle-review{margin:20px 0;border:1px solid #bacbdb;border-radius:12px;padding:16px;color:#263b50;background:#f7f9fc}
+#axle-review summary{font-size:17px;font-weight:700;min-height:44px;cursor:pointer;line-height:1.5}
+#axle-review p{font-size:14px;line-height:1.6;color:#364d63}
+#axle-review label{display:grid;gap:8px;font-size:14px;margin:12px 0}
+#axle-review input:not([type=checkbox]),#axle-review select,#axle-review textarea{width:100%;min-width:0;min-height:48px;padding:10px;border:1px solid #aebfce;border-radius:8px;font-size:16px}
+#axle-review textarea{min-height:100px;resize:vertical}
+#axle-entry-rows fieldset{display:grid;grid-template-columns:1fr 1fr;gap:12px;border:1px solid #c7d4df;border-radius:10px;margin:16px 0;padding:12px;min-width:0}
+#axle-entry-rows legend{font-size:16px;font-weight:700;padding:0 6px;color:#263b50}
+#axle-review .axle-confirm{display:flex;align-items:flex-start;gap:12px;line-height:1.5;min-height:44px}
+#axle-review input[type=checkbox]{flex-shrink:0;width:22px;height:22px;margin-top:2px}
+#axle-review button{min-height:48px;padding:12px 16px;border:1px solid #175cc6;border-radius:10px;font-size:16px;font-weight:600;background:#fff;color:#175cc6;cursor:pointer;margin:4px 0}
+#axle-review button:disabled{opacity:.5;cursor:not-allowed}
+#axle-review-status{border-left:3px solid #9a6600;padding:8px 12px;background:#fff8e9}
+#axle-review-groups{padding-left:24px;font-size:14px;line-height:1.7}
+#axle-review :focus-visible{outline:3px solid #1768e9;outline-offset:3px}
+#axle-review [hidden]{display:none!important}
+@media(max-width:480px){#axle-entry-rows fieldset{grid-template-columns:1fr;gap:0}}

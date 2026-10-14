@@ -8,7 +8,7 @@ export async function requestTruckCandidate(input,{enabled=false,apiKey,fetchImp
  if(typeof apiKey!=='string'||!apiKey.trim())return hold('PROVIDER_NOT_CONFIGURED');
  if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>10000||!Number.isSafeInteger(maxBytes)||maxBytes<1||maxBytes>1048576)return hold('INVALID_SERVER_LIMITS');
  let prepared,fingerprint,trip;const createdAt=clock();
- const signature=x=>{const candidate=prepareHereRequest({...x,now:createdAt});return createHash('sha256').update(JSON.stringify([candidate.query,candidate.vehicleReviewBinding])).digest('hex');};
+ const signature=(x,now=createdAt)=>{const candidate=prepareHereRequest({...x,now});return createHash('sha256').update(JSON.stringify([candidate.query,candidate.vehicleReviewBinding])).digest('hex');};
  try{
   prepared=prepareHereRequest({...input,now:createdAt});fingerprint=signature(input);
   // Snapshot from the validated outgoing request, not mutable browser-supplied review evidence.
@@ -27,7 +27,7 @@ export async function requestTruckCandidate(input,{enabled=false,apiKey,fetchImp
   const reader=response.body.getReader();const chunks=[];let size=0;
   try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>maxBytes){await reader.cancel();return hold('RESPONSE_TOO_LARGE');}chunks.push(value);}}finally{reader.releaseLock();}
   let payload;try{payload=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks)));}catch{return hold('INVALID_PROVIDER_RESPONSE');}
-  let currentFingerprint;try{currentFingerprint=signature(currentInput());}catch{return hold('REQUEST_CHANGED');}
+  let currentFingerprint;try{currentFingerprint=signature(currentInput(),clock());}catch{return hold('REQUEST_CHANGED');}
   return reviewHereCandidate(payload,{fingerprint,trip,transportMode:'truck',scope:'standard-nonhazmat',createdAt,expiresAt:createdAt+timeoutMs},{fingerprint:currentFingerprint,now:clock()});
  };
  try{return await Promise.race([run(),new Promise(resolve=>{timer=setTimeout(()=>{controller.abort();resolve(hold('PROVIDER_TIMEOUT'));},timeoutMs);})]);}

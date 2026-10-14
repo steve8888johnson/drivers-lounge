@@ -3,7 +3,7 @@ import {requestTruckCandidate} from '../server/truck-routing.mjs';
 import {sectionFixture,tripFixture} from './fixtures/truck-geometry.mjs';
 import {vehicleFixture} from './fixtures/truck-axles.mjs';
 const now=Date.parse('2026-10-13T12:00:00Z');
-const draft=()=>({vehicle:vehicleFixture(),...tripFixture(),departure:'2026-10-15T12:00:00.000Z'});
+const draft=()=>({vehicle:vehicleFixture(),...tripFixture(),departure:'2026-10-13T13:00:00.000Z'});
 const payload=()=>({routes:[{id:'r',sections:[sectionFixture()]}]});
 const opts=extra=>({enabled:true,apiKey:'test-only',clock:()=>now,fetchImpl:async()=>Response.json(payload()),...extra});
 test('server connection is off by default and invalid profiles never send',async()=>{let calls=0;const fetchImpl=async()=>{calls++;throw Error('no');};assert.equal((await requestTruckCandidate(draft(),{fetchImpl})).status,'HOLD');await requestTruckCandidate({},opts({fetchImpl}));assert.equal(calls,0);});
@@ -35,4 +35,12 @@ test('missing axle evidence never sends; changed axle spacing invalidates a late
  const changed=draft();changed.vehicle.axleMeasurement.axles[4].positionIn+=12;
  const late=await requestTruckCandidate(draft(),opts({currentInput:()=>changed}));
  assert.equal(late.status,'HOLD');assert.equal(late.reasons[0].code,'REQUEST_CHANGED');
+});
+test('changed load reference or weighing time rejects a late response',async()=>{
+ for(const change of [m=>m.loadReference='new-load',m=>m.measuredAt='2026-10-13T11:00:00.000Z',m=>m.unchangedSinceWeighing=false]){const changed=draft();change(changed.vehicle.axleMeasurement);const r=await requestTruckCandidate(draft(),opts({currentInput:()=>changed}));assert.equal(r.status,'HOLD');assert.equal(r.reasons[0].code,'REQUEST_CHANGED');}
+});
+test('a load review expiring during transport is rejected and stale loads never send',async()=>{
+ let clock=now,calls=0;const d=draft();d.departure=new Date(now+500).toISOString();d.vehicle.axleMeasurement.measuredAt=new Date(now-86400000+1000).toISOString();
+ const r=await requestTruckCandidate(d,opts({clock:()=>clock,fetchImpl:async()=>{calls++;clock+=1000;return Response.json(payload());}}));assert.equal(r.status,'HOLD');assert.equal(calls,1);
+ calls=0;await requestTruckCandidate(d,opts({clock:()=>clock,fetchImpl:async()=>{calls++;return Response.json(payload());}}));assert.equal(calls,0);
 });
