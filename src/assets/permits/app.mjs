@@ -8,6 +8,7 @@ import { setupHazmat, renderHazmat, readHazmat } from './hazmat-ui.mjs';
 import { captureTripDraft, applyGeometryDraft, maneuverKey } from './drafts.mjs';
 import { walkthrough } from './walkthrough.mjs';
 import { walletLaunch } from './launch.mjs';
+import { planningPlaces, preparationStatus, applyPlanningHandoff } from './preparation.mjs';
 
 const $ = selector => document.querySelector(selector);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -58,11 +59,15 @@ async function renderPicker() {
 function renderLoad() {
   const form = $('#load-form');
   for (const key of ['name', 'departure']) form.elements[key].value = trip[key];
+  const places = planningPlaces(trip.planning);
+  for (const key of ['origin', 'destination']) form.elements[`planning-${key}`].value = places[key];
   for (const [key, value] of Object.entries(trip.profile)) if (form.elements[key]) form.elements[key].value = value;
   form.elements.acknowledged.checked = trip.acknowledged;
+  $('#load-preparation-status').textContent = preparationStatus(trip).message;
 }
 function readLoad(target) {
   const f = new FormData($('#load-form')); target.name = String(f.get('name') || '').trim(); target.departure = String(f.get('departure') || ''); target.acknowledged = f.has('acknowledged');
+  target.planning = planningPlaces({ origin: f.get('planning-origin'), destination: f.get('planning-destination') });
   for (const key of Object.keys(target.profile)) target.profile[key] = String(f.get(key) || '').trim();
 }
 function renderList() {
@@ -311,7 +316,12 @@ setupHazmat({ getTrip: () => trip, safe, capture: captureDrafts, routeConfirmed:
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
 for (const name of ['state', 'entry-state', 'exit-state']) $('#permit-form').elements[name].innerHTML = '<option value="">Select state / not a border</option>' + STATES.map(s => `<option>${s}</option>`).join('');
 for (const selector of ['#load-form', '#permit-form', '#geometry-json']) on(selector, 'input', () => { edit(); status('Unsaved changes. Save and reconfirm any changed route before guidance.'); });
-on('#load-form', 'submit', async e => { e.preventDefault(); captureDrafts(); await persist('Load details saved on this device.'); renderRoute(); });
+on('#load-form', 'submit', async e => { e.preventDefault(); captureDrafts(); await persist('Load details saved on this device.'); renderLoad(); renderRoute(); });
+on('#save-load-draft', 'click', async () => {
+  captureDrafts();
+  await persist('Draft saved on this device. Add the actual measurements and permits when available.');
+  renderLoad(); renderRoute();
+});
 on('#permit-form', 'submit', async e => { e.preventDefault(); captureDrafts(); await persist('Permit details saved. Confirmation is required after changes.'); renderList(); renderReview(); });
 on('#save-trip', 'click', async () => { captureDrafts(); await persist('Trip saved on this device.'); render(); });
 on('#new-trip', 'click', async () => { if (await changeGuard()) await openTrip(blankTrip()); });
@@ -358,8 +368,15 @@ window.addEventListener('beforeunload', event => { if (dirty) { event.preventDef
 async function launchWallet() {
   let lastId = ''; try { lastId = JSON.parse(localStorage.getItem('dl-last-permit-trip') || 'null') || ''; } catch { /* Use the available device trips. */ }
   const launch = walletLaunch(await listTrips(), location.hash, lastId);
-  await openTrip(launch.trip || blankTrip()); switchTab(launch.missing ? 'load' : launch.tab);
-  status(launch.missing ? 'The linked trip is not saved on this device. Showing another available load; check the load name or import its backup before proceeding.' : 'Private device wallet ready. Create a load and import every state permit.', launch.missing);
+  const params = new URLSearchParams(location.hash.slice(1));
+  const handoff = params.get('new') === '1' && params.get('prepare') === '1';
+  const next = launch.trip || blankTrip();
+  if (handoff) {
+    let places = {}; try { places = window.DLTripPreparation?.load(sessionStorage) || {}; } catch { /* Empty draft remains usable. */ }
+    applyPlanningHandoff(next, places);
+  }
+  await openTrip(next); switchTab(launch.missing ? 'load' : launch.tab);
+  status(handoff ? 'New permit draft prepared. Places are planning notes only. Add actual dimensions and all issued permits when available.' : launch.missing ? 'The linked trip is not saved on this device. Showing another available load; check the load name or import its backup before proceeding.' : 'Private device wallet ready. Create a load and import every state permit.', launch.missing);
 }
 window.addEventListener('hashchange', safe(async () => { const params = new URLSearchParams(location.hash.slice(1)); if (!['trip','tab','new'].some(key => params.has(key))) return; if (await changeGuard()) await launchWallet(); else switchTab(tab); }));
 try { await launchWallet(); connection(); if ('serviceWorker' in navigator) void navigator.serviceWorker.register('/sw.js').catch(() => {}); }

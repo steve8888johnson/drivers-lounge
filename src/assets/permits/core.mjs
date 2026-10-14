@@ -11,7 +11,7 @@ export function blankPermit() {
     restrictions: '', complete: false, qr: [], documents: [], steps: [], confidence: {}, limits: {}, travelWindow: null, geometrySource: null, review: null, geometryReview: null, hazmatRoute: blankHazmatRoute() };
 }
 export function blankTrip() {
-  return { schema: 'dl-permit-trip/v1', id: id(), revision: 1, name: '', departure: new Date().toLocaleDateString('en-CA'),
+  return { schema: 'dl-permit-trip/v1', id: id(), revision: 1, name: '', departure: '', planning: { origin: '', destination: '' },
     profile: { heightFt: '', widthFt: '', lengthFt: '', weightLb: '', axles: '', axleWeights: '', hazmat: '' }, permits: [], acknowledged: false, hazmat: blankHazmat() };
 }
 export const validDate = s => /^\d{4}-\d{2}-\d{2}$/.test(s || '') && Number.isFinite(Date.parse(s + 'T12:00:00Z')) && new Date(s + 'T12:00:00Z').toISOString().slice(0, 10) === s;

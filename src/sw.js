@@ -1,7 +1,7 @@
-const CACHE='drivers-lounge-rc2-map-safety-20261014';
+const CACHE='drivers-lounge-rc2-trip-preparation-20261014';
 const PERMIT_SHELL=['/permitted-loads','/assets/permits/permit-trip.css','/assets/permits/app.mjs','/assets/permits/core.mjs','/assets/permits/drafts.mjs','/assets/permits/walkthrough.mjs','/assets/permits/hazmat.mjs','/assets/permits/hazmat-ui.mjs','/assets/permits/hazmat-sources.mjs','/assets/permits/import.mjs','/assets/permits/provider.mjs','/assets/permits/qr-scan.mjs','/assets/permits/qr-worker.mjs','/assets/permits/storage.mjs','/assets/permits/examples.mjs','/assets/permits/crew.mjs','/assets/vendor/jsQR-1.4.0.js','/assets/backend.js'];
 const REFERENCE_SHELL=['/compliance','/assets/compliance/reference.css','/assets/compliance/app.mjs','/assets/compliance/core.mjs','/assets/compliance/glossary.mjs','/assets/compliance/rules.mjs','/assets/compliance/sources.mjs','/assets/compliance/states.mjs'];
-PERMIT_SHELL.push('/assets/permits/launch.mjs');
+PERMIT_SHELL.push('/assets/permits/launch.mjs','/assets/permits/preparation.mjs','/assets/trip-preparation.js');
 const DRIVER_SHELL=['/start','/assets/driver/driver.css','/assets/driver/model.mjs','/assets/driver/app.mjs'];
 const SHELL=['/offline','/manifest.webmanifest','/assets/drivers-lounge-logo.png','/assets/rc1-design-system.css',...PERMIT_SHELL,...REFERENCE_SHELL,...DRIVER_SHELL];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting())));
