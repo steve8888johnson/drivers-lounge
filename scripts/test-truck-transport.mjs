@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {requestTruckCandidate} from '../server/truck-routing.mjs';
 import {sectionFixture,tripFixture} from './fixtures/truck-geometry.mjs';
-import {vehicleFixture} from './fixtures/truck-axles.mjs';
+import {vehicleFixture,equipmentFixture} from './fixtures/truck-axles.mjs';
 const now=Date.parse('2026-10-13T12:00:00Z');
 const draft=()=>({vehicle:vehicleFixture(),...tripFixture(),departure:'2026-10-13T13:00:00.000Z'});
 const payload=()=>({routes:[{id:'r',sections:[sectionFixture()]}]});
@@ -41,6 +41,12 @@ test('changed load reference or weighing time rejects a late response',async()=>
 });
 test('a load review expiring during transport is rejected and stale loads never send',async()=>{
  let clock=now,calls=0;const d=draft();d.departure=new Date(now+500).toISOString();d.vehicle.axleMeasurement.measuredAt=new Date(now-86400000+1000).toISOString();
+ d.vehicle.equipment=equipmentFixture(d.vehicle.axleMeasurement);
  const r=await requestTruckCandidate(d,opts({clock:()=>clock,fetchImpl:async()=>{calls++;clock+=1000;return Response.json(payload());}}));assert.equal(r.status,'HOLD');assert.equal(calls,1);
  calls=0;await requestTruckCandidate(d,opts({clock:()=>clock,fetchImpl:async()=>{calls++;return Response.json(payload());}}));assert.equal(calls,0);
+});
+test('missing or exceeded equipment limits prevent transport; changed ratings hold late results',async()=>{
+ for(const change of [d=>delete d.vehicle.equipment,d=>d.vehicle.equipment.axles[0].gawrLb=11000,d=>d.vehicle.equipment.axles[0].tires[0].coldPsi=80]){const d=draft();change(d);let calls=0;const r=await requestTruckCandidate(d,opts({fetchImpl:async()=>{calls++;return Response.json(payload());}}));assert.equal(r.status,'HOLD');assert.equal(calls,0);}
+ const changed=draft();changed.vehicle.equipment.axles[0].tires[0].coldPsi=101;
+ const r=await requestTruckCandidate(draft(),opts({currentInput:()=>changed}));assert.equal(r.status,'HOLD');assert.equal(r.reasons[0].code,'REQUEST_CHANGED');
 });

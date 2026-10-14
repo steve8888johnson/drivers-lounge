@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {reviewHereCandidate,prepareHereRequest} from '../src/assets/truck-provider-review.mjs';
 import {sectionFixture,tripFixture} from './fixtures/truck-geometry.mjs';
-import {vehicleFixture} from './fixtures/truck-axles.mjs';
+import {vehicleFixture,equipmentFixture} from './fixtures/truck-axles.mjs';
+import {poundsToKilogramsUp} from '../src/assets/truck-axle-review.mjs';
 const request={fingerprint:'route-and-profile-v1',trip:tripFixture(),transportMode:'truck',scope:'standard-nonhazmat',createdAt:100,expiresAt:200};
 const current={fingerprint:request.fingerprint,now:150};
 const candidate=()=>({routes:[{id:'r1',sections:[sectionFixture()]}]});
@@ -13,17 +14,23 @@ test('request preparation preserves explicit dimensions and distinct weight mean
  assert.equal(q.get('vehicle[currentWeight]'),'35381');assert.equal(q.get('vehicle[grossWeight]'),'40000');
  assert.equal(q.get('vehicle[weightPerAxleGroup]'),'single:5444,tandem:14969');assert.equal(q.get('transportMode'),'truck');
  assert.equal(q.has('apiKey'),false);assert.equal(result.networkEnabled,false);
+ assert.equal(q.get('vehicle[trailerCount]'),'1');
 });
 test('request preparation rejects defaults, inconsistent axle groups and timeless routes',()=>{
  for(const mutate of [i=>delete i.vehicle.heightCm,i=>i.vehicle.widthCm='260',i=>i.vehicle.lengthCm=100,i=>i.vehicle.axleMeasurement.axles[0].weightLb=1,i=>i.vehicle.hazmat=true,i=>i.vehicle.currentWeightKg=50000,i=>i.departure='any',i=>i.departure='2026-02-30T12:00:00.000Z',i=>i.origin.lat=NaN]){
  const i=draft();mutate(i);assert.throws(()=>prepareHereRequest(i));}
+});
+test('an explicitly configured single truck sends zero trailers and its measured weight',()=>{
+ const d=draft(),m=d.vehicle.axleMeasurement;m.configuration='single-unit';m.axles=m.axles.slice(0,3);m.loadedWeightLb=45000;m.providerGroups=m.providerGroups.slice(0,2);
+ d.vehicle.currentWeightKg=poundsToKilogramsUp(45000);d.vehicle.equipment=equipmentFixture(m);d.vehicle.equipment.loadedRating.kind='GVWR';d.vehicle.lengthCm=1200;
+ const q=new URLSearchParams(prepareHereRequest(d).query);assert.equal(q.get('vehicle[trailerCount]'),'0');assert.equal(q.get('vehicle[currentWeight]'),String(poundsToKilogramsUp(45000)));
 });
 test('provider route never grants driving authorization or returns geometry',()=>{
  const result=review(candidate());assert.equal(result.status,'REVIEW_REQUIRED');assert.equal(result.guidanceAllowed,false);assert.equal(result.polyline,undefined);
 });
 test('expired load reviews or departures outside the review window cannot prepare a request',()=>{
  for(const change of [i=>delete i.vehicle.axleMeasurement.measuredAt,i=>i.vehicle.axleMeasurement.measurementKind='grouped',i=>i.vehicle.axleMeasurement.unchangedSinceWeighing=false,i=>i.departure='2026-10-14T10:00:00.000Z',i=>i.now=Date.parse('2026-10-14T10:00:00Z')]){const d=draft();change(d);assert.throws(()=>prepareHereRequest(d));}
- const d=draft(),initial=prepareHereRequest(d);d.vehicle.axleMeasurement.loadReference='other-load';assert.notEqual(prepareHereRequest(d).vehicleReviewBinding,initial.vehicleReviewBinding);
+ const d=draft(),initial=prepareHereRequest(d);d.vehicle.axleMeasurement.loadReference='other-load';assert.throws(()=>prepareHereRequest(d));d.vehicle.equipment.loadReference='other-load';assert.notEqual(prepareHereRequest(d).vehicleReviewBinding,initial.vehicleReviewBinding);
 });
 test('info-severity state-wide violation blocks the candidate',()=>{
  const p=candidate();p.routes[0].sections[0].notices=[{code:'violatedAdminWideVehicleRestriction',severity:'info'}];

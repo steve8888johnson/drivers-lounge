@@ -4,6 +4,7 @@
 import {inspectTruckGeometry} from './truck-route-geometry.mjs';
 import {prepareMeasuredAxleParameters} from './truck-axle-review.mjs';
 import {reviewLoadMeasurement} from './truck-load-measurement.mjs';
+import {reviewEquipmentLimits} from './truck-equipment-review.mjs';
 export function prepareHereRequest(input) {
   const p = input?.vehicle;
   if (!p || p.confirmed !== true || p.oversize !== false || p.hazmat !== false)
@@ -17,9 +18,13 @@ export function prepareHereRequest(input) {
   const loadReview=reviewLoadMeasurement(p.axleMeasurement,{now:input.now,departure:Date.parse(input.departure)});
   if(loadReview.status==='HOLD')throw Error('Current load measurements and weighing time require review.');
   const measuredAxles = prepareMeasuredAxleParameters(p.axleMeasurement);
+  const equipment=reviewEquipmentLimits(p.axleMeasurement,p.equipment,{now:input.now,departure:Date.parse(input.departure)});
+  if(equipment.status==='HOLD')throw Error('Installed manufacturer and tire limits require review.');
   if (p.currentWeightKg !== measuredAxles.currentWeightKg) throw Error('Current weight must match the measured loaded total, rounded up to kilograms.');
   if (p.axleMeasurement.axles.at(-1).positionIn * 2.54 > p.lengthCm) throw Error('Measured axle span exceeds total vehicle length.');
   params.set('vehicle[weightPerAxleGroup]',measuredAxles.weightPerAxleGroup);
+  // Omitting trailerCount would ignore restrictions specific to towing a trailer.
+  params.set('vehicle[trailerCount]',p.axleMeasurement.configuration==='single-unit'?'0':'1');
   for (const endpoint of ['origin','destination']) {
     const point = input[endpoint];
     if (!point || typeof point.lat !== 'number' || typeof point.lng !== 'number' || !Number.isFinite(point.lat) || !Number.isFinite(point.lng) || Math.abs(point.lat)>90 || Math.abs(point.lng)>180)
@@ -31,7 +36,7 @@ export function prepareHereRequest(input) {
   if (!Number.isFinite(input.now) || !Number.isFinite(departure) || new Date(departure).toISOString() !== input.departure || departure < input.now)
     throw Error('Future canonical UTC departure required.');
   params.set('departureTime',input.departure);
-  return {endpoint:'https://router.hereapi.com/v8/routes',query:params.toString(),vehicleReviewBinding:JSON.stringify([measuredAxles.binding,loadReview.binding]),networkEnabled:false,guidanceAllowed:false};
+  return {endpoint:'https://router.hereapi.com/v8/routes',query:params.toString(),vehicleReviewBinding:JSON.stringify([measuredAxles.binding,loadReview.binding,equipment.binding]),networkEnabled:false,guidanceAllowed:false};
 }
 export function reviewHereCandidate(payload, request, current) {
   const reasons = [];

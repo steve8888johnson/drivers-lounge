@@ -2,6 +2,8 @@
   'use strict';
   // Diagnostic contract only. Caller-provided evidence is not authenticated authority.
   const checks = Object.freeze(['truckAccess', 'clearance', 'weight', 'dimensions', 'closures', 'destinationAccess']);
+  // Conservative diagnostic window, not an authority's update schedule or legal rule.
+  const maxObservationAgeMs = 24 * 60 * 60 * 1000;
   function timestamp(value) {
     // Date.parse alone normalizes impossible dates (e.g. February30) into a later month.
     const match = typeof value === 'string' && value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(Z|([+-])(\d{2}):(\d{2}))$/);
@@ -50,11 +52,17 @@
           }
           if (evidence.routeId !== route.id || evidence.profileRevision !== profile.revision || evidence.segmentId !== id)
             add('EVIDENCE_BINDING', `${kind}: evidence belongs to another route, segment or vehicle.`, id);
+          if(evidence.sourceType!=='directed-restriction-record'||evidence.coverage!=='complete'||typeof evidence.sourceRecordId!=='string'||!evidence.sourceRecordId.trim())
+            add('COVERAGE_UNVERIFIED', `${kind}: a directory, inventory point, partial feed or missing source record cannot establish directed-road coverage.`, id);
           let validUrl = false;
-          try { validUrl = new URL(evidence.sourceUrl).protocol === 'https:'; } catch (_) {}
+          try { const url=new URL(evidence.sourceUrl);validUrl=url.protocol==='https:'&&!url.username&&!url.password; } catch (_) {}
           if (!validUrl || typeof evidence.authority !== 'string' || !evidence.authority.trim() || typeof evidence.version !== 'string' || !evidence.version.trim())
             add('SOURCE_MISSING', `${kind}: authority, source and version are required.`, id);
           const checked = timestamp(evidence.checkedAt), from = timestamp(evidence.validFrom), until = timestamp(evidence.validUntil);
+          // Fetching an old inventory today does not refresh the underlying observation.
+          const observed=timestamp(evidence.observedAt);
+          if(![observed,checked,now,arrival].every(Number.isFinite)||observed>checked||observed>now||now-observed>=maxObservationAgeMs||arrival>=observed+maxObservationAgeMs)
+            add('SOURCE_OBSERVATION_STALE', `${kind}: require a source observation that covers arrival within the preliminary 24-hour review window. A page-fetch time is not a road observation.`, id);
           if (![checked, from, until, departure, arrival, now].every(Number.isFinite) || checked > now || checked > departure || from > departure || until <= arrival || until <= checked || from > until)
             add('EVIDENCE_EXPIRED', `${kind}: evidence is invalid or does not cover the entire trip.`, id);
         }
@@ -63,5 +71,5 @@
     return { status: issues.length ? 'HOLD' : 'REVIEW_REQUIRED', guidanceAllowed: false, issues,
       message: issues.length ? 'Truck route unavailable. Resolve the listed gaps first.' : 'Evidence fields passed preliminary checks. Source authentication, road coverage and field validation are still required.' };
   }
-  root.DLTruckRouteReadiness = Object.freeze({ assess, checks });
+  root.DLTruckRouteReadiness = Object.freeze({ assess, checks, maxObservationAgeMs });
 })(typeof window === 'undefined' ? globalThis : window);

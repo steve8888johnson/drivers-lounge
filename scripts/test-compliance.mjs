@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, access } from 'node:fs/promises';
 import { runInNewContext } from 'node:vm';
+import {ROUTING_JURISDICTIONS} from '../src/assets/compliance/sources.mjs';
 import { ENTRIES, BY_ID, COUNTS, SOURCES, CATEGORIES, STATE_DIRECTORY, STATE_CHECKLISTS, findEntries, readFilters, filterQuery, cleanBookmarks, escapeHTML, sourceURL } from '../src/assets/compliance/core.mjs';
 
 test('reference graph has unique stable IDs, real sources and complete jurisdiction coverage',()=>{
@@ -17,6 +18,10 @@ test('reference graph has unique stable IDs, real sources and complete jurisdict
   }
   for(const s of STATE_DIRECTORY){const desk=BY_ID.get('state-'+s.code.toLowerCase());assert(desk.sources.includes('state-'+s.code));assert(desk.sources.includes('hazmat-'+s.code));}
   assert.deepEqual(Object.keys(STATE_CHECKLISTS).sort(),['hazmat','oversize','pilot','standard']);
+});
+test('dated federal inventory metadata never promotes any jurisdiction to verified road coverage',()=>{
+ const nbi=SOURCES['fhwa-nbi-layer'].routingReview;assert.equal(nbi.datasetAsOf,'2023-06-15');assert.equal(nbi.catalogDateConflict,true);assert.equal(nbi.geometryType,'point');
+ for(const r of [nbi,SOURCES['fhwa-nbi-crosswalk'].routingReview,...ROUTING_JURISDICTIONS]){assert.equal(r.roadDataConnected,false);assert.equal(r.guidanceAllowed,false);if(typeof r.coverage==='object')assert(Object.values(r.coverage).every(x=>x==='unknown'));else assert.equal(r.coverage,'unknown');}
 });
 test('acronyms, punctuation, multi-word terms and exact regulation references are searchable',()=>{
   for(const [q,id] of [['HOS','term-hos'],['OS/OW','term-osow'],['high pole','term-high-pole'],['172.504','term-placard'],['49 CFR 397','rule-hm-routing'],['working load limit','term-wll'],['reciprocity','term-reciprocity'],['Illinois','state-il']]){
