@@ -14,7 +14,7 @@ test('request preparation preserves explicit dimensions and distinct weight mean
  assert.equal(q.get('vehicle[currentWeight]'),'35381');assert.equal(q.get('vehicle[grossWeight]'),'40000');
  assert.equal(q.get('vehicle[weightPerAxleGroup]'),'single:5444,tandem:14969');assert.equal(q.get('transportMode'),'truck');
  assert.equal(q.has('apiKey'),false);assert.equal(result.networkEnabled,false);
- assert.equal(q.get('vehicle[trailerCount]'),'1');
+ assert.equal(q.get('vehicle[trailerCount]'),'1');assert.equal(q.get('spans'),'segmentRef');
 });
 test('request preparation rejects defaults, inconsistent axle groups and timeless routes',()=>{
  for(const mutate of [i=>delete i.vehicle.heightCm,i=>i.vehicle.widthCm='260',i=>i.vehicle.lengthCm=100,i=>i.vehicle.axleMeasurement.axles[0].weightLb=1,i=>i.vehicle.hazmat=true,i=>i.vehicle.currentWeightKg=50000,i=>i.departure='any',i=>i.departure='2026-02-30T12:00:00.000Z',i=>i.origin.lat=NaN]){
@@ -26,7 +26,7 @@ test('an explicitly configured single truck sends zero trailers and its measured
  const q=new URLSearchParams(prepareHereRequest(d).query);assert.equal(q.get('vehicle[trailerCount]'),'0');assert.equal(q.get('vehicle[currentWeight]'),String(poundsToKilogramsUp(45000)));
 });
 test('provider route never grants driving authorization or returns geometry',()=>{
- const result=review(candidate());assert.equal(result.status,'REVIEW_REQUIRED');assert.equal(result.guidanceAllowed,false);assert.equal(result.polyline,undefined);
+ const result=review(candidate());assert.equal(result.status,'HOLD');assert(result.reasons.some(r=>r.code==='ROAD_TOPOLOGY_AND_ENTRANCES_UNVERIFIED'));assert.equal(result.guidanceAllowed,false);assert.equal(result.polyline,undefined);
 });
 test('expired load reviews or departures outside the review window cannot prepare a request',()=>{
  for(const change of [i=>delete i.vehicle.axleMeasurement.measuredAt,i=>i.vehicle.axleMeasurement.measurementKind='grouped',i=>i.vehicle.axleMeasurement.unchangedSinceWeighing=false,i=>i.departure='2026-10-14T10:00:00.000Z',i=>i.now=Date.parse('2026-10-14T10:00:00Z')]){const d=draft();change(d);assert.throws(()=>prepareHereRequest(d));}

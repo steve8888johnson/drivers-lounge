@@ -5,11 +5,12 @@ import {inspectTruckGeometry} from './truck-route-geometry.mjs';
 import {prepareMeasuredAxleParameters} from './truck-axle-review.mjs';
 import {reviewLoadMeasurement} from './truck-load-measurement.mjs';
 import {reviewEquipmentLimits} from './truck-equipment-review.mjs';
+import {inspectRoadBinding} from './truck-road-binding.mjs';
 export function prepareHereRequest(input) {
   const p = input?.vehicle;
   if (!p || p.confirmed !== true || p.oversize !== false || p.hazmat !== false)
     throw Error('Confirmed standard non-hazmat vehicle required.');
-  const params = new URLSearchParams({transportMode:'truck',routingMode:'fast',return:'polyline,summary',alternatives:'0','avoid[features]':'uTurns,dirtRoad'});
+  const params = new URLSearchParams({transportMode:'truck',routingMode:'fast',return:'polyline,summary',spans:'segmentRef',alternatives:'0','avoid[features]':'uTurns,dirtRoad'});
   for (const [field, parameter] of Object.entries({heightCm:'height',widthCm:'width',lengthCm:'length',currentWeightKg:'currentWeight',grossWeightKg:'grossWeight'})) {
     if (!Number.isSafeInteger(p[field]) || p[field] <= 0) throw Error(`Missing or invalid ${field}; no default vehicle sizes allowed.`);
     params.set(`vehicle[${parameter}]`,String(p[field]));
@@ -38,7 +39,7 @@ export function prepareHereRequest(input) {
   params.set('departureTime',input.departure);
   return {endpoint:'https://router.hereapi.com/v8/routes',query:params.toString(),vehicleReviewBinding:JSON.stringify([measuredAxles.binding,loadReview.binding,equipment.binding]),networkEnabled:false,guidanceAllowed:false};
 }
-export function reviewHereCandidate(payload, request, current) {
+export function reviewHereCandidate(payload, request, current, roadEvidence) {
   const reasons = [];
   const add = (code, section = null) => reasons.push({code, section});
   if (!request || !current || typeof request.fingerprint !== 'string' || !request.fingerprint.trim() || request.fingerprint !== current.fingerprint)
@@ -78,6 +79,8 @@ export function reviewHereCandidate(payload, request, current) {
     }
   }
   reasons.push(...inspectTruckGeometry(sections, request?.trip).reasons);
+  // Separate adapter argument: never trust a provider payload's self-declared access evidence.
+  reasons.push(...inspectRoadBinding(route, request, current, roadEvidence).reasons);
   return {
     status: reasons.length ? 'HOLD' : 'REVIEW_REQUIRED',
     guidanceAllowed: false,
