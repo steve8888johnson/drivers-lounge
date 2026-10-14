@@ -2,7 +2,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 
-const roots = ['src', 'scripts'];
+const roots = ['src', 'scripts', 'server'];
 const extensions = new Set(['.js', '.mjs']);
 const files = [];
 const htmlFiles = [];
