@@ -62,13 +62,20 @@ export async function importPublicQR(url, fetcher = fetch) {
   return sanitizePermit(parsed.permit);
 }
 
-export async function scanImage(file) {
-  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) throw Error('Scan a JPG, PNG or WebP photo. PDFs can be kept in the wallet; photograph the QR page to scan.');
+export async function scanImage(file, { signal } = {}) {
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) throw Error('Scan a JPG, PNG or WebP photo. For PDFs, use Scan PDF QR codes beside the saved original.');
   const bitmap = await createImageBitmap(file);
   try {
     const canvas = document.createElement('canvas'), scale = Math.min(1, 2600 / Math.max(bitmap.width, bitmap.height));
     canvas.width = Math.round(bitmap.width * scale); canvas.height = Math.round(bitmap.height * scale);
     const ctx = canvas.getContext('2d', { willReadFrequently: true }); ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    return await scanCanvas(canvas, { signal });
+  } finally { bitmap.close(); }
+}
+
+export async function scanCanvas(canvas, { signal } = {}) {
+    if (signal?.aborted) throw new DOMException('Scan stopped.', 'AbortError');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if ('BarcodeDetector' in window) {
       try { const found = await new BarcodeDetector({ formats: ['qr_code'] }).detect(canvas); if (found.length) return [...new Set(found.map(x => x.rawValue))]; } catch { /* Portable local decoder below. */ }
     }
@@ -76,11 +83,14 @@ export async function scanImage(file) {
     const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
     if ('Worker' in window) return await new Promise((resolve, reject) => {
       const worker = new Worker(new URL('./qr-worker.mjs', import.meta.url), { type: 'module' });
-      const timer = setTimeout(() => { worker.terminate(); reject(Error('Photo scan timed out. Try a closer QR photo.')); }, 45000);
-      worker.onmessage = event => { clearTimeout(timer); worker.terminate(); event.data.error ? reject(Error(event.data.error)) : resolve(event.data.codes); };
-      worker.onerror = () => { clearTimeout(timer); worker.terminate(); reject(Error('Photo scanner unavailable. Paste the QR contents or enter the permit manually.')); };
+      const finish = () => { clearTimeout(timer); worker.terminate(); signal?.removeEventListener('abort', stop); };
+      const stop = () => { finish(); reject(new DOMException('Scan stopped.', 'AbortError')); };
+      const timer = setTimeout(() => { finish(); reject(Error('Photo scan timed out. Try a closer QR photo.')); }, 45000);
+      signal?.addEventListener('abort', stop, { once: true });
+      if (signal?.aborted) { stop(); return; }
+      worker.onmessage = event => { finish(); event.data.error ? reject(Error(event.data.error)) : resolve(event.data.codes); };
+      worker.onerror = () => { finish(); reject(Error('Photo scanner unavailable. Paste the QR contents or enter the permit manually.')); };
       worker.postMessage({ pixels: pixels.data.buffer, width: canvas.width, height: canvas.height }, [pixels.data.buffer]);
     });
     return decodePhotoPixels(pixels.data, canvas.width, canvas.height, window.jsQR);
-  } finally { bitmap.close(); }
 }

@@ -53,3 +53,8 @@ export function parkedInstruction(view) {
   if (!view?.available) return null;
   return `Parked permit review. ${view.permit.state}. Instruction ${view.index + 1} of ${view.total}. ${view.step.text}. ${view.border ? `Next state ${view.border.permit.state}. Check its permit and conditions before the border.` : view.next ? `Next instruction: ${view.next.step.text}.` : 'End of supplied instructions. Confirm destination access from the permit.'} This is a review, not live guidance.`;
 }
+
+export function parkedSource(view) {
+  if (!view?.available || typeof view.source !== 'string' || !view.source.trim()) return null;
+  return `Parked source comparison. ${view.permit.state}. Saved route line ${view.step.routeLine}. ${view.source}. Compare this saved text with the original permit. This is not live guidance.`;
+}

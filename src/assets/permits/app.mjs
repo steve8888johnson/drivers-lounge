@@ -1,6 +1,6 @@
 import { mountSetupAccount } from '../truck-setup-account.mjs';
 import { STATES, profileErrors, blankTrip, blankPermit, buildMaster, crewKey, geometryReviewed, reviewed, confirmPermit, confirmGeometry, locateOnMaster, warnings, sanitizePermit } from './core.mjs';
-import { classifyQR, parsePermitText, importPublicQR, scanImage } from './import.mjs';
+import { classifyQR, parsePermitText, importPublicQR, scanImage, scanCanvas } from './import.mjs';
 import { listTrips, saveTrip, addDocument, getDocument, deleteTrip, exportPacket, importPacket, verifyWallet } from './storage.mjs';
 import { exampleTrip } from './examples.mjs';
 import { Crew } from './crew.mjs';
@@ -12,11 +12,12 @@ import { walletLaunch } from './launch.mjs';
 import { planningPlaces, preparationStatus, applyPlanningHandoff } from './preparation.mjs';
 import { previewPermitIntake, intakeContext, intakeContextMatches, createCameraSession } from './intake.mjs';
 import { createGuidanceSession, maneuverCue } from './guidance.mjs';
-import { createSpeech, speechPreferences, parkedInstruction } from './speech.mjs';
+import { createSpeech, speechPreferences, parkedInstruction, parkedSource } from './speech.mjs';
 import { createGuidanceWatch } from './gps-watch.mjs';
 import { routeSketch } from './route-sketch.mjs';
 import { coverageMarkup, maneuverChoices } from './route-coverage.mjs';
 import { applySavedPermitSetup, REUSABLE_MEASUREMENTS } from './saved-setup.mjs';
+import { scanPDF } from './pdf-scan.mjs';
 
 const $ = selector => document.querySelector(selector);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -25,6 +26,7 @@ const cameraSession = createCameraSession();
 const guidanceSession = createGuidanceSession();
 let setupAccount;
 let trip, selected, tab = 'load', dirty = false, watching = null, gpsWatch = null, progress, master, crewTimer, crewBusy = false, lastCrew = 0, camera, cameraTimer, activeState = '', objectURLs = [], guidanceVersion = 0;
+let pdfSelection, pdfAbort;
 let savedTrip, walkthroughIndex = 0, mapFocus = false, guidancePause = '', spokenState = '';
 const speech = createSpeech({ synthesis: window.speechSynthesis, Utterance: window.SpeechSynthesisUtterance, visible: () => !document.hidden,
   onState: state => { $('#permit-speech-status').textContent = state.message; },
@@ -106,8 +108,20 @@ function renderList() {
   $('#permit-list').innerHTML = trip.permits.length ? trip.permits.map((p, i) => `<button class="permit-item ${p.id === selected ? 'selected' : ''}" data-permit="${esc(p.id)}"><b>${i + 1}. ${esc(p.state || 'New state')} <span>${esc(p.number)}</span></b><small>${esc(p.entry.label || 'Origin needed')} → ${esc(p.exit.label || 'Destination needed')}</small><small>${geometryReviewed(p) ? 'Route geometry confirmed' : reviewed(p) ? 'Permit confirmed · geometry needed' : 'Needs your confirmation'}</small></button>`).join('') : '<p class="muted">No permits yet. Add a permit or import its original.</p>';
   document.querySelectorAll('[data-permit]').forEach(b => b.onclick = safe(async () => { if (!await changeGuard()) return; selected = b.dataset.permit; renderReview(); renderList(); switchTab('review'); }));
 }
-function documentRows(p) { return p.documents.map(doc => `<div class="doc-row"><span>${esc(doc.name)}<br><small>${(doc.size / 1024).toFixed(0)} KB · original</small></span><button data-open-doc="${esc(doc.id)}">Open original</button></div>`).join(''); }
-function wireDocuments(container) { container.querySelectorAll('[data-open-doc]').forEach(button => button.onclick = safe(async () => {
+function documentRows(p) { return p.documents.map(doc => `<div class="doc-row"><span>${esc(doc.name)}<br><small>${(doc.size / 1024).toFixed(0)} KB · original</small>${doc.scanSummary ? `<br><small>${esc(doc.scanSummary)}</small>` : ''}</span><button data-open-doc="${esc(doc.id)}">Open original</button>${doc.type === 'application/pdf' ? `<button data-scan-pdf="${esc(doc.id)}">Scan PDF QR codes</button>` : ''}</div>`).join(''); }
+function wireDocuments(container) {
+container.querySelectorAll('[data-scan-pdf]').forEach(button => button.onclick = safe(async () => {
+  if (dirty) throw Error('Save changes before scanning an original.');
+  const permit = trip.permits.find(p => p.documents.some(d => d.id === button.dataset.scanPdf));
+  if (!permit) throw Error('Original no longer belongs to this load.');
+  selected = permit.id; renderList(); renderReview(); switchTab('review');
+  pdfSelection = { tripId: trip.id, permitId: permit.id, docId: button.dataset.scanPdf };
+  $('#pdf-scan-name').textContent = permit.documents.find(d => d.id === pdfSelection.docId).name;
+  $('#pdf-start-page').value = '1'; $('#pdf-scan-result').textContent = '';
+  $('#pdf-scan-status').textContent = 'Ready to scan this saved original. No file is uploaded.';
+  $('#pdf-scan-dialog').showModal();
+}));
+container.querySelectorAll('[data-open-doc]').forEach(button => button.onclick = safe(async () => {
   const doc = await getDocument(button.dataset.openDoc); if (!doc?.blob) throw Error('Original is not on this device. Import the trip packet or add the original pages.');
   const url = URL.createObjectURL(doc.blob); objectURLs.push(url);
   const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener'; a.click();
@@ -174,6 +188,7 @@ function renderWalkthrough(m = buildMaster(trip, { geometry: true })) {
   $('#walkthrough-previous').disabled = dirty || !view.available || view.index === 0;
   $('#walkthrough-next').disabled = dirty || !view.available || view.index === view.total - 1;
   $('#walkthrough-speak').disabled = dirty || !view.available || watching !== null;
+  $('#walkthrough-source-speak').disabled = dirty || !view.available || watching !== null;
   const choices = !dirty && watching === null ? maneuverChoices(m) : [];
   $('#walkthrough-jump').disabled = !choices.length;
   $('#walkthrough-jump').innerHTML = choices.length ? choices.map((choice, index) => `<option value="${index}">${index + 1}. ${esc(choice.state)} · line ${choice.line} · ${esc(choice.text)}</option>`).join('') : '<option value="">Complete route review first</option>';
@@ -240,9 +255,42 @@ async function attach(files, split = false) {
     else pdfs++;
   }
   await persist(); renderList(); switchTab('review');
-  status(`${files.length} original page(s) saved for this permit. ${found} QR result(s) retained. ${withoutQR ? `${withoutQR} photo(s) had no readable QR. ` : ''}${scanFailures ? `${scanFailures} photo scan(s) failed; originals are saved. Try a closer QR photo. ` : ''}${pdfs ? 'PDFs are saved; add a QR photo or paste their route text. ' : ''}Choose a saved QR import action and check every original page.`);
+  status(`${files.length} original file(s) saved for this permit. ${found} QR result(s) retained. ${withoutQR ? `${withoutQR} photo(s) had no readable QR. ` : ''}${scanFailures ? `${scanFailures} photo scan(s) failed; originals are saved. Try a closer QR photo. ` : ''}${pdfs ? 'PDFs are saved. Tap Scan PDF QR codes beside each original. ' : ''}Choose a saved QR import action and check every original page.`);
 }
 async function stopCamera() { cameraSession.cancel(); clearTimeout(cameraTimer); camera?.getTracks().forEach(track => track.stop()); camera = null; $('#qr-video').srcObject = null; $('#qr-video').hidden = true; $('#camera-stop').hidden = true; $('#camera-start').disabled = false; }
+on('#pdf-scan-run', 'click', async () => {
+  const selectedPDF = pdfSelection, p = currentPermit();
+  if (!selectedPDF || dirty || selectedPDF.tripId !== trip.id || selectedPDF.permitId !== p?.id) throw Error('Load changed. Reopen the original to scan.');
+  const startPage = Number($('#pdf-start-page').value);
+  if (!Number.isInteger(startPage) || startPage < 1) { $('#pdf-scan-status').textContent = 'Enter a whole starting page number.'; return; }
+  const context = intakeContext(trip.id, p), doc = await getDocument(selectedPDF.docId);
+  if (!doc?.blob) { $('#pdf-scan-status').textContent = 'Original is missing on this device. Import the full trip packet again.'; return; }
+  const controller = new AbortController(); pdfAbort = controller;
+  $('#pdf-scan-run').disabled = true; $('#pdf-start-page').disabled = true; $('#pdf-scan-stop').disabled = false;
+  $('#pdf-scan-result').textContent = ''; $('#pdf-scan-status').textContent = 'Opening PDF on this device…';
+  try {
+    const result = await scanPDF(doc.blob, { signal: controller.signal, startPage, decode: scanCanvas,
+      onPage: page => { $('#pdf-scan-status').textContent = `Page ${page.page} of ${page.totalPages} · ${page.status === 'scanning' ? 'scanning locally…' : page.status === 'failed' ? 'could not scan; check original' : page.status === 'qr-found' ? `${page.count} QR code(s) found` : 'no readable QR found'}`; }
+    });
+    if (!intakeContextMatches(context, trip.id, currentPermit())) throw Error('The load or original changed. Scan results were not applied.');
+    let retained = 0;
+    for (const code of result.codes) {
+      if (p.qr.includes(code.raw)) { retained++; continue; }
+      if (p.qr.length >= 20) continue;
+      p.qr.push(code.raw); retained++;
+    }
+    const summary = `${result.pages.length} of ${result.totalPages} PDF pages checked from page ${result.startPage}; ${result.pages.filter(page => page.status === 'failed').length} scan failure(s); ${retained} unique QR reference(s) retained${result.stopped ? '; stopped early' : ''}.`;
+    edit(); p.documents.find(d => d.id === selectedPDF.docId).scanSummary = summary;
+    p.review = null; p.geometryReview = null;
+    await persist(summary + ' Scanning does not confirm route completeness.'); renderList(); renderReview();
+    $('#pdf-scan-status').textContent = summary;
+    $('#pdf-scan-result').textContent = result.pages.map(page => `Page ${page.page}: ${page.status === 'failed' ? 'SCAN FAILED — check original / use QR photo' : page.status === 'qr-found' ? `${page.count} QR code(s) found` : 'No readable QR — inspect original'}`).join('\n') + `\n${result.nextPage ? `Pages remain. Start at page ${result.nextPage} to continue; failed pages need a separate retry.` : 'Every scanned page still requires original review.'}${retained < result.codes.length ? '\nQR storage limit reached. Some codes were not retained; keep the original.' : ''}\nQR codes are references only until reviewed. No permit text, route or approval was applied.`;
+    if (result.nextPage) $('#pdf-start-page').value = String(result.nextPage);
+  } catch (error) { $('#pdf-scan-status').textContent = error.message; }
+  finally { if (pdfAbort === controller) pdfAbort = null; $('#pdf-scan-run').disabled = false; $('#pdf-start-page').disabled = false; $('#pdf-scan-stop').disabled = true; }
+});
+$('#pdf-scan-stop').onclick = () => pdfAbort?.abort();
+$('#pdf-scan-dialog').addEventListener('close', () => pdfAbort?.abort());
 async function startCamera() {
   await ensurePermit(); if (!navigator.mediaDevices?.getUserMedia) throw Error('Camera is unavailable here. Use Scan QR photo instead.');
   const token = cameraSession.start(trip.id, selected);
@@ -433,6 +481,12 @@ on('#walkthrough-jump', 'change', () => {
   speech.stop(); walkthroughIndex = index; renderWalkthrough(m);
 });
 on('#stop-permit-speech', 'click', () => speech.stop());
+on('#walkthrough-source-speak', 'click', () => {
+  if (dirty || watching !== null) throw Error('Park and save changes before reviewing source text.');
+  const text = parkedSource(walkthrough(buildMaster(trip, { geometry: true }), walkthroughIndex, $('#crew-role').value));
+  if (!text) throw Error('Complete the permit and geometry checks first.');
+  speech.play(text, { ...voiceSettings(), key: 'parked-source', repeat: true });
+});
 on('#finish-trip', 'click', async () => { if (dirty) throw Error('Save or discard changes before completing this move.'); if (!await confirmAction('Mark this permitted move complete? A single-trip permit cannot be used for a second move.', 'Mark complete')) return; stopGuidance('Permitted move marked complete.'); trip.completedAt = new Date().toISOString(); await persist('Move complete. Original permits remain in the inspection wallet.'); if (trip.shared?.owner) await crew.close(trip.shared); renderRoute(); });
 on('#read-warnings', 'click', () => { if (watching !== null || dirty) throw Error('Park and save changes before reviewing notes aloud.'); const p = currentPermit(); if (!p) throw Error('Choose a state permit first.'); speech.play('Parked review of saved notes. ' + ([...warnings(p, trip.profile, $('#crew-role').value), ...hazmatWarnings(trip, p)].join(' ') || 'No restrictions entered. Consult the original permit.'), { ...voiceSettings(), key: 'parked-notes', repeat: true }); });
 on('#active-wallet', 'click', e => { e.preventDefault(); const permitId = activeState; switchTab('wallet'); if (permitId) document.getElementById(`wallet-${permitId}`)?.scrollIntoView({ behavior: 'smooth' }); });
@@ -453,8 +507,8 @@ on('#close-crew', 'click', async () => { if (!trip.shared?.owner) throw Error('O
 on('#refresh-crew', 'click', refreshCrew);
 function connection() { $('#connection').textContent = navigator.onLine ? 'Device wallet · online' : 'Offline · device wallet'; if (!navigator.onLine) { $('#crew-status').textContent = 'Offline — crew positions are unavailable.'; $('#crew-positions').textContent = ''; } }
 window.addEventListener('online', connection); window.addEventListener('offline', connection);
-document.addEventListener('visibilitychange', () => { if (document.hidden) { speech.stop('Page hidden. Speech stopped; tap to read again when parked.'); void stopCamera(); if (watching !== null) stopGuidance('Guidance paused while app was hidden. Restart when safely in the foreground.'); } });
-window.addEventListener('pagehide', () => { stopGuidance(); void stopCamera(); objectURLs.forEach(URL.revokeObjectURL); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { pdfAbort?.abort(); speech.stop('Page hidden. Speech stopped; tap to read again when parked.'); void stopCamera(); if (watching !== null) stopGuidance('Guidance paused while app was hidden. Restart when safely in the foreground.'); } });
+window.addEventListener('pagehide', () => { pdfAbort?.abort(); stopGuidance(); void stopCamera(); objectURLs.forEach(URL.revokeObjectURL); });
 window.addEventListener('beforeunload', event => { if (dirty) { event.preventDefault(); event.returnValue = ''; } });
 async function launchWallet() {
   let lastId = ''; try { lastId = JSON.parse(localStorage.getItem('dl-last-permit-trip') || 'null') || ''; } catch { /* Use the available device trips. */ }
