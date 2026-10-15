@@ -33,3 +33,7 @@ Operational guidance remains disabled. Full issued permits, every condition page
 5. Use https://driverslounge.app/permit-phone-check for the separate parked sound/GPS reception rehearsal. Do not use these tests as authorization to drive the load.
 
 Release candidate at creation; see RELEASE-GATES.md for exact live receipt.
+
+## Live release receipt
+
+Verified October15 at16:52UTC: source4a5212d908e7490654a922697da67ffaf68903f2, READY productiondpl_3NerqjzuDTMHCf7oo8AuGktENZ7p, driverslounge.app. Remote319tests and all build checks passed. Eight public assets match source; account/permit pagesHTTP200. Account-only access remains enabled; operational guidance disabled. Owner draft unchanged. See RELEASE-GATES.md for evidence limits.
