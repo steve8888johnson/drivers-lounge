@@ -12,7 +12,10 @@ export function routeSketch(master, index = 0, focus = false, allowSelection = t
   const selectedSegments = selected ? segments.filter(s => s.permitId === selected.permit.id && s.step === selected.step) : [];
   const selectable = selectedSegments.length > 0, focused = focus && selectable;
   const bounds = (focused ? selectedSegments : segments).flatMap(s => [s.a, s.b]);
-  if (!bounds.length) return { selectable: false, focused: false, markup: '<text x="400" y="155" text-anchor="middle" fill="#435570" font-size="18">No route geometry saved</text><text x="400" y="185" text-anchor="middle" fill="#435570" font-size="14">Keep reviewing your original permits.</text>', caption: 'No GPS position or road map. Scanning a QR alone does not supply a route.' };
+  if (!bounds.length) {
+    const issuerMap = master?.permits?.some(p => p.issuerMap);
+    return { selectable: false, focused: false, markup: `<text x="400" y="155" text-anchor="middle" fill="#435570" font-size="18">${issuerMap ? 'No turn positions supplied' : 'No route geometry saved'}</text><text x="400" y="185" text-anchor="middle" fill="#435570" font-size="14">${issuerMap ? 'Open View scanned route above for the issuer map.' : 'Keep reviewing your original permits.'}</text>`, caption: issuerMap ? 'The issuer map is saved separately. Open View scanned route above; GPS and turn positions remain unavailable.' : 'No GPS position or road map. Scanning a QR alone does not supply a route.' };
+  }
   let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
   for (const [lat, lng] of bounds) { minLat = Math.min(minLat, lat); maxLat = Math.max(maxLat, lat); minLng = Math.min(minLng, lng); maxLng = Math.max(maxLng, lng); }
   const k = Math.max(.01, Math.cos((minLat + maxLat) / 2 * Math.PI / 180));

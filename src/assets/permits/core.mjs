@@ -1,5 +1,6 @@
 import { blankHazmat, blankHazmatRoute, sanitizeHazmat, sanitizeHazmatRoute, hazmatErrors } from './hazmat.mjs';
 import { routeLineCoverage } from './route-coverage.mjs';
+import { sanitizeIssuerMap } from './issuer-map.mjs';
 // Permit text is evidence. Geometry is a reviewed transcription, never a new route.
 export const CONTROLLING_NOTICE = 'Drivers Lounge assists with following issued permits. The issued permit and state restrictions remain controlling. Never take an unapproved detour.';
 export const STATES = 'AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC'.split(' ');
@@ -16,7 +17,7 @@ export function sourceText(value, max = 20000, label = 'Permit text') {
 export function blankPermit() {
   return { id: id(), state: '', number: '', kind: 'single-trip', validFrom: '', validTo: '', timeZone: '',
     entry: { label: '', state: '', road: '' }, exit: { label: '', state: '', road: '' }, routeText: '',
-    restrictions: '', complete: false, qr: [], documents: [], steps: [], confidence: {}, limits: {}, travelWindow: null, geometrySource: null, review: null, geometryReview: null, hazmatRoute: blankHazmatRoute() };
+    restrictions: '', complete: false, qr: [], documents: [], steps: [], issuerMap: null, confidence: {}, limits: {}, travelWindow: null, geometrySource: null, review: null, geometryReview: null, hazmatRoute: blankHazmatRoute() };
 }
 export function blankTrip() {
   return { schema: 'dl-permit-trip/v1', id: id(), revision: 1, name: '', departure: '', planning: { origin: '', destination: '' },
@@ -70,6 +71,7 @@ export function profileErrors(p) {
 }
 export function geometryErrors(p) {
   const e = [], label = p.number || p.state;
+  if (p.issuerMap) return [`${label}: the issuer overview has no verified turn positions and cannot provide GPS guidance.`];
   if (!Array.isArray(p.steps) || !p.steps.length) return [`${label}: reviewed route geometry is needed for GPS guidance.`];
   if (p.steps.length > 1000) return [`${label}: too many maneuvers.`];
   const coverage = routeLineCoverage(p);
@@ -126,7 +128,7 @@ export function buildMaster(trip, { date = trip.departure, geometry = false } = 
       if (previous && pointOK(a) && pointOK(b) && meters(a, b) > 25) issues.push(`${previous.state} → ${p.state}: border coordinates differ by ${Math.round(meters(a, b))} m. No connecting road will be invented.`);
     }
     boundaries.push({ state: p.state, permitId: p.id, at: offset, entry: p.entry.label });
-    for (const [stepIndex, step] of p.steps.entries()) {
+    for (const [stepIndex, step] of (p.issuerMap ? [] : p.steps).entries()) {
       if (!Array.isArray(step.points) || !step.points.every(pointOK)) continue;
       for (let n = 1; n < step.points.length; n++) {
         const distance = meters(step.points[n - 1], step.points[n]);
@@ -240,6 +242,7 @@ export function sanitizePermit(value) {
   });
   p.confidence = Object.fromEntries(['state', 'number', 'validFrom', 'validTo', 'entry', 'exit', 'routeText'].map(field => [field, { score: p[field] && (typeof p[field] !== 'object' || p[field].label) ? .8 : 0, source: 'Imported data; compare with original' }]));
   if (value.geometrySource?.format === 'promiles-public-json/v1') p.geometrySource = { format: 'promiles-public-json/v1', note: 'Geometry supplied by public issued-route endpoint; full original review required' };
+  if (value.issuerMap) { p.issuerMap = sanitizeIssuerMap(value.issuerMap, p); p.steps = []; p.geometrySource = null; p.complete = false; }
   if (value.travelWindow) { if (!windowValid(value.travelWindow)) throw Error('Invalid copied movement window.'); p.travelWindow = { from: value.travelWindow.from, to: value.travelWindow.to, days: [...value.travelWindow.days], closedDates: [...value.travelWindow.closedDates] }; }
   if (value.qr !== undefined && (!Array.isArray(value.qr) || value.qr.length > 20)) throw Error('Too many or unsupported QR references. Keep all originals; import at most 20 references per permit.');
   p.qr = (value.qr || []).map(s => sourceText(s, 50000, 'QR reference'));

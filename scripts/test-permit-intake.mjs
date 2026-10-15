@@ -22,7 +22,7 @@ test('scan result distinguishes geometry, route text and identification without 
   const text=JSON.stringify({schema:'dl-permit-route/v1',permit:{routeText:'Synthetic test'}});
   assert.match(qrAction(text).title,/no coordinates/);
   assert.equal(qrAction(infoQR).action,undefined);assert.equal(qrAction(infoQR).external,null);
-  assert.equal(qrAction(texasInfoQR).external,texasInfoQR);assert.equal(qrAction(texasInfoQR).action,undefined);
+  assert.equal(qrAction(texasInfoQR).external,texasInfoQR);assert.equal(qrAction(texasInfoQR).action,'Load Texas route map');
 });
 test('QR display never turns active content or private URL schemes into an external-link action',()=>{
   for(const raw of ['javascript:alert(1)','data:text/html,test','file:///private.pdf','https://localhost/route','https://user:password@example.com/route',texasInfoQR.replace('txpros.txdmv.gov','evil.test')]) assert(!qrAction(raw).external);
@@ -50,19 +50,19 @@ test('identification-only QR never supplies a route, issuer or movement dates', 
   }
   assert.equal(classifyQR(infoQR+'\nTurn left onto TEST ROAD').kind,'manual');
 });
-test('Texas permit-information references are preserved without a route import or scheme upgrade', async () => {
+test('Texas QR preserves its original link and requires the explicit map adapter instead of a generic text import', async () => {
   let requests=0;
   for (const text of [texasInfoQR,texasInfoQR.replace('http:','https:')]) {
     const result=classifyQR(text);
-    assert.equal(result.kind,'permit-info');assert.equal(result.raw,text);
-    assert.equal(result.permit,undefined);assert.equal(result.url,undefined);
+    assert.equal(result.kind,'texas-map');assert.equal(result.raw,text);
+    assert.equal(result.permit,undefined);assert.equal(result.url,text);
     assert.throws(()=>parsePermitText(text),/not the issued route/);
     await assert.rejects(()=>importPublicQR(text,async()=>{requests++;return new Response('unexpected');}),/Only public HTTPS/);
   }
   assert.equal(requests,0);
 });
 test('lookalike hosts, credentials and altered information references are not the recognized Texas QR', () => {
-  for (const text of [texasInfoQR.replace('txpros.txdmv.gov','txpros.txdmv.gov.example.com'),texasInfoQR.replace('txpros.txdmv.gov','txpros.txdmv.gov@evil.example'),texasInfoQR+'&QRUSER=1',texasInfoQR+'&other=1',texasInfoQR+'#x',texasInfoQR.replace('10000001','not-an-id')]) assert.notEqual(classifyQR(text).kind,'permit-info');
+  for (const text of [texasInfoQR.replace('txpros.txdmv.gov','txpros.txdmv.gov.example.com'),texasInfoQR.replace('txpros.txdmv.gov','txpros.txdmv.gov@evil.example'),texasInfoQR+'&QRUSER=1',texasInfoQR+'&other=1',texasInfoQR+'#x',texasInfoQR.replace('10000001','not-an-id')]) assert.notEqual(classifyQR(text).kind,'texas-map');
 });
 
 test('a different state or permit ID cannot silently overwrite the selected permit', () => {

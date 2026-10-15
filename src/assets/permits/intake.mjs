@@ -14,8 +14,9 @@ export function mergePermitIntake(existing, value) {
   // Preserve an already-entered permit type when a partial extraction lacks it.
   if (incoming.kind && !existing.number && !existing.routeText) next.kind = incoming.kind;
   for (const side of ['entry', 'exit']) for (const field of ['label', 'state', 'road']) if (incoming[side]?.[field]) next[side][field] = incoming[side][field];
-  if (changedRoute) { next.steps = []; next.geometrySource = null; }
-  if (incoming.steps.length) { next.steps = incoming.steps; next.geometrySource = incoming.geometrySource; }
+  if (changedRoute) { next.steps = []; next.geometrySource = null; next.issuerMap = null; }
+  if (incoming.steps.length) { next.steps = incoming.steps; next.geometrySource = incoming.geometrySource; next.issuerMap = null; }
+  if (incoming.issuerMap) { next.issuerMap = incoming.issuerMap; next.steps = []; next.geometrySource = null; }
   if (incoming.travelWindow) next.travelWindow = incoming.travelWindow;
   if (Object.keys(incoming.limits).length) next.limits = incoming.limits;
   next.confidence = incoming.confidence;
@@ -37,7 +38,8 @@ export function previewPermitIntake(existing, value) {
     warnings: ['This is an unconfirmed draft. Applying it clears the complete-pages checkbox and both permit and geometry confirmations.',
       ...(existing.steps.length && !next.steps.length ? ['The issued route changed without replacement geometry. The old maneuvers will be removed; no roads will be calculated between points.'] : []),
       ...(retained.length ? ['Unchanged saved fields are retained, not reverified by this import: ' + retained.join(', ') + '. Compare them with every current original page.'] : []),
-      ...(next.steps.length ? ['Imported maneuver count is not proof of complete route or road coverage. Compare every instruction and original condition.'] : [])] };
+      ...(next.steps.length ? ['Imported maneuver count is not proof of complete route or road coverage. Compare every instruction and original condition.'] : []),
+      ...(next.issuerMap ? [`Texas supplied ${next.issuerMap.paths[0].length} map coordinates. This replaces any saved maneuvers with a parked overview only. Turn positions and GPS guidance are unavailable; retain every original condition page.`] : [])] };
 }
 
 export function intakeContext(tripId, permit) { return JSON.stringify([tripId, permit.id, permit]); }

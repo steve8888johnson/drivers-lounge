@@ -47,12 +47,19 @@ export function createMapReview() {
     $('#permit-map-all').disabled = !whole.available;
     $('#permit-map-all').setAttribute('aria-pressed', String(overview));
     $('#permit-map-one').setAttribute('aria-pressed', String(!overview));
+    $('#permit-map-one').disabled = !view.available;
+    $('#permit-map-one').hidden = whole.issuerOverview === true;
+    $('#permit-map-maneuvers').hidden = whole.issuerOverview === true;
     $('#permit-map-overview').hidden = !overview;
-    $('#permit-map-overview').textContent = overview ? `${whole.drawn} of ${whole.total} instructions plotted. ${whole.issues.length ? `${whole.issues.length} checks remain; gaps stay open. ` : ''}Preview only; this does not activate guidance.` : '';
+    $('#permit-map-overview').textContent = overview ? `${whole.issuerOverview ? `Texas issuer map · ${whole.pointCount} supplied coordinates. Turn positions are not supplied.` : `${whole.drawn} of ${whole.total} instructions plotted.`} ${whole.issues.length ? `${whole.issues.length} geometry check${whole.issues.length === 1 ? ' remains' : 's remain'}; gaps stay open. ` : ''}Parked preview only; this does not activate guidance.` : '';
     $('#permit-map-previous').disabled = !view.available || index === 0;
     $('#permit-map-next').disabled = !view.available || index === view.total - 1;
     $('#permit-map-step').disabled = !view.available;
-    if (!view.available) { $('#permit-map-step').innerHTML = '<option>No saved maneuvers</option>'; $('#permit-map-comparison').textContent = view.reason; return; }
+    if (!view.available) {
+      $('#permit-map-step').innerHTML = '<option>No saved maneuvers</option>';
+      $('#permit-map-comparison').innerHTML = whole.issuerOverview ? `<p>Loaded from the Texas issuer on ${esc(new Date(whole.retrievedAt).toLocaleString())}. Compare this saved overview with the current original.</p><p><a href="${esc(whole.sourceUrl)}" target="_blank" rel="noopener noreferrer">Open Texas issuer map and conditions</a></p><details><summary>Issued route text (${permit.routeText.split('\n').length} rows)</summary><pre>${esc(permit.routeText)}</pre></details>${whole.issues.length ? `<p>${esc(whole.issues[0])}</p>` : ''}` : esc(whole.issues?.[0] || view.reason);
+      if (map) draw(view); return;
+    }
     $('#permit-map-step').innerHTML = view.choices.map(c => `<option value="${c.index}">${esc(c.label)}</option>`).join(''); $('#permit-map-step').value = String(index);
     $('#permit-map-comparison').innerHTML = `<p class="eyebrow">${esc(view.state)} · ${esc(view.number)} · MANEUVER ${index + 1} OF ${view.total}</p><h3>${esc(view.text || 'Instruction missing')}</h3><p><strong>Saved permit line ${esc(view.line)}</strong></p><blockquote>${esc(view.source || 'No source line saved')}</blockquote><p><strong>Road:</strong> ${esc(view.road || 'Not supplied')}<br><strong>Lane:</strong> ${esc(view.lane || 'Not supplied')}</p><details class="map-inspection-details"><summary>Endpoints &amp; geometry checks</summary><dl><dt>A · Instruction start</dt><dd>${coordinateText(view.start)}</dd><dt>B · Instruction end (not arrival)</dt><dd>${coordinateText(view.end)}</dd></dl><p>${view.pointCount} supplied points. ${view.previous ? `Previous connection: ${Math.round(view.previous.gap)} m. ` : 'First maneuver in this state. '}${view.next ? `Next connection: ${Math.round(view.next.gap)} m.` : 'Last maneuver in this state; check the border or site entrance.'}</p>${view.issues.length ? `<ul class="issue-list">${view.issues.map(issue => `<li>${esc(issue)}</li>`).join('')}</ul>` : '<p>Point spacing and adjacent endpoints pass the basic checks. Road, ramp, direction, level and access are still unverified.</p>'}</details>${view.issues.length ? `<p class="walkthrough-warning">${esc(view.issues[0])}</p>` : ''}`;
     if (map) draw(view);
@@ -85,5 +92,5 @@ export function createMapReview() {
   dialog.addEventListener('close', dispose);
   document.addEventListener('visibilitychange', () => { if (document.hidden && dialog.open) { dispose(); status('Map stopped while page was hidden. Tap Show street map to reload while parked.'); } });
   window.addEventListener('pagehide', dispose);
-  return { open(value, selected = 0, selectionChanged = () => {}, options = {}) { dispose(); onSelection = selectionChanged; permit = structuredClone(value); index = selected; whole = routeOverview(permit); overview = options.overview === true; render(); status('Compare the original permit with the saved instruction. The map is off until requested.'); dialog.showModal(); if (options.showMap && whole.available) return showMap(); } };
+  return { open(value, selected = 0, selectionChanged = () => {}, options = {}) { dispose(); onSelection = selectionChanged; permit = structuredClone(value); index = selected; whole = routeOverview(permit); overview = options.overview === true || whole.issuerOverview === true; render(); status('Compare the original permit with the saved instruction. The map is off until requested.'); dialog.showModal(); if (options.showMap && whole.available) return showMap(); } };
 }

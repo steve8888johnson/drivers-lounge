@@ -1,4 +1,5 @@
 import { pointOK, meters } from './core.mjs';
+import { sanitizeIssuerMap } from './issuer-map.mjs';
 
 // Inspect supplied points only. No routing, snapping, geocoding or approval.
 export function mapReview(permit, index = 0, { choices = true } = {}) {
@@ -45,6 +46,19 @@ export function mapReview(permit, index = 0, { choices = true } = {}) {
 export function routeOverview(permit) {
   const steps = permit?.steps;
   const empty = reason => ({ available: false, paths: [], issues: [reason], total: 0, drawn: 0, pointCount: 0 });
+  if (permit?.issuerMap) {
+    let supplied; try { supplied = sanitizeIssuerMap(permit.issuerMap, permit); } catch (error) { return empty(error.message); }
+    const paths = [], issues = []; let path;
+    for (const points of supplied.paths) {
+      path = null;
+      for (let i = 1; i < points.length; i++) {
+        const a=points[i-1],b=points[i],distance=meters(a,b);
+        if (distance > 5000) { issues.push('A sparse segment was omitted. No road is drawn across the gap.'); path=null; }
+        else if (distance >= .01) { if (path) path.push(b); else {path=[a,b];paths.push(path);} }
+      }
+    }
+    return {available:paths.length>0,paths,issues,total:0,drawn:0,pointCount:supplied.paths[0].length,issuerOverview:true,sourceUrl:supplied.sourceUrl,retrievedAt:supplied.retrievedAt};
+  }
   if (!Array.isArray(steps) || !steps.length || steps.length > 1000) return empty('This QR has no supported route coordinates to plot.');
   const count = steps.reduce((n, step) => n + (Array.isArray(step?.points) ? step.points.length : 0), 0);
   if (count > 100000) return empty('This route exceeds the map preview limit. Nothing was shortened or plotted.');

@@ -110,3 +110,13 @@ test('explicit save-and-plot opens the full preview without setting permit or ge
     assert.equal(JSON.stringify(p),before);
   }finally{env.cleanup();}
 });
+
+test('issuer overview draws and reopens without manufacturing selected turns; altered route clears it',async()=>{
+  const env=environment();try{
+    const p={...blankPermit(),state:'TX',number:'TEST',routeText:'TEST ROAD',entry:{label:'A'},exit:{label:'B'}};
+    p.issuerMap={format:'txpros-issuer-map/v1',sourceUrl:'https://txpros.txdmv.gov/PermitDetails02.aspx?PermitID=10000001&QRUSER=1',permitNumber:'TEST',routeText:p.routeText,entryLabel:'A',exitLabel:'B',retrievedAt:'2026-10-15T12:00:00Z',paths:[[[32,-100],[32.001,-100]]]};
+    const review=createMapReview(),before=JSON.stringify(p);await review.open(p,0,()=>{},{showMap:true});
+    assert.equal(env.state.created,1);assert(env.el('#permit-map-one').disabled);assert(env.el('#permit-map-next').disabled);assert.match(env.el('#permit-map-overview').textContent,/Texas issuer map · 2/);assert.match(env.el('#permit-map-comparison').innerHTML,/Open Texas issuer map/);assert.equal(JSON.stringify(p),before);
+    p.routeText='changed';review.open(p);assert.equal(env.state.removed,1);assert(env.el('#permit-map-show').disabled);assert.match(env.el('#permit-map-comparison').innerHTML,/does not match/);
+  }finally{env.cleanup();}
+});

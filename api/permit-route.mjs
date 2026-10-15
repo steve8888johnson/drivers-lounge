@@ -1,6 +1,9 @@
 import { publicProviderURL, parsePublicProvider } from '../src/assets/permits/provider.mjs';
+import { texasPermitReference } from '../src/assets/permits/issuer-map.mjs';
+import { resolveTexasPermitMap } from '../server/texas-permit-map.mjs';
 const send = (res, status, body) => { res.setHeader('Cache-Control', 'private, no-store'); res.statusCode = status; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(body)); };
 export async function resolvePermitURL(raw, fetcher = fetch) {
+  if (texasPermitReference(raw)) return resolveTexasPermitMap(raw, fetcher);
   const url = publicProviderURL(raw); if (!url) throw Error('Unsupported route reference. Use the original permit for manual entry.');
   const response = await fetcher(url.href, { redirect: 'manual', credentials: 'omit', signal: AbortSignal.timeout(12000), headers: { Accept: 'application/json' } });
   if ([401, 403].includes(response.status)) throw Error('This issuing service requires authorized access. QR retained; enter the route from the original permit.');

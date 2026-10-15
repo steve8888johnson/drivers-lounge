@@ -22,6 +22,7 @@ import { createMapReview } from './map-review-ui.mjs';
 import { createPrintedRouteReview } from './pdf-route-review-ui.mjs';
 import { qrAction, retainScannedQR } from './qr-flow.mjs';
 import { routeOverview } from './map-review.mjs';
+import { texasPracticeReference } from './issuer-map.mjs';
 
 const $ = selector => document.querySelector(selector);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -187,7 +188,7 @@ function renderSketch(m) {
 function renderRoute() {
   const m = buildMaster(trip, { geometry: true });
   $('#scanned-route-previews').replaceChildren();
-  for (const p of trip.permits.filter(p => p.steps.length)) {
+  for (const p of trip.permits.filter(p => p.steps.length || p.issuerMap)) {
     const button = document.createElement('button'); button.textContent = `View scanned route · ${p.state || 'State needed'} ${p.number || ''}`;
     button.disabled = dirty || watching !== null;
     button.onclick = safe(async () => { speech.stop(); await permitMap.open(p, 0, () => {}, { overview: true, showMap: true }); });
@@ -267,7 +268,7 @@ function renderQRCards(p) {
   let importer, label;
   if (result.kind === 'encoded-route') { label = 'Use encoded route'; importer = async () => result.permit; }
   if (result.kind === 'public-url') { label = 'Import this public route'; importer = () => importPublicQR(result.url); }
-  if (result.kind === 'public-provider') { label = 'Import issued route data'; importer = async () => { const response = await fetch('/api/permit-route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: result.url }), signal: AbortSignal.timeout(15000), cache: 'no-store' }); const data = await response.json(); if (!response.ok) throw Error(data.error || 'Public import unavailable. Use manual entry.'); return data.permit; }; }
+  if (['public-provider','texas-map'].includes(result.kind)) { label = 'Import issued route data'; importer = async () => { const response = await fetch('/api/permit-route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: result.url }), signal: AbortSignal.timeout(25000), cache: 'no-store' }); const data = await response.json(); if (!response.ok) throw Error(data.error || 'Public import unavailable. Use manual entry.'); return data.permit; }; }
   if (importer) { const button = document.createElement('button'); button.className = 'primary'; button.textContent = result.action || label; button.onclick = safe(async () => { if (currentPermit()?.id !== p.id) throw Error('Select the original state permit before importing this QR.'); const context = intakeContext(trip.id, p); button.disabled = true; feedback.textContent = 'Loading route data…'; try { const imported = await importer(); if (!intakeContextMatches(context, trip.id, currentPermit())) throw Error('The load or permit changed while fetching this QR. The result was not applied.'); feedback.textContent = ''; await mergeImport(imported, { plot: true }); } catch (error) { feedback.textContent = error.message || 'Route could not load. QR kept; retry or open the original link.'; } finally { button.disabled = false; } }); el.append(button); }
   if (result.external) { const link = document.createElement('a'); link.href = result.external; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.className = 'qr-issuer-link'; link.textContent = `Open QR link · ${new URL(result.external).hostname}${result.external.startsWith('http:') ? ' (HTTP)' : ''}`; el.append(link); }
   $('#qr-results').append(el);
@@ -564,6 +565,14 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) { pdf
 window.addEventListener('pagehide', () => { pdfAbort?.abort(); stopGuidance(); void stopCamera(); objectURLs.forEach(URL.revokeObjectURL); });
 window.addEventListener('beforeunload', event => { if (dirty) { event.preventDefault(); event.returnValue = ''; } });
 async function launchWallet() {
+  const texas = texasPracticeReference(location.hash);
+  if (texas) {
+    const practice = blankTrip(), permit = blankPermit();
+    practice.name = 'PRACTICE ONLY · Texas QR map'; permit.state = 'TX'; permit.qr = [texas.url]; practice.permits = [permit];
+    await openTrip(practice); switchTab('review');
+    status('Separate Texas practice load created on this device. Tap Load Texas route map, review, then Save & plot. No request was sent yet. Add the original PDF separately for permit review.');
+    return;
+  }
   let lastId = ''; try { lastId = JSON.parse(localStorage.getItem('dl-last-permit-trip') || 'null') || ''; } catch { /* Use the available device trips. */ }
   const launch = walletLaunch(await listTrips(), location.hash, lastId);
   const params = new URLSearchParams(location.hash.slice(1));
