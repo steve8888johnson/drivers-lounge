@@ -1,0 +1,45 @@
+import { pointOK, meters } from './core.mjs';
+
+// Inspect supplied points only. No routing, snapping, geocoding or approval.
+export function mapReview(permit, index = 0) {
+  const steps = Array.isArray(permit?.steps) ? permit.steps : [];
+  if (!steps.length || steps.length > 1000) return { available: false, reason: 'No supported maneuver geometry is saved. A QR reference alone does not contain a route.' };
+  if (!Number.isInteger(index) || index < 0 || index >= steps.length) return { available: false, reason: 'Choose a saved maneuver.' };
+  const step = steps[index] || {}, lines = String(permit.routeText || '').split('\n');
+  const source = Number.isInteger(step.routeLine) && step.routeLine > 0 ? lines[step.routeLine - 1] || '' : '';
+  const points = step.points, issues = [], segments = [];
+  const maxSpacing = permit.geometrySource?.format === 'promiles-public-json/v1' ? 5000 : 500;
+  if (!source.trim()) issues.push('The saved permit line is missing or invalid. Resolve it before confirmation.');
+  if (!String(step.text || '').trim()) issues.push('Maneuver instruction is missing.');
+  if (!String(step.road || '').trim()) issues.push('Road name or number was not supplied. Compare the original road, direction and ramp.');
+  const valid = Array.isArray(points) && points.length >= 2 && points.length <= 20000 && points.every(p => pointOK(p) && Math.abs(p[0]) <= 85.05112878);
+  if (!valid) issues.push('Invalid or missing latitude/longitude points. This maneuver is not drawn.');
+  else {
+    let omitted = 0;
+    for (let i = 1; i < points.length; i++) {
+      const distance = meters(points[i - 1], points[i]);
+      if (distance > maxSpacing || Math.abs(points[i][1] - points[i - 1][1]) > 180) omitted++;
+      else if (distance >= .01) segments.push([points[i - 1].slice(), points[i].slice()]);
+    }
+    if (omitted) issues.push(`${omitted} sparse or unsupported segment(s) are not drawn. No road is invented across the gap.`);
+    if (!segments.length) issues.push('No usable continuous geometry to draw.');
+  }
+  const start = valid ? points[0].slice() : null, end = valid ? points.at(-1).slice() : null;
+  const adjacent = (other, point, side) => {
+    const edge = side === 'previous' ? other?.points?.at(-1) : other?.points?.[0];
+    if (!other) return null;
+    if (!point || !pointOK(edge)) { issues.push(`${side === 'previous' ? 'Previous' : 'Next'} maneuver connection cannot be checked.`); return null; }
+    const gap = meters(point, edge);
+    if (gap > 25) issues.push(`${Math.round(gap)} m gap to ${side} maneuver. Correct the supplied geometry; do not join it with a guessed road.`);
+    return { point: edge.slice(), gap, text: String(other.text || ''), road: String(other.road || '') };
+  };
+  const previous = adjacent(steps[index - 1], start, 'previous'), next = adjacent(steps[index + 1], end, 'next');
+  return { available: true, index, total: steps.length, state: String(permit.state || 'State needed'), number: String(permit.number || ''),
+    source, line: step.routeLine, text: String(step.text || ''), road: String(step.road || ''), lane: String(step.lane || ''),
+    start, end, segments, previous, next, issues, pointCount: valid ? points.length : 0,
+    choices: steps.map((s, i) => ({ index: i, label: `${i + 1}. ${String(s?.text || 'Instruction missing')}` })) };
+}
+
+export const coordinateText = point => pointOK(point) ? `${point[0].toFixed(6)}, ${point[1].toFixed(6)}` : 'Not supplied';
+export const STREET_TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+export const STREET_OPTIONS = Object.freeze({ maxZoom: 19, minZoom: 2, noWrap: true, keepBuffer: 0, updateWhenIdle: true, updateWhenZooming: false, detectRetina: false, referrerPolicy: 'origin', attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors' });

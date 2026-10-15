@@ -18,12 +18,14 @@ import { routeSketch } from './route-sketch.mjs';
 import { coverageMarkup, maneuverChoices } from './route-coverage.mjs';
 import { applySavedPermitSetup, REUSABLE_MEASUREMENTS } from './saved-setup.mjs';
 import { scanPDF } from './pdf-scan.mjs';
+import { createMapReview } from './map-review-ui.mjs';
 
 const $ = selector => document.querySelector(selector);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const crew = new Crew(window.DLBackend);
 const cameraSession = createCameraSession();
 const guidanceSession = createGuidanceSession();
+const permitMap = createMapReview();
 let setupAccount;
 let trip, selected, tab = 'load', dirty = false, watching = null, gpsWatch = null, progress, master, crewTimer, crewBusy = false, lastCrew = 0, camera, cameraTimer, activeState = '', objectURLs = [], guidanceVersion = 0;
 let pdfSelection, pdfAbort;
@@ -189,6 +191,7 @@ function renderWalkthrough(m = buildMaster(trip, { geometry: true })) {
   $('#walkthrough-next').disabled = dirty || !view.available || view.index === view.total - 1;
   $('#walkthrough-speak').disabled = dirty || !view.available || watching !== null;
   $('#walkthrough-source-speak').disabled = dirty || !view.available || watching !== null;
+  $('#walkthrough-map').disabled = dirty || !view.available || watching !== null;
   const choices = !dirty && watching === null ? maneuverChoices(m) : [];
   $('#walkthrough-jump').disabled = !choices.length;
   $('#walkthrough-jump').innerHTML = choices.length ? choices.map((choice, index) => `<option value="${index}">${index + 1}. ${esc(choice.state)} · line ${choice.line} · ${esc(choice.text)}</option>`).join('') : '<option value="">Complete route review first</option>';
@@ -486,6 +489,18 @@ on('#walkthrough-source-speak', 'click', () => {
   const text = parkedSource(walkthrough(buildMaster(trip, { geometry: true }), walkthroughIndex, $('#crew-role').value));
   if (!text) throw Error('Complete the permit and geometry checks first.');
   speech.play(text, { ...voiceSettings(), key: 'parked-source', repeat: true });
+});
+on('#inspect-permit-map', 'click', () => {
+  if (dirty || watching !== null) throw Error('Park and save changes before comparing the map.');
+  const p = currentPermit(); if (!p) throw Error('Select a state permit first.');
+  speech.stop(); permitMap.open(p);
+});
+on('#walkthrough-map', 'click', () => {
+  if (dirty || watching !== null) throw Error('Park and save changes before comparing the map.');
+  const view = walkthrough(buildMaster(trip, { geometry: true }), walkthroughIndex, $('#crew-role').value);
+  if (!view.available) throw Error('Complete the permit and geometry checks first.');
+  const localIndex = view.permit.steps.indexOf(view.step), offset = view.index - localIndex;
+  speech.stop(); permitMap.open(view.permit, localIndex, next => { speech.stop(); walkthroughIndex = offset + next; renderWalkthrough(); });
 });
 on('#finish-trip', 'click', async () => { if (dirty) throw Error('Save or discard changes before completing this move.'); if (!await confirmAction('Mark this permitted move complete? A single-trip permit cannot be used for a second move.', 'Mark complete')) return; stopGuidance('Permitted move marked complete.'); trip.completedAt = new Date().toISOString(); await persist('Move complete. Original permits remain in the inspection wallet.'); if (trip.shared?.owner) await crew.close(trip.shared); renderRoute(); });
 on('#read-warnings', 'click', () => { if (watching !== null || dirty) throw Error('Park and save changes before reviewing notes aloud.'); const p = currentPermit(); if (!p) throw Error('Choose a state permit first.'); speech.play('Parked review of saved notes. ' + ([...warnings(p, trip.profile, $('#crew-role').value), ...hazmatWarnings(trip, p)].join(' ') || 'No restrictions entered. Consult the original permit.'), { ...voiceSettings(), key: 'parked-notes', repeat: true }); });
