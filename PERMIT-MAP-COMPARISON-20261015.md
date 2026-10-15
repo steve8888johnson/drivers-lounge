@@ -31,3 +31,7 @@ Unmodified Leaflet1.9.4 is bundled locally with its BSD2 license and npm SHA512 
 OpenStreetMap standard tiles follow https://operations.osmfoundation.org/policies/tiles/ (checked October15,2026): exact tile endpoint, visible attribution, origin referrer, normal caching, bounded interactive requests, no bulk/offline download. This is a best-effort public service, with no availability guarantee, no truck-specific restriction coverage and no claim that viewing it grants a commercial routing-data license. Before scaling map traffic, reassess service suitability and terms.
 
 Release candidate; record the exact verified production receipt separately.
+
+## Verified production receipt
+
+Live October15 at17:12UTC. Source cb786ca713c94b023a1afb4f3adf2967b55f6285; deployment dpl_7RNXjAkYYkVDd6t3pZBZVLpwkdDu READY and driverslounge.app alias. Remote332tests pass,165JS+4inline syntax,57pages/833references; seven live assets match source. Permit/account HTTP200. accountsEnabled=true/readOnlyBeta=true/permitGuidanceEnabled=false preserved. Real-trip comparison correctly shows no supported geometry and disables street tiles; one empty state placeholder and held guidance remain unchanged. App warning/error list empty; immediate scoped10minute runtime query found no error/fatal logs, not sustained monitoring. Local server stopped/tab closed/viewport reset. No paid service, provider routing, credential/DNS change or real-trip edit.
