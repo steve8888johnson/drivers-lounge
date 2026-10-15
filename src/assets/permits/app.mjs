@@ -19,6 +19,7 @@ import { coverageMarkup, maneuverChoices } from './route-coverage.mjs';
 import { applySavedPermitSetup, REUSABLE_MEASUREMENTS } from './saved-setup.mjs';
 import { scanPDF } from './pdf-scan.mjs';
 import { createMapReview } from './map-review-ui.mjs';
+import { createPrintedRouteReview } from './pdf-route-review-ui.mjs';
 
 const $ = selector => document.querySelector(selector);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -34,6 +35,7 @@ const speech = createSpeech({ synthesis: window.speechSynthesis, Utterance: wind
   onState: state => { $('#permit-speech-status').textContent = state.message; },
   onFailure: message => { if (watching !== null) stopGuidance('Spoken guidance failed. Stop when safe and check the device audio.'); $('#permit-speech-status').textContent = message; }
 });
+const printedRoute = createPrintedRouteReview(() => speech.stop());
 function voiceSettings() { try { return speechPreferences(localStorage); } catch { return speechPreferences(null); } }
 const currentPermit = () => trip?.permits.find(p => p.id === selected);
 function status(text, error = false) { $('#status').textContent = text; $('#status').dataset.error = String(error); }
@@ -110,8 +112,14 @@ function renderList() {
   $('#permit-list').innerHTML = trip.permits.length ? trip.permits.map((p, i) => `<button class="permit-item ${p.id === selected ? 'selected' : ''}" data-permit="${esc(p.id)}"><b>${i + 1}. ${esc(p.state || 'New state')} <span>${esc(p.number)}</span></b><small>${esc(p.entry.label || 'Origin needed')} → ${esc(p.exit.label || 'Destination needed')}</small><small>${geometryReviewed(p) ? 'Route geometry confirmed' : reviewed(p) ? 'Permit confirmed · geometry needed' : 'Needs your confirmation'}</small></button>`).join('') : '<p class="muted">No permits yet. Add a permit or import its original.</p>';
   document.querySelectorAll('[data-permit]').forEach(b => b.onclick = safe(async () => { if (!await changeGuard()) return; selected = b.dataset.permit; renderReview(); renderList(); switchTab('review'); }));
 }
-function documentRows(p) { return p.documents.map(doc => `<div class="doc-row"><span>${esc(doc.name)}<br><small>${(doc.size / 1024).toFixed(0)} KB · original</small>${doc.scanSummary ? `<br><small>${esc(doc.scanSummary)}</small>` : ''}</span><button data-open-doc="${esc(doc.id)}">Open original</button>${doc.type === 'application/pdf' ? `<button data-scan-pdf="${esc(doc.id)}">Scan PDF QR codes</button>` : ''}</div>`).join(''); }
+function documentRows(p) { return p.documents.map(doc => `<div class="doc-row"><span>${esc(doc.name)}<br><small>${(doc.size / 1024).toFixed(0)} KB · original</small>${doc.scanSummary ? `<br><small>${esc(doc.scanSummary)}</small>` : ''}</span><button data-open-doc="${esc(doc.id)}">Open original</button>${doc.type === 'application/pdf' ? `<button data-scan-pdf="${esc(doc.id)}">Scan PDF QR codes</button><button data-read-route-pdf="${esc(doc.id)}">Read printed route</button>` : ''}</div>`).join(''); }
 function wireDocuments(container) {
+container.querySelectorAll('[data-read-route-pdf]').forEach(button => button.onclick = safe(async () => {
+  if(dirty || watching!==null) throw Error('Park and save changes before reading the original.');
+  const doc=await getDocument(button.dataset.readRoutePdf);
+  if(!doc?.blob || !trip.permits.some(p=>p.documents.some(d=>d.id===doc.id))) throw Error('The original is unavailable for this load.');
+  await printedRoute.open(doc.blob,doc.name);
+}));
 container.querySelectorAll('[data-scan-pdf]').forEach(button => button.onclick = safe(async () => {
   if (dirty) throw Error('Save changes before scanning an original.');
   const permit = trip.permits.find(p => p.documents.some(d => d.id === button.dataset.scanPdf));
