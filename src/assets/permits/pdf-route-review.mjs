@@ -64,6 +64,8 @@ export async function readPDFRoute(file,{signal,onPage=()=>{}}={}) {
   const pdfjs=await import('../vendor/pdfjs-6.4.299/pdf.min.mjs');
   pdfjs.GlobalWorkerOptions.workerSrc=new URL('../vendor/pdfjs-6.4.299/pdf.worker.min.mjs',import.meta.url).href;
   const data=new Uint8Array(await file.arrayBuffer()); if(signal?.aborted) throw abort();
+  const pdfSha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',data)),b=>b.toString(16).padStart(2,'0')).join('');
+  if(signal?.aborted)throw abort();
   const task=pdfjs.getDocument({data,isEvalSupported:false,enableXfa:false,useWasm:false,useWorkerFetch:false,disableAutoFetch:true,disableStream:true,stopAtErrors:true,disableWorkerRendering:true,verbosity:0});
   let cancelled=false; const stop=()=>{cancelled=true;void task.destroy().catch(()=>{});};
   signal?.addEventListener('abort',stop,{once:true});const timer=setTimeout(stop,60000);
@@ -72,7 +74,7 @@ export async function readPDFRoute(file,{signal,onPage=()=>{}}={}) {
     const pdf=await task.promise; if(pdf.numPages>40) throw Error('This PDF has more than 40 pages. Read the original; nothing was shortened.');
     const pages=[];
     for(let page=1;page<=pdf.numPages;page++) {if(cancelled)throw abort();onPage(page,pdf.numPages);const p=await pdf.getPage(page);try{const text=await p.getTextContent();pages.push({page,items:text.items});}finally{p.cleanup();}}
-    if(cancelled)throw abort();return extractRouteTables(pages);
+    if(cancelled)throw abort();return {...extractRouteTables(pages),pdfSha256};
   } catch(e) {if(cancelled)throw abort();throw e;}
   finally {clearTimeout(timer);signal?.removeEventListener('abort',stop);await task.destroy().catch(()=>{});}
 }
