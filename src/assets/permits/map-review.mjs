@@ -1,7 +1,7 @@
 import { pointOK, meters } from './core.mjs';
 
 // Inspect supplied points only. No routing, snapping, geocoding or approval.
-export function mapReview(permit, index = 0) {
+export function mapReview(permit, index = 0, { choices = true } = {}) {
   const steps = Array.isArray(permit?.steps) ? permit.steps : [];
   if (!steps.length || steps.length > 1000) return { available: false, reason: 'No supported maneuver geometry is saved. A QR reference alone does not contain a route.' };
   if (!Number.isInteger(index) || index < 0 || index >= steps.length) return { available: false, reason: 'Choose a saved maneuver.' };
@@ -37,7 +37,29 @@ export function mapReview(permit, index = 0) {
   return { available: true, index, total: steps.length, state: String(permit.state || 'State needed'), number: String(permit.number || ''),
     source, line: step.routeLine, text: String(step.text || ''), road: String(step.road || ''), lane: String(step.lane || ''),
     start, end, segments, previous, next, issues, pointCount: valid ? points.length : 0,
-    choices: steps.map((s, i) => ({ index: i, label: `${i + 1}. ${String(s?.text || 'Instruction missing')}` })) };
+    choices: choices ? steps.map((s, i) => ({ index: i, label: `${i + 1}. ${String(s?.text || 'Instruction missing')}` })) : [] };
+}
+
+// Display imported geometry before review, without granting navigation readiness.
+// Preserve every gap and maneuver boundary; never connect endpoints ourselves.
+export function routeOverview(permit) {
+  const steps = permit?.steps;
+  const empty = reason => ({ available: false, paths: [], issues: [reason], total: 0, drawn: 0, pointCount: 0 });
+  if (!Array.isArray(steps) || !steps.length || steps.length > 1000) return empty('This QR has no supported route coordinates to plot.');
+  const count = steps.reduce((n, step) => n + (Array.isArray(step?.points) ? step.points.length : 0), 0);
+  if (count > 100000) return empty('This route exceeds the map preview limit. Nothing was shortened or plotted.');
+  const paths = [], issues = []; let drawn = 0;
+  steps.forEach((step, index) => {
+    const view = mapReview(permit, index, { choices: false });
+    if (view.segments.length) drawn++;
+    for (const issue of view.issues) issues.push(`Instruction ${index + 1}: ${issue}`);
+    let path;
+    for (const [a, b] of view.segments) {
+      if (path && path.at(-1)[0] === a[0] && path.at(-1)[1] === a[1]) path.push(b);
+      else { path = [a, b]; paths.push(path); }
+    }
+  });
+  return { available: paths.length > 0, paths, issues, total: steps.length, drawn, pointCount: count };
 }
 
 export const coordinateText = point => pointOK(point) ? `${point[0].toFixed(6)}, ${point[1].toFixed(6)}` : 'Not supplied';

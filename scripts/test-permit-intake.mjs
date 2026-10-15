@@ -9,11 +9,37 @@ import { reviewFixture } from './fixtures/permitted-review.mjs';
 import { readFileSync } from 'node:fs';
 import jsQR from '../src/assets/vendor/jsQR-1.4.0.js';
 import { decodePhotoPixels } from '../src/assets/permits/qr-scan.mjs';
+import { qrAction, retainScannedQR } from '../src/assets/permits/qr-flow.mjs';
 
 // Synthetic values only. Real carrier details and private permit references stay
 // outside the repository; these reproduce the observed structure, not the load.
 const infoQR = 'Permit No: 10000001\r\nStart Date: 10/14/2026\r\nEnd Date: 10/20/2026\r\nDot No: 1000000\r\nPlate No: TEST001\r\nVIN: 00001\r\nPhone: 5550100000';
 const texasInfoQR = 'http://txpros.txdmv.gov/PermitDetails02.aspx?PermitID=10000001&QRUSER=1';
+
+test('scan result distinguishes geometry, route text and identification without inventing a route',()=>{
+  const raw=JSON.stringify({schema:'dl-permit-route/v1',permit:{routeText:'Synthetic test',steps:[{routeLine:1,text:'Synthetic test',points:[[40,-111],[40.001,-111]]}]}});
+  assert.equal(qrAction(raw).title,'Route coordinates found');assert.equal(qrAction(raw).action,'Review & plot route');
+  const text=JSON.stringify({schema:'dl-permit-route/v1',permit:{routeText:'Synthetic test'}});
+  assert.match(qrAction(text).title,/no coordinates/);
+  assert.equal(qrAction(infoQR).action,undefined);assert.equal(qrAction(infoQR).external,null);
+  assert.equal(qrAction(texasInfoQR).external,texasInfoQR);assert.equal(qrAction(texasInfoQR).action,undefined);
+});
+test('QR display never turns active content or private URL schemes into an external-link action',()=>{
+  for(const raw of ['javascript:alert(1)','data:text/html,test','file:///private.pdf','https://localhost/route','https://user:password@example.com/route',texasInfoQR.replace('txpros.txdmv.gov','evil.test')]) assert(!qrAction(raw).external);
+  assert.equal(qrAction('https://example.com/route').external,'https://example.com/route');
+});
+
+test('PDF scan capacity preserves older QR references and counts omitted codes honestly',()=>{
+  const existing=Array.from({length:19},(_,i)=>`saved-${i}`),before=[...existing];
+  const result=retainScannedQR(existing,[{raw:'saved-0'},{raw:'new-one'},{raw:'new-two'},{raw:'new-one'}]);
+  assert.equal(result.references.length,20);assert.equal(result.retained,2);assert.equal(result.omitted,1);
+  assert.equal(result.references.at(-1),'new-one');assert.deepEqual(existing,before);
+});
+test('invalid QR scan output cannot partly update a saved reference list',()=>{
+  const saved=['original'];
+  assert.throws(()=>retainScannedQR(saved,[{raw:'good'},{raw:'x'.repeat(50001)}]),/Unsupported/);
+  assert.deepEqual(saved,['original']);assert.deepEqual(retainScannedQR(saved,[]).references,saved);
+});
 test('identification-only QR never supplies a route, issuer or movement dates', () => {
   for (const text of [infoQR,infoQR.replaceAll('\r\n','\n')]) {
     const result=classifyQR(text);

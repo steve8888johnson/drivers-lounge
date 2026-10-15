@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { mapReview, coordinateText, STREET_TILES, STREET_OPTIONS } from '../src/assets/permits/map-review.mjs';
+import { mapReview, routeOverview, coordinateText, STREET_TILES, STREET_OPTIONS } from '../src/assets/permits/map-review.mjs';
 import { blankPermit, geometryErrors } from '../src/assets/permits/core.mjs';
 import { createMapReview } from '../src/assets/permits/map-review-ui.mjs';
 const permit = () => ({ ...blankPermit(), state:'UT', number:'SYNTHETIC', routeText:'Use I-15 north\nTake the issued exit', steps:[
@@ -53,7 +53,7 @@ test('tile requests have explicit attribution and origin-only referrer without p
 
 function environment() {
   const elements=new Map(), events={}, tileEvents={}, state={removed:0,created:0,fail:false};
-  const el=id=>{if(!elements.has(id))elements.set(id,{textContent:'',innerHTML:'',value:'',hidden:true,disabled:false,open:false,addEventListener(n,f){this[n]=f;},showModal(){this.open=true;}});return elements.get(id);};
+  const el=id=>{if(!elements.has(id))elements.set(id,{textContent:'',innerHTML:'',value:'',hidden:true,disabled:false,open:false,setAttribute(n,v){this[n]=v;},addEventListener(n,f){this[n]=f;},showModal(){this.open=true;}});return elements.get(id);};
   const L={map(){if(state.fail)throw Error('Test map unavailable');state.created++;return {remove(){state.removed++;},invalidateSize(){},fitBounds(){}};},layerGroup(){return {addTo(){return this;},clearLayers(){}};},polyline(){return {addTo(){}};},circleMarker(){return {bindTooltip(){return this;},addTo(){}};},latLngBounds(x){return x;},tileLayer(){return {on(n,f){tileEvents[n]=f;return this;},addTo(){return this;}};}};
   const oldDoc=globalThis.document,oldWin=globalThis.window;
   globalThis.document={hidden:false,querySelector:el,addEventListener(n,f){events[n]=f;}};
@@ -80,5 +80,33 @@ test('zoom or pan loading revokes loaded status and preserves failures until reo
     const review=createMapReview();review.open(permit());await env.el('#permit-map-show').onclick();env.tileEvents.load();assert.match(env.el('#permit-map-status').textContent,/context loaded/);
     env.tileEvents.loading();assert.match(env.el('#permit-map-status').textContent,/coverage is incomplete/);env.tileEvents.tileerror();env.tileEvents.load();assert.match(env.el('#permit-map-status').textContent,/failed to load/);
     review.open(permit());const old=env.el('#permit-map-status').textContent;env.tileEvents.loading();assert.equal(env.el('#permit-map-status').textContent,old);
+  }finally{env.cleanup();}
+});
+
+test('full imported route preview preserves gaps and never creates a state connection or approval',()=>{
+  const p=permit();p.steps[0].points.push([41,-111],[41.001,-111]);
+  const before=JSON.stringify(p), result=routeOverview(p);
+  assert(result.available);assert.equal(result.drawn,2);assert.equal(result.paths.length,3);
+  assert.deepEqual(result.paths[0],[[40,-111],[40.001,-111]]);
+  assert.deepEqual(result.paths[1],[[41,-111],[41.001,-111]]);
+  assert(result.issues.some(x=>x.includes('gap')));assert(result.issues.some(x=>x.includes('not drawn')));
+  assert.equal(JSON.stringify(p),before);assert(!('ready' in result));assert.equal(p.geometryReview,null);
+});
+test('overview rejects excessive data and omits invalid or sparse geometry without hiding the failure',()=>{
+  assert(!routeOverview(null).available);assert(!routeOverview(blankPermit()).available);
+  const p=permit();p.steps[0].points=[[40,-111],[42,-111]];
+  let result=routeOverview(p);assert(result.available);assert.equal(result.drawn,1);assert.equal(result.total,2);assert(result.issues.length);
+  p.steps[1].points=[[90,0],[90,1]];assert(!routeOverview(p).available);
+  p.steps[0].points=Array(100001).fill([40,-111]);assert.match(routeOverview(p).issues[0],/limit/);
+});
+test('explicit save-and-plot opens the full preview without setting permit or geometry confirmations',async()=>{
+  const env=environment();try{
+    const p=permit(),before=JSON.stringify(p),review=createMapReview();
+    await review.open(p,0,()=>{},{overview:true,showMap:true});
+    assert.equal(env.state.created,1);assert.equal(env.el('#permit-map-all')['aria-pressed'],'true');
+    assert.match(env.el('#permit-map-overview').textContent,/2 of 2/);assert.match(env.el('#permit-map-overview').textContent,/does not activate guidance/);
+    env.el('#permit-map-next').onclick();assert(env.el('#permit-map-overview').hidden);
+    env.el('#permit-map-all').onclick();assert(!env.el('#permit-map-overview').hidden);
+    assert.equal(JSON.stringify(p),before);
   }finally{env.cleanup();}
 });

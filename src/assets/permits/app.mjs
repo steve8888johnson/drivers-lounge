@@ -20,6 +20,8 @@ import { applySavedPermitSetup, REUSABLE_MEASUREMENTS } from './saved-setup.mjs'
 import { scanPDF } from './pdf-scan.mjs';
 import { createMapReview } from './map-review-ui.mjs';
 import { createPrintedRouteReview } from './pdf-route-review-ui.mjs';
+import { qrAction, retainScannedQR } from './qr-flow.mjs';
+import { routeOverview } from './map-review.mjs';
 
 const $ = selector => document.querySelector(selector);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -184,6 +186,13 @@ function renderSketch(m) {
 }
 function renderRoute() {
   const m = buildMaster(trip, { geometry: true });
+  $('#scanned-route-previews').replaceChildren();
+  for (const p of trip.permits.filter(p => p.steps.length)) {
+    const button = document.createElement('button'); button.textContent = `View scanned route · ${p.state || 'State needed'} ${p.number || ''}`;
+    button.disabled = dirty || watching !== null;
+    button.onclick = safe(async () => { speech.stop(); await permitMap.open(p, 0, () => {}, { overview: true, showMap: true }); });
+    $('#scanned-route-previews').append(button);
+  }
   $('#route-coverage').innerHTML = dirty ? '<p>Save changes before comparing route-line coverage.</p>' : coverageMarkup(m.permits);
   $('#route-readiness').textContent = m.ready ? 'Ready for parked review' : 'Needs review';
   $('#state-chain').innerHTML = m.permits.map(p => `<div class="state-stop"><strong>${esc(p.state || '?')}</strong><small>${esc(p.number || 'Permit needed')}</small></div>`).join('<span aria-hidden="true">→</span>');
@@ -218,10 +227,13 @@ function renderWallet() {
 function render() { renderLoad(); renderList(); renderReview(); renderRoute(); renderHazmat(trip); if (tab === 'wallet') renderWallet(); }
 async function openTrip(value) { stopGuidance(); stopCamera(); trip = value; trip.hazmat ??= blankHazmat(); selected = trip.permits[0]?.id; dirty = false; walkthroughIndex = 0; mapFocus = false; $('#crew-role').value = trip.shared?.role || trip.localRole || 'driver'; $('#share-consent').checked = false; $('#conditions-checked').checked = false; $('#crew-members').textContent = ''; $('#crew-positions').textContent = ''; $('#invite-code').textContent = ''; $('#cache-status').textContent = ''; await persist(); try { localStorage.setItem('dl-last-permit-trip', JSON.stringify(trip.id)); } catch { /* The IndexedDB wallet remains usable without shortcut preferences. */ } render(); switchTab('load'); $('#crew-status').textContent = trip.shared ? 'Saved crew link. Reconnect before sharing location.' : 'Live sharing is off.'; }
 async function ensurePermit() { if (!currentPermit()) { captureDrafts(); edit(); const p = blankPermit(); trip.permits.push(p); selected = p.id; await persist(); renderList(); renderReview(); } return currentPermit(); }
-async function mergeImport(imported) {
+async function mergeImport(imported, { plot = false } = {}) {
   await ensurePermit(); captureDrafts(); const p = currentPermit();
   const preview = previewPermitIntake(p, imported), context = intakeContext(trip.id, p);
   const dialog = $('#permit-import-review');
+  const drawable = plot && routeOverview(preview.next).available;
+  $('#import-review-apply').textContent = drawable ? 'Save & plot route' : 'Save imported text';
+  $('#import-map-note').hidden = !drawable;
   $('#import-change-summary').textContent = `${preview.changes.length} field group(s) change. Maneuvers: ${preview.geometryBefore} saved → ${preview.geometryAfter} after import${preview.geometryChanged ? ' (changed)' : ' (unchanged)'}. Original pages and saved QR references stay in this wallet.`;
   $('#import-review-warnings').innerHTML = preview.warnings.map(w => `<p class="info">${esc(w)}</p>`).join('');
   $('#import-field-changes').innerHTML = preview.changes.map(c => `<details ${c.field === 'routeText' || c.field === 'restrictions' ? 'open' : ''}><summary>${esc(c.label)}</summary><div class="import-comparison"><div><h3>Saved now</h3><pre>${esc(c.before)}</pre></div><div><h3>After applying</h3><pre>${esc(c.after)}</pre></div></div></details>`).join('') || '<p>No saved field text changes. Applying still requires a fresh original review.</p>';
@@ -231,6 +243,8 @@ async function mergeImport(imported) {
   if (!intakeContextMatches(context, trip.id, currentPermit())) throw Error('The selected load or permit changed during review. Read the QR again; the proposed changes were not applied.');
   edit(); trip.permits[trip.permits.indexOf(p)] = preview.next;
   await persist('Imported draft. Confirm every extracted field against the original.'); renderList(); renderReview();
+  if (drawable) { switchTab('route'); await permitMap.open(currentPermit(), 0, () => {}, { overview: true, showMap: true }); }
+  else if (plot) status('Route text saved. This import has no drawable route coordinates; keep the original and obtain a supported route export.');
 }
 async function handleQR(raw) {
   if (typeof raw !== 'string' || !raw.trim() || raw.length > 50000) throw Error('QR contents are empty or too large. Keep the original and enter its route manually.');
@@ -243,33 +257,46 @@ async function handleQR(raw) {
 function renderQRCards(p) {
   $('#qr-results').replaceChildren();
   for (const [index, raw] of p.qr.entries()) {
-  const result = classifyQR(raw);
-  const el = document.createElement('div'); el.className = 'info'; const text = document.createElement('p'); text.textContent = `Saved QR ${index + 1} · ` + (result.message || 'Encoded permit route ready to import; not yet confirmed.'); el.append(text);
-  const code = document.createElement('pre'); code.className = 'qr-data'; code.textContent = raw; el.append(code);
+  const result = qrAction(raw);
+  const el = document.createElement('div'); el.className = 'info qr-result';
+  const heading = document.createElement('h3'); heading.textContent = `${index + 1}. ${result.title}`; el.append(heading);
+  const text = document.createElement('p'); text.textContent = result.message; el.append(text);
+  const details = document.createElement('details'), summary = document.createElement('summary'); summary.textContent = 'Original QR contents';
+  const code = document.createElement('pre'); code.className = 'qr-data'; code.textContent = raw; details.append(summary, code); el.append(details);
+  const feedback = document.createElement('p'); feedback.setAttribute('role', 'status'); el.append(feedback);
   let importer, label;
   if (result.kind === 'encoded-route') { label = 'Use encoded route'; importer = async () => result.permit; }
   if (result.kind === 'public-url') { label = 'Import this public route'; importer = () => importPublicQR(result.url); }
   if (result.kind === 'public-provider') { label = 'Import issued route data'; importer = async () => { const response = await fetch('/api/permit-route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: result.url }), signal: AbortSignal.timeout(15000), cache: 'no-store' }); const data = await response.json(); if (!response.ok) throw Error(data.error || 'Public import unavailable. Use manual entry.'); return data.permit; }; }
-  if (importer) { const button = document.createElement('button'); button.textContent = label; button.onclick = safe(async () => { if (currentPermit()?.id !== p.id) throw Error('Select the original state permit before importing this QR.'); const context = intakeContext(trip.id, p); button.disabled = true; try { const imported = await importer(); if (!intakeContextMatches(context, trip.id, currentPermit())) throw Error('The load or permit changed while fetching this QR. The result was not applied.'); await mergeImport(imported); } finally { button.disabled = false; } }); el.append(button); }
+  if (importer) { const button = document.createElement('button'); button.className = 'primary'; button.textContent = result.action || label; button.onclick = safe(async () => { if (currentPermit()?.id !== p.id) throw Error('Select the original state permit before importing this QR.'); const context = intakeContext(trip.id, p); button.disabled = true; feedback.textContent = 'Loading route data…'; try { const imported = await importer(); if (!intakeContextMatches(context, trip.id, currentPermit())) throw Error('The load or permit changed while fetching this QR. The result was not applied.'); feedback.textContent = ''; await mergeImport(imported, { plot: true }); } catch (error) { feedback.textContent = error.message || 'Route could not load. QR kept; retry or open the original link.'; } finally { button.disabled = false; } }); el.append(button); }
+  if (result.external) { const link = document.createElement('a'); link.href = result.external; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.className = 'qr-issuer-link'; link.textContent = `Open QR link · ${new URL(result.external).hostname}${result.external.startsWith('http:') ? ' (HTTP)' : ''}`; el.append(link); }
   $('#qr-results').append(el);
   }
 }
-async function attach(files, split = false) {
+async function attach(files, split = false, scanPDFNow = false, decodedCodes = null) {
   if (!files.length) return; edit(); captureDrafts();
   let found = 0, withoutQR = 0, scanFailures = 0, pdfs = 0;
   // Every selection is pages of ONE permit, never one inferred state per page.
   if (split) { const p = blankPermit(); trip.permits.push(p); selected = p.id; renderReview(); }
   for (const file of files) {
     const p = await ensurePermit();
-    await addDocument(trip, p, file); renderReview();
-    if (file.type.startsWith('image/')) { status('Original saved. Scanning QR codes on this device…'); let codes; try { codes = await scanImage(file); } catch { scanFailures++; codes = null; } if (codes) { for (const code of codes) await handleQR(code); found += codes.length; if (!codes.length) withoutQR++; } }
-    else pdfs++;
+    const doc = await addDocument(trip, p, file); renderReview();
+    if (file.type.startsWith('image/')) { status('Original saved. Scanning QR codes on this device…'); let codes; try { codes = decodedCodes || await scanImage(file); } catch { scanFailures++; codes = null; } if (codes) { for (const code of codes) await handleQR(code); found += codes.length; if (!codes.length) withoutQR++; } }
+    else if (scanPDFNow) {
+      await persist(); pdfSelection = { tripId: trip.id, permitId: p.id, docId: doc.id };
+      $('#pdf-scan-name').textContent = doc.name; $('#pdf-start-page').value = '1'; $('#pdf-scan-dialog').showModal();
+      const result = await runPDFScan();
+      found += result?.retained || 0;
+      if (result?.scanComplete && result.retained > 0 && result.retained === result.codes.length) $('#pdf-scan-dialog').close();
+      else { pdfs++; break; }
+    } else pdfs++;
   }
   await persist(); renderList(); switchTab('review');
   status(`${files.length} original file(s) saved for this permit. ${found} QR result(s) retained. ${withoutQR ? `${withoutQR} photo(s) had no readable QR. ` : ''}${scanFailures ? `${scanFailures} photo scan(s) failed; originals are saved. Try a closer QR photo. ` : ''}${pdfs ? 'PDFs are saved. Tap Scan PDF QR codes beside each original. ' : ''}Choose a saved QR import action and check every original page.`);
+  if (found && !$('#pdf-scan-dialog').open) $('#qr-results').scrollIntoView({ block: 'start' });
 }
 async function stopCamera() { cameraSession.cancel(); clearTimeout(cameraTimer); camera?.getTracks().forEach(track => track.stop()); camera = null; $('#qr-video').srcObject = null; $('#qr-video').hidden = true; $('#camera-stop').hidden = true; $('#camera-start').disabled = false; }
-on('#pdf-scan-run', 'click', async () => {
+async function runPDFScan() {
   const selectedPDF = pdfSelection, p = currentPermit();
   if (!selectedPDF || dirty || selectedPDF.tripId !== trip.id || selectedPDF.permitId !== p?.id) throw Error('Load changed. Reopen the original to scan.');
   const startPage = Number($('#pdf-start-page').value);
@@ -284,12 +311,8 @@ on('#pdf-scan-run', 'click', async () => {
       onPage: page => { $('#pdf-scan-status').textContent = `Page ${page.page} of ${page.totalPages} · ${page.status === 'scanning' ? 'scanning locally…' : page.status === 'failed' ? 'could not scan; check original' : page.status === 'qr-found' ? `${page.count} QR code(s) found` : 'no readable QR found'}`; }
     });
     if (!intakeContextMatches(context, trip.id, currentPermit())) throw Error('The load or original changed. Scan results were not applied.');
-    let retained = 0;
-    for (const code of result.codes) {
-      if (p.qr.includes(code.raw)) { retained++; continue; }
-      if (p.qr.length >= 20) continue;
-      p.qr.push(code.raw); retained++;
-    }
+    const { references, retained } = retainScannedQR(p.qr, result.codes);
+    p.qr = references;
     const summary = `${result.pages.length} of ${result.totalPages} PDF pages checked from page ${result.startPage}; ${result.pages.filter(page => page.status === 'failed').length} scan failure(s); ${retained} unique QR reference(s) retained${result.stopped ? '; stopped early' : ''}.`;
     edit(); p.documents.find(d => d.id === selectedPDF.docId).scanSummary = summary;
     p.review = null; p.geometryReview = null;
@@ -297,9 +320,11 @@ on('#pdf-scan-run', 'click', async () => {
     $('#pdf-scan-status').textContent = summary;
     $('#pdf-scan-result').textContent = result.pages.map(page => `Page ${page.page}: ${page.status === 'failed' ? 'SCAN FAILED — check original / use QR photo' : page.status === 'qr-found' ? `${page.count} QR code(s) found` : 'No readable QR — inspect original'}`).join('\n') + `\n${result.nextPage ? `Pages remain. Start at page ${result.nextPage} to continue; failed pages need a separate retry.` : 'Every scanned page still requires original review.'}${retained < result.codes.length ? '\nQR storage limit reached. Some codes were not retained; keep the original.' : ''}\nQR codes are references only until reviewed. No permit text, route or approval was applied.`;
     if (result.nextPage) $('#pdf-start-page').value = String(result.nextPage);
+    return { ...result, retained };
   } catch (error) { $('#pdf-scan-status').textContent = error.message; }
   finally { if (pdfAbort === controller) pdfAbort = null; $('#pdf-scan-run').disabled = false; $('#pdf-start-page').disabled = false; $('#pdf-scan-stop').disabled = true; }
-});
+}
+on('#pdf-scan-run', 'click', runPDFScan);
 $('#pdf-scan-stop').onclick = () => pdfAbort?.abort();
 $('#pdf-scan-dialog').addEventListener('close', () => pdfAbort?.abort());
 async function startCamera() {
@@ -314,7 +339,7 @@ async function startCamera() {
   try { await video.play(); } catch { await stopCamera(); throw Error('Camera preview could not start. Use Scan QR photo instead.'); }
   const scan = async () => {
     if (!camera || !cameraSession.current(token, trip.id, selected)) return;
-    try { const canvas = document.createElement('canvas'); canvas.width = Math.min(1280, video.videoWidth); canvas.height = Math.round(video.videoHeight * canvas.width / video.videoWidth); if (canvas.width && canvas.height) { canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height); const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png')); const codes = await scanImage(blob); if (!camera || !cameraSession.current(token, trip.id, selected)) return; if (codes.length) { const file = new File([blob], 'permit-qr-capture.png', { type: 'image/png' }); await stopCamera(); await safe(() => attach([file]))({type:'capture'}); return; } } }
+    try { const canvas = document.createElement('canvas'); canvas.width = Math.min(1280, video.videoWidth); canvas.height = Math.round(video.videoHeight * canvas.width / video.videoWidth); if (canvas.width && canvas.height) { canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height); const codes = await scanCanvas(canvas); if (!camera || !cameraSession.current(token, trip.id, selected)) return; if (codes.length) { const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png')); if (!blob || !cameraSession.current(token, trip.id, selected)) return; const file = new File([blob], 'permit-qr-capture.png', { type: 'image/png' }); await stopCamera(); await safe(() => attach([file], false, false, codes))({type:'capture'}); return; } } }
     catch (e) { if (cameraSession.current(token, trip.id, selected)) { await stopCamera(); status(e.message, true); } return; }
     cameraTimer = setTimeout(scan, 800);
   }; void scan();
@@ -472,7 +497,12 @@ on('#decode-qr', 'click', async () => { const raw = $('#qr-contents').value.trim
 on('#extract-text', 'click', async () => { const text = $('#permit-text').value; if (!text.trim()) throw Error('Paste the original permit text first.'); await mergeImport(parsePermitText(text)); });
 on('#import-originals', 'change', async e => { const files = [...e.target.files]; e.target.value = ''; await attach(files, true); });
 on('#add-pages', 'change', async e => { const files = [...e.target.files]; e.target.value = ''; await attach(files); });
-on('#qr-photo', 'change', async e => { const files = [...e.target.files]; e.target.value = ''; await attach(files); });
+on('#qr-photo', 'change', async e => { const files = [...e.target.files]; e.target.value = ''; await attach(files, false, true); });
+async function openScanner() {
+  await ensurePermit(); switchTab('review');
+  $('#permit-scanner').open = true; $('#permit-scanner').scrollIntoView({ block: 'start' }); $('#camera-start').focus({ preventScroll: true });
+}
+on('#scan-permit-shortcut', 'click', openScanner);
 on('#camera-start', 'click', startCamera); on('#camera-stop', 'click', stopCamera);
 for (const [selector, focus] of [['#map-full', false], ['#map-selected', true]]) on(selector, 'click', () => { mapFocus = focus; renderWalkthrough(); });
 on('#start-guidance', 'click', startGuidance); on('#stop-guidance', 'click', () => stopGuidance());
@@ -545,6 +575,10 @@ async function launchWallet() {
   }
   await openTrip(next); switchTab(launch.missing ? 'load' : launch.tab);
   status(handoff ? 'New permit draft prepared. Places are planning notes only. Add actual dimensions and all issued permits when available.' : launch.missing ? 'The linked trip is not saved on this device. Showing another available load; check the load name or import its backup before proceeding.' : 'Private device wallet ready. Create a load and import every state permit.', launch.missing);
+  if (new URLSearchParams(location.search).get('scan') === '1' && !launch.missing) {
+    history.replaceState(null, '', location.pathname + location.hash);
+    await openScanner();
+  }
 }
 window.addEventListener('hashchange', safe(async () => { const params = new URLSearchParams(location.hash.slice(1)); if (!['trip','tab','new'].some(key => params.has(key))) return; if (await changeGuard()) await launchWallet(); else switchTab(tab); }));
 try { await launchWallet(); connection(); if ('serviceWorker' in navigator) void navigator.serviceWorker.register('/sw.js').catch(() => {}); }
