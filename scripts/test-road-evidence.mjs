@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {rowIdentity,readRoadEvidence,evidenceForRow,nearestRoadPoint,connectionEvidence} from '../src/assets/permits/road-evidence.mjs';
+import {sourcePiece,readMovements,compassOrder} from '../src/assets/permits/road-movement.mjs';
 import {createRoadEvidence} from '../src/assets/permits/road-evidence-ui.mjs';
 const review=()=>({state:'TX',pdfSha256:'a'.repeat(64),issues:[],rows:[{page:3,road:'IH35 s',instruction:'Take Exit 12',miles:'1.0',cumulative:'2.0'},{page:4,road:'IH35 Ramp s',instruction:'Continue on frontage road',miles:'0.3',cumulative:'2.3'}]});
 const packet=()=>({format:'dl-road-evidence/v1',pdfSha256:'a'.repeat(64),state:'TX',rowCount:2,rows:[{index:0,identity:rowIdentity(review(),0),source:'https://example.gov/roads',retrievedAt:'2026-10-15T12:00:00Z',dataDate:'2026-10-01',note:'Proximity only',features:[{id:'1',road:'IH0035-RP',kind:'Ramp',direction:'Unknown',paths:[[[32,-97],[32.001,-97.001]]]}]}]});
@@ -33,7 +34,7 @@ function environment(){
  const old={document:globalThis.document,window:globalThis.window,Option:globalThis.Option},elements=new Map(),state={removed:0,created:0,fail:false,read:0,stops:0,changes:[],fits:[]};
  const el=id=>{if(!elements.has(id))elements.set(id,{textContent:'',value:'',hidden:true,disabled:false,open:true,children:[],replaceChildren(...children){this.children=children;this.value=children[0]?.value||'';},append(...children){this.children.push(...children);}});return elements.get(id);};
  globalThis.document={hidden:false,querySelector:el,createElement:()=>({textContent:''}),createTextNode:s=>s};globalThis.Option=class{constructor(text,value){this.text=text;this.value=value;}};
- globalThis.window={L:{map(){if(state.fail)throw Error('Map unavailable');state.created++;return {remove(){state.removed++;},fitBounds(bounds){state.fits.push(bounds);}};},layerGroup(){return {addTo(){return this;},clearLayers(){}};},polyline(){return {bindTooltip(){return this;},addTo(){return this;}};},latLngBounds:x=>x}};
+ globalThis.window={L:{map(){if(state.fail)throw Error('Map unavailable');state.created++;return {remove(){state.removed++;},fitBounds(bounds){state.fits.push(bounds);}};},layerGroup(){return {addTo(){return this;},clearLayers(){}};},polyline(){return {bindTooltip(){return this;},addTo(){return this;}};},circleMarker(){return {bindTooltip(){return this;},addTo(){return this;}};},latLngBounds:x=>x}};
  const ui=createRoadEvidence({readRow:()=>state.read++,stopSpeech:()=>state.stops++,changeRow:i=>state.changes.push(i)});ui.reset(review());
  const load=(raw=JSON.stringify(packet()))=>el('#printed-road-file').onchange({target:{files:[{size:raw.length,text:async()=>raw}],value:'file'}});
  return {ui,el,state,load,cleanup(){ui.stop();Object.assign(globalThis,old);}};
@@ -61,4 +62,32 @@ test('stopping an opening map prevents late rendering and automatic restart on r
 
 test('whole-junction view includes alternatives while turn buttons respect source boundaries',async()=>{
  const e=environment();try{const p=packet();p.rows[0].features.push({id:'2',road:'Other branch',kind:'Ramp',direction:'Unknown',paths:[[[32.002,-97.003],[32.004,-97.005]]]});await e.load(JSON.stringify(p));assert(e.el('#printed-road-previous').disabled);e.el('#printed-road-previous').onclick();assert.deepEqual(e.state.changes,[]);e.el('#printed-road-next').onclick();assert.deepEqual(e.state.changes,[1]);await e.el('#printed-road-open').onclick();e.el('#printed-road-fit').onclick();assert.deepEqual(e.state.fits.at(-1),p.rows[0].features.flatMap(f=>f.paths.flat()));e.ui.select(1);assert(e.el('#printed-road-next').disabled);assert(e.el('#printed-road-fit').disabled);e.el('#printed-road-next').onclick();assert.deepEqual(e.state.changes,[1]);}finally{e.cleanup();}
+});
+
+test('interior split retains original vertices and excludes the unused branch in both storage orders',()=>{
+ const path=[[32,-97],[32.001,-97],[32.002,-97],[32.003,-97]];
+ const start={segment:0,fraction:.5},end={segment:1,fraction:.5};
+ assert.deepEqual(sourcePiece(path,start,end),[[32.0005,-97],[32.001,-97],[32.0015,-97]]);
+ assert.deepEqual(sourcePiece(path,end,start),[[32.0015,-97],[32.001,-97],[32.0005,-97]]);
+ assert.throws(()=>sourcePiece(path,start,start));
+ for(const invalid of [{segment:-1,fraction:0},{segment:3,fraction:0},{segment:1,fraction:NaN},{segment:0,fraction:1.1}])assert.throws(()=>sourcePiece(path,start,invalid));
+});
+const candidate=()=>({id:'split',label:'South branch comparison',note:'Signs unverified.',parts:[{featureId:'1',pathIndex:0,start:{segment:0,fraction:0},end:{segment:0,fraction:1}}]});
+test('movement claims cannot set approval or verified direction, even when endpoints coincide',()=>{
+ const f=packet().rows[0].features,m=readMovements([{...candidate(),approved:true,travelDirectionVerified:true}],f)[0];
+ assert.equal(m.approved,false);assert.equal(m.travelDirectionVerified,false);assert.equal(m.parts[0].compass,'northwest');
+ assert.equal(compassOrder([[32,-97],[32.001,-97],[32,-97]]),'loops back near its start');
+});
+test('disconnected, wrong-branch, nonexistent and repeated movement references fail closed',()=>{
+ const features=packet().rows[0].features;features.push({...features[0],id:'2',paths:[[[32.01,-97.01],[32.011,-97.011]]]});
+ for(const mutate of [m=>m.parts[0].featureId='missing',m=>m.parts[0].pathIndex=1,m=>m.parts.push(m.parts[0]),m=>m.parts.push({...m.parts[0],featureId:'2'})]){const m=candidate();mutate(m);assert.throws(()=>readMovements([m],features));}
+ const m=candidate();assert.throws(()=>readMovements([m,m],features));
+});
+test('nearby pieces remain separate without a fabricated line through their gap',()=>{
+ const features=packet().rows[0].features;features.push({...features[0],id:'2',paths:[[[32.00103,-97.001],[32.002,-97.002]]]});
+ const m=candidate();m.parts.push({...m.parts[0],featureId:'2'});const result=readMovements([m],features)[0];
+ assert(result.gaps[0]>3&&result.gaps[0]<4);assert.equal(result.parts.length,2);assert.equal(result.parts[0].path.length,2);assert.equal(result.parts[1].path.length,2);assert.equal(result.approved,false);
+});
+test('candidate selection fits only its referenced pieces, keeps speech manual and exposes direction uncertainty',async()=>{
+ const e=environment();try{const p=packet();p.rows[0].movements=[candidate()];await e.load(JSON.stringify(p));await e.el('#printed-road-open').onclick();assert.match(e.el('#printed-road-detail').textContent,/CANDIDATE COMPARISON/);assert.match(e.el('#printed-road-detail').textContent,/Traffic direction and turn permission remain unverified/);assert.deepEqual(e.state.fits.at(-1),p.rows[0].features[0].paths[0]);assert.equal(e.state.read,0);const stops=e.state.stops;e.el('#printed-road-feature').value='1';e.el('#printed-road-feature').onchange();assert(e.state.stops>stops);assert.match(e.el('#printed-road-detail').textContent,/inventory order, not allowed traffic/);assert.equal(e.state.read,0);}finally{e.cleanup();}
 });

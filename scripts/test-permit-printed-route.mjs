@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {pageLines,extractRouteTables,printedRowSpeech} from '../src/assets/permits/pdf-route-review.mjs';
+import {pageLines,extractRouteTables,printedRowSpeech,pronouncePrintedRoad} from '../src/assets/permits/pdf-route-review.mjs';
 const item=(str,x,y)=>({str,transform:[1,0,0,1,x,y]});
 const line=(y,cells)=>cells.map((s,i)=>item(s,[30,130,230,530,600][i],y));
 const page=(number,rows,title='Texas Oversize/Overweight Single-Trip Permit')=>({page:number,items:[item(title,30,760),...line(700,['Miles','Route','To','Distance','Est. Time']),...rows.flatMap((cells,i)=>line(680-i*20,cells)),item('Final Destination: SYNTHETIC SITE',30,100)]});
@@ -10,7 +10,7 @@ test('continued tables preserve row order, literal road suffixes and source page
 });
 test('wrapped lane and ramp wording is retained rather than replaced by main-road directions',()=>{
   const r=extractRouteTables([page(1,[['< 0.1','SS192 Ramp e','Continue straight on SS192 e','54.90','00:00'],['0.30','US82 se','Merge onto US281 s [HENRY S GRACE','358.60','00:00'],['','','FREEWAY]','','']])]);
-  assert.equal(r.rows[0].miles,'< 0.1');assert.match(r.rows[1].instruction,/HENRY S GRACE FREEWAY/);assert.match(printedRowSpeech(r,0),/less than 0.1/);assert.match(printedRowSpeech(r,0),/PDF page 1/);assert.match(printedRowSpeech(r,0),/SS192 Ramp e/);
+  assert.equal(r.rows[0].miles,'< 0.1');assert.match(r.rows[1].instruction,/HENRY S GRACE FREEWAY/);assert.match(printedRowSpeech(r,0),/less than 0.1/);assert.match(printedRowSpeech(r,0),/PDF page 1/);assert.match(printedRowSpeech(r,0),/State Spur 192 Ramp east/);
 });
 test('Kansas table retains US83 road and does not silently rewrite the destination as road geometry',()=>{
   const r=extractRouteTables([page(2,[['75.46','US-83','Arrive at destination.','76.11','01:22']],'Kansas Overdimension Oversize and/or Overweight Single-Trip')]);assert.equal(r.state,'KS');assert.equal(r.rows[0].road,'US-83');assert.match(printedRowSpeech(r,0),/No position or road match/);
@@ -26,4 +26,13 @@ test('unsupported table row is exposed and never silently omitted from a clean s
 });
 test('position grouping tolerates small baseline variations and arbitrary input order',()=>{
   const p=page(1,[['1.00','SH31 sw','Arrive at destination.','1.00','00:01']]);p.items.reverse();p.items.find(x=>x.str==='SH31 sw').transform[5]+=.5;const r=extractRouteTables([p]);assert.equal(r.rows[0].road,'SH31 sw');assert.deepEqual(r.issues,[]);
+});
+
+test('speech expands known codes without confusing branch letters, street initials or changing the source',()=>{
+ const r=extractRouteTables([page(3,[['0.4','IH35W Connector e','Keep right toward IH35W South/Waco','1.0','00:01']])]);const original=JSON.stringify(r);
+ assert.match(printedRowSpeech(r,0),/Interstate 35 W Connector east/);assert.match(printedRowSpeech(r,0),/Interstate 35 W South\/Waco/);assert.equal(JSON.stringify(r),original);
+ assert.equal(pronouncePrintedRoad('US70WFR se [US287WFR]'),'U.S. Highway 70 west frontage road southeast [U.S. Highway 287 west frontage road]');
+ assert.equal(pronouncePrintedRoad('SH31 sw [FM339] HENRY S GRACE'),'State Highway 31 southwest [Farm to Market Road 339] HENRY S GRACE');
+ assert.equal(pronouncePrintedRoad('IH-35 s SL143 e SS192 e'),'Interstate 35 south State Loop 143 east State Spur 192 east');
+ assert.equal(pronouncePrintedRoad('UNKNOWN34 Exit 368A'),'UNKNOWN34 Exit 368A');
 });

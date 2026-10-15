@@ -15,16 +15,27 @@ export function createRoadEvidence({stopSpeech=()=>{},readRow=()=>{},changeRow=(
   function clearMap(){generation++;map?.remove();map=null;group=null;$('#printed-road-map').hidden=true;$('#printed-road-fit').disabled=true;}
   function selectFeature(){
     selected=$('#printed-road-feature').value;stopSpeech();
+    const movement=row?.movements.find(m=>`movement:${m.id}`===selected);
     const f=row?.features.find(f=>f.id===selected);
-    $('#printed-road-detail').textContent=f?`${f.road} · ${f.kind} · record ${f.id}. Source direction field: ${f.direction||'not supplied'}. This is not proof of travel direction or an allowed turn.`:'';
+    $('#printed-road-detail').textContent=movement?`CANDIDATE COMPARISON — ${movement.label}. ${movement.note} Geometry: ${(movement.lengthMeters/1609.344).toFixed(2)} mi. Drawn order: ${movement.parts.map((p,i)=>`${i+1}: ${p.compass} on record ${p.featureId}`).join('; ')}. Numbers show the comparison order, not driving instructions. Traffic direction and turn permission remain unverified.`:f?`${f.road} · ${f.kind} · record ${f.id}. Inventory reference direction: ${f.direction||'not supplied'}. This field describes inventory order, not allowed traffic direction.`:'';
     if(!map||!row)return;const L=window.L;group.clearLayers();
     for(const feature of row.features){const active=feature.id===selected;const label=document.createElement('span');label.textContent=`${feature.road.replace(/ · inventory \d+$/,'')} · ${feature.kind==='Grade Separated Connector'?'connector':feature.kind}`;L.polyline(feature.paths,{color:active?'#a94c00':'#73849a',weight:active?7:3,opacity:active?1:.65,smoothFactor:0}).bindTooltip(label,{permanent:active,direction:'top'}).addTo(group);}
-    if(f){map.fitBounds(L.latLngBounds(f.paths.flat()),{padding:[30,30],maxZoom:17,animate:false});}
+    if(movement){
+      for(const [i,p]of movement.parts.entries()){
+        const label=document.createElement('span');label.textContent=`${i+1}. ${p.road.replace(/ · inventory \d+$/,'')} · drawn ${p.compass}`;
+        L.polyline(p.path,{color:'#a94c00',weight:7,opacity:1,smoothFactor:0}).bindTooltip(label,{permanent:false,direction:'top'}).addTo(group);
+        const start=document.createElement('span');start.textContent=`${i+1} start`;
+        L.circleMarker(p.path[0],{radius:6,color:'#743600',fillColor:'#fff',fillOpacity:1}).bindTooltip(start,{permanent:true,direction:'top'}).addTo(group);
+      }
+      const end=document.createElement('span');end.textContent='End of comparison';
+      L.circleMarker(movement.parts.at(-1).path.at(-1),{radius:6,color:'#743600',fillColor:'#a94c00',fillOpacity:1}).bindTooltip(end,{permanent:true,direction:'bottom'}).addTo(group);
+      map.fitBounds(L.latLngBounds(movement.parts.flatMap(p=>p.path)),{padding:[35,35],maxZoom:17,animate:false});
+    }else if(f){map.fitBounds(L.latLngBounds(f.paths.flat()),{padding:[30,30],maxZoom:17,animate:false});}
   }
   function render(follow=false){
     clearMap();row=evidenceForRow(packet,review,index);$('#printed-road-open').disabled=!row;$('#printed-road-read').disabled=!row;
     const original=review?.rows[index];$('#printed-road-turn').textContent=row?`PDF page ${original.page} · row ${index+1}: ${original.instruction}`:'';
-    $('#printed-road-feature').replaceChildren(...(row?.features||[]).map(f=>new Option(`${f.road} · ${f.kind} · ${f.id}`,f.id)));
+    $('#printed-road-feature').replaceChildren(...(row?.movements||[]).map(m=>new Option(`Candidate: ${m.label}`,`movement:${m.id}`)),...(row?.features||[]).map(f=>new Option(`${f.road} · ${f.kind} · ${f.id}`,f.id)));
     $('#printed-road-feature').disabled=!row;$('#printed-road-detail').textContent='';
     $('#printed-road-previous').disabled=!review?.rows.length||index===0;$('#printed-road-next').disabled=!review?.rows.length||index===review.rows.length-1;
     $('#printed-road-coverage').textContent=packet?`${packet.rows.length} of ${review.rows.length} printed rows have comparison areas. These are junction windows, not a continuous or approved driving route.`:'';
@@ -45,7 +56,7 @@ export function createRoadEvidence({stopSpeech=()=>{},readRow=()=>{},changeRow=(
   $('#printed-road-fit').onclick=()=>{if(map&&row)map.fitBounds(window.L.latLngBounds(row.features.flatMap(f=>f.paths.flat())),{padding:[24,24],maxZoom:17,animate:false});};
   async function openMap(){
     if(!row)return;wantsMap=true;stopSpeech();clearMap();const token=++generation;$('#printed-road-open').disabled=true;say('Opening the local road geometry…');
-    try{const L=await leaflet();if(token!==generation||document.hidden||!$('#printed-route-dialog').open)return;$('#printed-road-map').hidden=false;map=L.map('printed-road-map',{scrollWheelZoom:false,zoomAnimation:false,fadeAnimation:false,attributionControl:false});group=L.layerGroup().addTo(map);selectFeature();$('#printed-road-fit').disabled=false;say('Amber: selected inventory record. Gray: alternatives/context. No street tiles, GPS, road snapping or approved route. Crossing lines do not establish a legal connection.');}
+    try{const L=await leaflet();if(token!==generation||document.hidden||!$('#printed-route-dialog').open)return;$('#printed-road-map').hidden=false;map=L.map('printed-road-map',{scrollWheelZoom:false,zoomAnimation:false,fadeAnimation:false,attributionControl:false});group=L.layerGroup().addTo(map);selectFeature();$('#printed-road-fit').disabled=false;say('Amber: selected comparison geometry. Gray: alternatives/context. No street tiles, GPS, road snapping or approved route. Crossing lines do not establish a legal connection.');}
     catch(e){if(token===generation){wantsMap=false;clearMap();$('#printed-road-open').disabled=!row;say(e.message);}}
     finally{if(token===generation)$('#printed-road-open').disabled=false;}
   }

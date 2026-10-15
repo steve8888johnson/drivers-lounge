@@ -51,10 +51,19 @@ export function extractRouteTables(pages) {
   return {state:texas?'TX':'KS',rows,tablePages:[...new Set(tablePages)],pageCount:pages.length,issues,geometry:[],approved:false};
 }
 
+// Expand only recognized printed abbreviations for voice; never change the
+// displayed source, infer a maneuver, or read a map candidate as an instruction.
+export function pronouncePrintedRoad(value) {
+  const roads={IH:'Interstate',US:'U.S. Highway',SH:'State Highway',SS:'State Spur',SL:'State Loop',FM:'Farm to Market Road'};
+  const frontages={NFR:'north frontage road',SFR:'south frontage road',EFR:'east frontage road',WFR:'west frontage road'};
+  const directions={n:'north',ne:'northeast',e:'east',se:'southeast',s:'south',sw:'southwest',w:'west',nw:'northwest'};
+  return value.replace(/\b(IH|US|SH|SS|SL|FM)-?(\d+)(NFR|SFR|EFR|WFR|[EW])?\b/g,(_,r,n,s)=>`${roads[r]} ${n}${s?' '+(frontages[s]||s):''}`).replace(/\b(ne|se|sw|nw|n|e|s|w)\b/g,d=>directions[d]);
+}
+
 export function printedRowSpeech(review,index) {
   const row=review?.rows?.[index];
   if(!row || review.issues.length) return null;
-  return `Parked printed route review. ${review.state}. PDF page ${row.page}, route row ${index+1} of ${review.rows.length}. Road column: ${row.road}. Printed segment miles: ${row.miles.startsWith('<')?'less than '+row.miles.slice(1).trim():row.miles}. Instruction: ${row.instruction}. This reads the permit text only. No position or road match has been established.`;
+  return `Parked printed route review. ${review.state}. PDF page ${row.page}, route row ${index+1} of ${review.rows.length}. Road column: ${pronouncePrintedRoad(row.road)}. Printed segment miles: ${row.miles.startsWith('<')?'less than '+row.miles.slice(1).trim():row.miles}. Instruction: ${pronouncePrintedRoad(row.instruction)}. This reads the permit text only. No position or road match has been established.`;
 }
 
 export async function readPDFRoute(file,{signal,onPage=()=>{}}={}) {

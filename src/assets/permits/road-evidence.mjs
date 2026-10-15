@@ -1,5 +1,6 @@
 // Read-only road inventory evidence. Never returns approved geometry or GPS cues.
 import { meters, pointOK } from './core.mjs';
+import { readMovements } from './road-movement.mjs';
 const text=(value,max=1000)=>typeof value==='string'&&value.length<=max;
 const norm=value=>String(value).trim().replace(/\s+/g,' ');
 export function rowIdentity(review,index) {
@@ -34,7 +35,7 @@ export function readRoadEvidence(raw,review) {
       });
       return {id:f.id,road:f.road,kind:f.kind,direction:f.direction,paths};
     });
-    return {index:r.index,identity:r.identity,note:r.note,source:url.href,retrievedAt:r.retrievedAt,dataDate:r.dataDate,features};
+    return {index:r.index,identity:r.identity,note:r.note,source:url.href,retrievedAt:r.retrievedAt,dataDate:r.dataDate,features,movements:readMovements(r.movements,features)};
   });
   return {format:p.format,pdfSha256:p.pdfSha256,state:p.state,rowCount:p.rowCount,rows,approved:false};
 }
