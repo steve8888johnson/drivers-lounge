@@ -15,6 +15,7 @@ import { createGuidanceSession, maneuverCue } from './guidance.mjs';
 import { createSpeech, speechPreferences, parkedInstruction } from './speech.mjs';
 import { createGuidanceWatch } from './gps-watch.mjs';
 import { routeSketch } from './route-sketch.mjs';
+import { coverageMarkup, maneuverChoices } from './route-coverage.mjs';
 import { applySavedPermitSetup, REUSABLE_MEASUREMENTS } from './saved-setup.mjs';
 
 const $ = selector => document.querySelector(selector);
@@ -129,6 +130,7 @@ function renderReview() {
   $('#confidence').textContent = reviewed(p) ? `Confirmed against original ${new Date(p.review.at).toLocaleString()}. Editing invalidates confirmation.` : `Extraction confidence (heuristic, not verification): ${scores.join(' · ') || 'manual entry; unconfirmed'}. Verify every field and the complete route.`;
   $('#geometry-json').value = JSON.stringify(p.steps, null, 2); $('#geometry-checked').checked = false;
   $('#geometry-state').textContent = geometryReviewed(p) ? 'Geometry confirmed against this permit revision.' : 'GPS guidance remains blocked until all route geometry is confirmed.';
+  $('#geometry-coverage').innerHTML = coverageMarkup([p]);
   $('#review-documents').innerHTML = documentRows(p) || '<p class="muted">Add all original route and restriction pages.</p>'; wireDocuments($('#review-documents'));
   $('#qr-contents').value = ''; $('#permit-text').value = ''; renderQRCards(p);
 }
@@ -158,6 +160,7 @@ function renderSketch(m) {
 }
 function renderRoute() {
   const m = buildMaster(trip, { geometry: true });
+  $('#route-coverage').innerHTML = dirty ? '<p>Save changes before comparing route-line coverage.</p>' : coverageMarkup(m.permits);
   $('#route-readiness').textContent = m.ready ? 'Ready for parked review' : 'Needs review';
   $('#state-chain').innerHTML = m.permits.map(p => `<div class="state-stop"><strong>${esc(p.state || '?')}</strong><small>${esc(p.number || 'Permit needed')}</small></div>`).join('<span aria-hidden="true">→</span>');
   $('#route-checks').innerHTML = m.issues.length ? `<p class="info"><strong>${m.issues.length} checks need attention before guidance.</strong><br>${esc(m.issues[0])}</p><details><summary>Review all required checks</summary><ul class="issue-list">${m.issues.map(issue => `<li>${esc(issue)}</li>`).join('')}</ul></details>` : '<p class="good">Saved permit order and geometry connections checked. Walk through the instructions below while parked. Road access and travel conditions still require verification.</p>';
@@ -171,6 +174,10 @@ function renderWalkthrough(m = buildMaster(trip, { geometry: true })) {
   $('#walkthrough-previous').disabled = dirty || !view.available || view.index === 0;
   $('#walkthrough-next').disabled = dirty || !view.available || view.index === view.total - 1;
   $('#walkthrough-speak').disabled = dirty || !view.available || watching !== null;
+  const choices = !dirty && watching === null ? maneuverChoices(m) : [];
+  $('#walkthrough-jump').disabled = !choices.length;
+  $('#walkthrough-jump').innerHTML = choices.length ? choices.map((choice, index) => `<option value="${index}">${index + 1}. ${esc(choice.state)} · line ${choice.line} · ${esc(choice.text)}</option>`).join('') : '<option value="">Complete route review first</option>';
+  if (choices.length) $('#walkthrough-jump').value = String(view.index);
   if (dirty || !view.available) { $('#walkthrough-content').textContent = dirty ? 'Save changes and complete the current route reviews first.' : view.reason; return; }
   walkthroughIndex = view.index;
   $('#walkthrough-content').innerHTML = `<p class="eyebrow">MANEUVER ${view.index + 1} OF ${view.total} · ${esc($('#crew-role').selectedOptions[0].textContent)}</p><h3>${esc(view.step.text)}</h3><p><strong>${view.enteringState ? 'State entry · ' : ''}${esc(view.permit.state)} · ${esc(view.permit.number)}</strong><br>${esc(view.step.road || 'Road not supplied')} · ${esc(view.step.lane || 'Lane guidance not supplied')}<br>${distance(view.meters)} along supplied geometry</p><div class="maneuver-source"><strong>Compare with saved route · line ${view.step.routeLine}</strong><blockquote>${esc(view.source)}</blockquote><p>Saved text must match the original permit. A matching line alone does not verify a turn.</p></div><p>${view.next ? `Next${view.next.permit.id !== view.permit.id ? ' · ' + esc(view.next.permit.state) + ' state entry' : ''}: ${esc(view.next.step.text)}` : 'Final supplied maneuver. Check the permit destination instructions; the end of a line does not confirm site access.'}</p>${view.border ? `<div class="border-review"><h4>Before entering ${esc(view.border.permit.state)}</h4><p>${esc(view.permit.exit.road)} → ${esc(view.border.permit.entry.road)}<br>Next permit: ${esc(view.border.permit.number)}<br>Effective ${esc(view.border.permit.validFrom)} through ${esc(view.border.permit.validTo)} · ${esc(view.border.permit.timeZone)}</p><p>${esc(view.border.clockMessage)}</p><p>${esc(view.border.windowText)}</p><p>${esc(view.border.permit.restrictions || 'No restriction notes copied. Read every original condition page.')}</p><button id="walkthrough-next-original">Open next state's original</button></div>` : ''}${view.alerts.map(a => `<p class="walkthrough-warning">${esc(a)}</p>`).join('')}<button id="walkthrough-original">Open this state in wallet</button>`;
@@ -400,7 +407,7 @@ on('#remove-permit', 'click', async () => { const p = currentPermit(); if (!p ||
 on('#delete-trip', 'click', async () => { if (!await confirmAction('Delete this device copy and its original documents? Export a backup first. This does not close a shared crew trip.', 'Delete device copy')) return; stopGuidance(); await deleteTrip(trip); const all = await listTrips(); await openTrip(all[0] || blankTrip()); });
 on('#order-permits', 'click', async () => { if (dirty) throw Error('Save changes before ordering permits.'); const m = buildMaster(trip); edit(); trip.permits = m.permits; await persist(m.issues.find(i => /order|mismatch|gap|Overlapping/.test(i)) || 'Permits ordered by matching state border crossings.'); renderList(); switchTab('route'); });
 on('#confirm-permit', 'click', async () => { captureDrafts(); const p = currentPermit(); confirmPermit(p); await persist('Permit confirmed against original. Geometry must be reviewed separately.'); renderList(); renderReview(); });
-on('#save-geometry', 'click', async () => { edit(); captureDrafts(); const p = currentPermit(); $('#geometry-json').value = JSON.stringify(p.steps, null, 2); await persist('Geometry saved; check it against every authorized route instruction.'); renderList(); renderRoute(); });
+on('#save-geometry', 'click', async () => { edit(); captureDrafts(); const p = currentPermit(); $('#geometry-json').value = JSON.stringify(p.steps, null, 2); await persist('Geometry saved; check it against every authorized route instruction.'); renderList(); renderReview(); renderRoute(); });
 on('#confirm-geometry', 'click', async () => { if (dirty) throw Error('Save all changed fields and reconfirm the permit before confirming geometry.'); const p = currentPermit(); if (!$('#geometry-checked').checked) throw Error('Check every road, ramp, direction and border against the permit before confirming.'); if (maneuverKey(JSON.parse($('#geometry-json').value)) !== maneuverKey(p.steps)) throw Error('Save geometry changes before confirming.'); confirmGeometry(p); await persist('Geometry confirmed for this permit revision.'); renderList(); renderReview(); renderRoute(); });
 on('#decode-qr', 'click', async () => { const raw = $('#qr-contents').value.trim(); if (!raw) throw Error('Paste QR contents first.'); await handleQR(raw); });
 on('#extract-text', 'click', async () => { const text = $('#permit-text').value; if (!text.trim()) throw Error('Paste the original permit text first.'); await mergeImport(parsePermitText(text)); });
@@ -418,6 +425,12 @@ on('#walkthrough-speak', 'click', () => {
   const text = parkedInstruction(walkthrough(buildMaster(trip, { geometry: true }), walkthroughIndex, $('#crew-role').value));
   if (!text) throw Error('Complete the permit and geometry checks first.');
   speech.play(text, { ...voiceSettings(), key: 'parked-maneuver', repeat: true });
+});
+on('#walkthrough-jump', 'change', () => {
+  if (dirty || watching !== null) throw Error('Park and save changes before reviewing maneuvers.');
+  const m = buildMaster(trip, { geometry: true }), index = Number($('#walkthrough-jump').value);
+  if (!Number.isInteger(index) || !maneuverChoices(m)[index]) throw Error('Complete the current route reviews first.');
+  speech.stop(); walkthroughIndex = index; renderWalkthrough(m);
 });
 on('#stop-permit-speech', 'click', () => speech.stop());
 on('#finish-trip', 'click', async () => { if (dirty) throw Error('Save or discard changes before completing this move.'); if (!await confirmAction('Mark this permitted move complete? A single-trip permit cannot be used for a second move.', 'Mark complete')) return; stopGuidance('Permitted move marked complete.'); trip.completedAt = new Date().toISOString(); await persist('Move complete. Original permits remain in the inspection wallet.'); if (trip.shared?.owner) await crew.close(trip.shared); renderRoute(); });

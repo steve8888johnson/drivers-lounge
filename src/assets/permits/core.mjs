@@ -1,4 +1,5 @@
 import { blankHazmat, blankHazmatRoute, sanitizeHazmat, sanitizeHazmatRoute, hazmatErrors } from './hazmat.mjs';
+import { routeLineCoverage } from './route-coverage.mjs';
 // Permit text is evidence. Geometry is a reviewed transcription, never a new route.
 export const CONTROLLING_NOTICE = 'Drivers Lounge assists with following issued permits. The issued permit and state restrictions remain controlling. Never take an unapproved detour.';
 export const STATES = 'AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC'.split(' ');
@@ -71,6 +72,8 @@ export function geometryErrors(p) {
   const e = [], label = p.number || p.state;
   if (!Array.isArray(p.steps) || !p.steps.length) return [`${label}: reviewed route geometry is needed for GPS guidance.`];
   if (p.steps.length > 1000) return [`${label}: too many maneuvers.`];
+  const coverage = routeLineCoverage(p);
+  if (coverage.missing.length) e.push(`${label}: ${coverage.missing.length} saved route line(s) have no maneuver reference (line${coverage.missing.length > 1 ? 's' : ''} ${coverage.missing.slice(0, 12).join(', ')}${coverage.missing.length > 12 ? ', …' : ''}). Compare the full issued route; do not skip instructions.`);
   p.steps.forEach((s, i) => {
     if (!s.text?.trim() || !Number.isInteger(s.routeLine) || s.routeLine < 1 || s.routeLine > p.routeText.split('\n').length || !p.routeText.split('\n')[s.routeLine - 1]?.trim()) e.push(`${label}: maneuver ${i + 1} needs an instruction and a source route line.`);
     if (!Array.isArray(s.points) || s.points.length < 2 || s.points.length > 20000 || !s.points.every(pointOK)) e.push(`${label}: maneuver ${i + 1} needs detailed latitude/longitude geometry.`);

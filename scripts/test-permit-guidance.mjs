@@ -109,7 +109,7 @@ test('the end of supplied geometry stops guidance without claiming arrival or co
 
 test('maneuvers sharing one printed source line still have separate spoken cue identities', () => {
   const t = fixture([[[40, -100], [40, -99.998]], [[40, -99.998], [40, -99.996]]]);
-  t.permits[0].steps[1].routeLine = 1; confirmGeometry(t.permits[0]); const m = buildMaster(t, { geometry: true });
+  t.permits[0].steps[1].routeLine = 1; t.permits[0].routeText = 'One issued line with two maneuvers'; confirmPermit(t.permits[0]); confirmGeometry(t.permits[0]); const m = buildMaster(t, { geometry: true });
   const a = maneuverCue(locate(m, [40, -99.999])), b = maneuverCue(locate(m, [40, -99.997]));
   assert.equal(a.sourceLine, b.sourceLine); assert.notEqual(a.key, b.key); assert.equal(b.source, t.permits[0].routeText.split('\n')[0]); assert.equal(maneuverCue({ status: 'deviation' }), null);
 });

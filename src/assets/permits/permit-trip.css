@@ -13,3 +13,5 @@ dialog{max-width:min(520px,calc(100vw - 32px));border:1px solid var(--line);bord
 @media(max-width:520px){#route-map .sketch-marker{r:38px}#route-map .sketch-label{font-size:38px}}
 
 #load-measurements{margin:16px 0;border:1px solid #cbd8e6;border-radius:12px;padding:12px}#load-measurements>summary{min-height:48px;display:list-item;line-height:1.6;padding:10px 4px;font-weight:700;cursor:pointer}#load-measurements .form-grid{margin-top:16px}
+
+.coverage-lines{padding-left:28px;max-height:420px;overflow:auto}.coverage-lines li{padding:12px 10px;margin:8px 0;border:1px solid var(--line);border-radius:8px;line-height:1.6;overflow-wrap:anywhere}.coverage-source{display:block;white-space:pre-wrap;font-size:15px}.coverage-lines strong{display:block;font-size:12px;margin-top:8px}.coverage-missing{background:#fff4f3;color:#8c202a}.coverage-state summary{overflow-wrap:anywhere}.coverage-state p{font-size:13px}#walkthrough-jump{min-height:48px;max-width:100%;font-size:16px;margin:8px 0 18px}.coverage-lines:focus-visible{outline:3px solid #b65c00}
