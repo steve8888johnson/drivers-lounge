@@ -18,7 +18,7 @@ export function parseTexasMap(details, geometry, ref, retrievedAt = new Date().t
   if (!Array.isArray(rows) || rows.length < 3 || rows.length > 1002 || rows.some((r,i) => r.SequenceNo !== i) || !Array.isArray(stops) || stops.length !== 2 || stops[0].LegType !== 1 || stops[1].LegType !== 2) throw unavailable();
   const origin = sourceText(rows[0].To, 350).match(/^\[Loaded Route Origin:\s*(.+?)\s*\]$/), destination = sourceText(rows.at(-1).To,350).match(/^\[Loaded Route Destination:\s*(.+?)\s*\]$/);
   if (!origin || !destination || !Array.isArray(g?.LatLons) || g.LatLons.length < 2 || g.LatLons.length > 20000 || JSON.stringify(g.ptsIndices) !== JSON.stringify([g.LatLons.length]) || JSON.stringify(g.legTypes) !== '[1,2]') throw unavailable();
-  const result = blankPermit(); result.state = 'TX'; result.number = String(p.PermitNo); result.timeZone = 'America/Chicago';
+  const result = blankPermit(); result.state = 'TX'; result.number = String(p.PermitNo);
   result.entry.label = origin[1]; result.exit.label = destination[1];
   result.routeText = sourceText(rows.slice(1,-1).map(row => {
     const road = sourceText(row.Route,200,'Issued road'), instruction = sourceText(row.To,1000,'Issued instruction');

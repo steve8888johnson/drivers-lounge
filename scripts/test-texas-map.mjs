@@ -18,7 +18,7 @@ test('phone handoff accepts one bounded Texas reference, never an existing trip 
 });
 test('actual format returns issuer coordinates and literal text, never credentials or GPS maneuvers',()=>{
   const p=parsed();assert.equal(p.issuerMap.paths[0].length,3);assert.equal(p.routeText,'TEST ROAD s · 0.2 mi — Continue to TEST END');assert.equal(p.steps.length,0);assert.equal(p.complete,false);assert.equal(p.review,null);assert.equal(p.validFrom,'');assert(!JSON.stringify(p).includes('DO-NOT-RETURN'));
-  assert.match(geometryErrors(p)[0],/no verified turn positions/);assert(routeOverview(p).issuerOverview);
+  assert.equal(p.timeZone,'');assert.match(geometryErrors(p)[0],/no verified turn positions/);assert(routeOverview(p).issuerOverview);
   p.steps=[{text:'Malicious approval',routeLine:1,points:[[32,-100],[32.002,-100]]}];const t=blankTrip();t.permits=[p];assert.equal(buildMaster(t,{geometry:true}).segments.length,0);assert.equal(sanitizePermit(p).steps.length,0);
 });
 test('mismatched, modified, suspended, multipart and incomplete issuer data reject rather than guessing',()=>{
