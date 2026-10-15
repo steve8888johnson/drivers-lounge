@@ -1,5 +1,5 @@
 (function(){
-const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)],B=window.DLBackend;
+const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)],B=window.DLAccountBackend||window.DLBackend;
 const query=new URLSearchParams(location.search);
 let refreshing=false;
 function msg(text,type='info'){const e=$('#auth-message');if(!e)return;e.textContent=text;e.className='auth-message '+type;e.hidden=false}
@@ -10,6 +10,10 @@ if(!B?.configured){
  msg('This beta does not accept sign-ins, registrations or password resets. You can use the available planning tools without an account. For account help or privacy requests, contact support@atlasdigital.dev.');
  return;
 }
+if(B.accountOnly){
+ $$('[data-full-service-only]').forEach(section=>{section.hidden=true;section.querySelectorAll('input,select,textarea,button').forEach(control=>control.disabled=true)});
+ const onboard=$('#onboarding-form');if(onboard){onboard.hidden=true;msg('Your truck setup is available in Navigation or Permitted loads. Business profile features are not open yet.');}
+}
 function errorMessage(err){
  const code=err?.code||'',text=err?.message||'';
  if(code==='invalid_credentials')return 'Email or password is incorrect. Try again or request a password reset below.';
@@ -19,9 +23,9 @@ function errorMessage(err){
  return text||'That did not work. Please try again.';
 }
 function destination(){
- const candidate=query.get('return')||'/mission-control';
- try{const u=new URL(candidate,location.origin);if(u.origin===location.origin&&!candidate.includes('\\')&&!['/account','/account.html'].includes(u.pathname))return u.pathname+u.search+u.hash}catch(_){}
- return '/mission-control';
+ const fallback=B.accountOnly?'/navigation':'/mission-control',candidate=query.get('return')||fallback;
+ try{const u=new URL(candidate,location.origin);const permitted=!B.accountOnly||['/navigation','/permitted-loads','/delete-account','/privacy','/support','/permit-phone-check'].includes(u.pathname);if(permitted&&u.origin===location.origin&&!candidate.includes('\\')&&!['/account','/account.html'].includes(u.pathname))return u.pathname+u.search+u.hash}catch(_){}
+ return fallback;
 }
 async function loadCommunicationPreferences(user){const f=$('#communication-form');if(!f||!user)return;try{const rows=await B.list('communication_preferences',{eq:{user_id:user.id},limit:1});const p=rows[0]||{};f.elements.email_offers.checked=!!p.email_offers;f.elements.sms_offers.checked=!!p.sms_offers;f.elements.mobile_phone.value=p.mobile_phone||''}catch(_){msg('Your account is signed in, but delivery preferences could not be loaded. Please retry later.','warning')}}
 async function refresh(){
@@ -32,7 +36,7 @@ async function refresh(){
   $$('[data-auth-only]').forEach(x=>x.hidden=!user||recovery);
   $$('[data-guest-only]').forEach(x=>x.hidden=!!user&&(!recovery||!B.authCallback.error));
   if(recovery&&!user)$$('[data-guest-only]').forEach(x=>x.hidden=false);
-  const passwordPanel=$('#password-panel');if(passwordPanel)passwordPanel.hidden=!user;
+  const passwordPanel=$('#password-panel');if(passwordPanel){passwordPanel.hidden=!user;if(recovery&&user)passwordPanel.open=true;}
   if($('#account-title'))$('#account-title').textContent=recovery&&user?'Set your new password':user?'Your account':'Sign in';
   $$('[data-user-email]').forEach(x=>x.textContent=user?.email||'');
   if(user&&$('#account-email'))$('#account-email').textContent=user.email;
@@ -42,13 +46,13 @@ async function refresh(){
    history.replaceState(null,'',location.pathname);
   }else if(recovery){msg(user?'Choose a new password below to finish resetting your account.':'Open the newest password-reset email to continue. If that link has expired, request a new one below.',user?'info':'warning');}
   else if(query.get('confirmed'))msg(user?'Email confirmed. Your account is ready.':'You returned from an email link. Sign in to continue; request a fresh confirmation if needed.','success');
-  if(user&&!recovery)await loadCommunicationPreferences(user);
+  if(user&&!recovery&&!B.accountOnly)await loadCommunicationPreferences(user);
   const onboard=$('#onboarding-form');
-  if(onboard&&user&&!onboard.dataset.loaded){const rows=await B.list('profiles',{eq:{id:user.id},limit:1});const p=rows[0];if(p){onboard.elements.name.value=p.display_name||'';onboard.elements.company.value=p.company_name||'';onboard.elements.role.value=['driver','carrier','pilot_car','business'].includes(p.role)?p.role:'driver';}onboard.dataset.loaded='1';}
+  if(onboard&&user&&!B.accountOnly&&!onboard.dataset.loaded){const rows=await B.list('profiles',{eq:{id:user.id},limit:1});const p=rows[0];if(p){onboard.elements.name.value=p.display_name||'';onboard.elements.company.value=p.company_name||'';onboard.elements.role.value=['driver','carrier','pilot_car','business'].includes(p.role)?p.role:'driver';}onboard.dataset.loaded='1';}
  }catch(err){msg(errorMessage(err),'error')}finally{refreshing=false}
 }
 async function submit(form,label,action){const button=form.querySelector('button[type="submit"],button:not([type])');if(button?.disabled)return;const old=button?.textContent;if(button){button.disabled=true;button.textContent=label}try{await action(new FormData(form))}catch(err){msg(errorMessage(err),'error')}finally{if(button){button.disabled=false;button.textContent=old}}}
-$('#signup-form')?.addEventListener('submit',e=>{e.preventDefault();submit(e.currentTarget,'Creating account…',async f=>{msg('Creating your account…');const {data,error}=await B.signUp(f.get('email'),f.get('password'),{display_name:String(f.get('name')).trim(),role:f.get('role')});if(error)throw error;if(data.session){msg('Account created.','success');location.href=query.has('return')?destination():'/onboarding'}else{msg('Check your email for a confirmation link. If you already have an account, sign in or reset your password.','success');e.target.reset()}})});
+$('#signup-form')?.addEventListener('submit',e=>{e.preventDefault();submit(e.currentTarget,'Creating account…',async f=>{msg('Creating your account…');const {data,error}=await B.signUp(f.get('email'),f.get('password'),{display_name:String(f.get('name')).trim(),role:B.accountOnly?'driver':f.get('role')});if(error)throw error;if(data.session){msg('Account created.','success');location.href=B.accountOnly||query.has('return')?destination():'/onboarding'}else{msg('Check your email for a confirmation link. If you already have an account, sign in or reset your password.','success');e.target.reset()}})});
 $('#login-form')?.addEventListener('submit',e=>{e.preventDefault();submit(e.currentTarget,'Signing in…',async f=>{const {error}=await B.signIn(f.get('email'),f.get('password'));if(error)throw error;msg('Signed in.','success');location.href=destination()})});
 $('#reset-form')?.addEventListener('submit',e=>{e.preventDefault();submit(e.currentTarget,'Sending reset email…',async f=>{await B.reset(f.get('email'));msg('If an account exists for that email, a reset link is on its way. Open the newest email and choose a new password on this page.','success')})});
 $('#resend-form')?.addEventListener('submit',e=>{e.preventDefault();submit(e.currentTarget,'Sending confirmation…',async f=>{await B.resendConfirmation(f.get('email'));msg('If the account needs confirmation, a fresh email is on its way. Use only the newest link.','success')})});
@@ -59,8 +63,8 @@ $('#password-form')?.addEventListener('submit',e=>{e.preventDefault();const form
 })});
 $$('[data-signout]').forEach(b=>b.addEventListener('click',async()=>{try{await B.signOut();location.href='/account'}catch(err){msg(errorMessage(err),'error')}}));
 window.addEventListener('dl-auth-change',()=>setTimeout(refresh,0));
-$('#communication-form')?.addEventListener('submit',async e=>{e.preventDefault();const user=await DLBackend.user();if(!user)return msg('Sign in before saving preferences.','error');const f=new FormData(e.currentTarget),emailOffers=f.get('email_offers')==='on',smsOffers=f.get('sms_offers')==='on',phone=String(f.get('mobile_phone')||'').trim();if(smsOffers&&!phone)return msg('Add a mobile number before enabling text delivery.','error');try{await DLBackend.upsert('communication_preferences',{user_id:user.id,email_offers:emailOffers,sms_offers:smsOffers,mobile_phone:phone||null,updated_at:new Date().toISOString()},'user_id');msg('Saved-offer delivery preferences updated.','success')}catch(err){msg(err.message,'error')}});
-$('#delete-account-form')?.addEventListener('submit',async e=>{e.preventDefault();const user=await DLBackend.user();if(!user)return msg('Sign in before requesting account deletion.','error');const f=new FormData(e.currentTarget);try{await DLBackend.upsert('account_deletion_requests',{user_id:user.id,email:user.email||null,reason:String(f.get('reason')||'').trim()||null,status:'requested'},'user_id');msg('Account deletion request received. You can continue using the app while the request is reviewed.','success');e.currentTarget.reset()}catch(err){msg(err.message,'error')}});
-$('#onboarding-form')?.addEventListener('submit',async e=>{e.preventDefault();const user=await DLBackend.user();if(!user)return msg('Sign in before saving a profile.','error');const f=new FormData(e.currentTarget);const role=e.currentTarget.elements.role.value;const profile={id:user.id,display_name:f.get('name'),company_name:f.get('company')||null};try{await DLBackend.update('profiles',{display_name:profile.display_name,company_name:profile.company_name,onboarding_complete:true},{id:user.id});if(role==='driver'){const passports=await DLBackend.list('driver_passports',{eq:{profile_id:profile.id},limit:1});await DLBackend.upsert('driver_passports',{profile_id:profile.id,user_id:profile.id,cdl_class:f.get('cdl_class'),preferences:{...(passports[0]?.preferences||{}),availability:f.get('availability')}},'profile_id');}localStorage.setItem('dl-role',role);msg('Profile saved.','success');setTimeout(()=>location.href=role==='driver'?'/mission-control':'/portal',600)}catch(err){msg(err.message,'error')}});
+if(!B.accountOnly)$('#communication-form')?.addEventListener('submit',async e=>{e.preventDefault();const user=await B.user();if(!user)return msg('Sign in before saving preferences.','error');const f=new FormData(e.currentTarget),emailOffers=f.get('email_offers')==='on',smsOffers=f.get('sms_offers')==='on',phone=String(f.get('mobile_phone')||'').trim();if(smsOffers&&!phone)return msg('Add a mobile number before enabling text delivery.','error');try{await B.upsert('communication_preferences',{user_id:user.id,email_offers:emailOffers,sms_offers:smsOffers,mobile_phone:phone||null,updated_at:new Date().toISOString()},'user_id');msg('Saved-offer delivery preferences updated.','success')}catch(err){msg(err.message,'error')}});
+$('#delete-account-form')?.addEventListener('submit',async e=>{e.preventDefault();const user=await B.user();if(!user)return msg('Sign in before requesting account deletion.','error');const f=new FormData(e.currentTarget);try{await B.upsert('account_deletion_requests',{user_id:user.id,email:user.email||null,reason:String(f.get('reason')||'').trim()||null,status:'requested'},'user_id');msg('Account deletion request received. You can continue using the app while the request is reviewed.','success');e.currentTarget.reset()}catch(err){msg(err.message,'error')}});
+if(!B.accountOnly)$('#onboarding-form')?.addEventListener('submit',async e=>{e.preventDefault();const user=await B.user();if(!user)return msg('Sign in before saving a profile.','error');const f=new FormData(e.currentTarget);const role=e.currentTarget.elements.role.value;const profile={id:user.id,display_name:f.get('name'),company_name:f.get('company')||null};try{await B.update('profiles',{display_name:profile.display_name,company_name:profile.company_name,onboarding_complete:true},{id:user.id});if(role==='driver'){const passports=await B.list('driver_passports',{eq:{profile_id:profile.id},limit:1});await B.upsert('driver_passports',{profile_id:profile.id,user_id:profile.id,cdl_class:f.get('cdl_class'),preferences:{...(passports[0]?.preferences||{}),availability:f.get('availability')}},'profile_id');}localStorage.setItem('dl-role',role);msg('Profile saved.','success');setTimeout(()=>location.href=role==='driver'?'/mission-control':'/portal',600)}catch(err){msg(err.message,'error')}});
 refresh();
 })();

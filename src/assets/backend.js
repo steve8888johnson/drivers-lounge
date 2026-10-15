@@ -1,14 +1,17 @@
 (function(){
 const cfg=window.DRIVERS_LOUNGE_CONFIG||{};
 const configured=!cfg.readOnlyBeta&&Boolean(cfg.supabaseUrl&&cfg.supabaseAnonKey&&window.supabase);
+const accountsConfigured=(configured||cfg.accountsEnabled===true)&&Boolean(cfg.supabaseUrl&&cfg.supabaseAnonKey&&window.supabase);
 // Capture recovery intent before Supabase consumes and removes the URL fragment.
 const callbackParams=new URLSearchParams(location.hash.slice(1));
 const queryParams=new URLSearchParams(location.search);
 const authCallback={recovery:callbackParams.get('type')==='recovery'||queryParams.get('flow')==='recovery',error:callbackParams.get('error_code')||queryParams.get('error_code')||callbackParams.get('error')||queryParams.get('error')||null};
-const client=configured?window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseAnonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}):null;
-if(client)client.auth.onAuthStateChange((event,session)=>{if(event==='PASSWORD_RECOVERY')authCallback.recovery=true;window.dispatchEvent(new CustomEvent('dl-auth-change',{detail:{event,userId:session?.user?.id||null}}))});
+const sharedClient=accountsConfigured?window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseAnonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}):null;
+if(sharedClient)sharedClient.auth.onAuthStateChange((event,session)=>{if(event==='PASSWORD_RECOVERY')authCallback.recovery=true;window.dispatchEvent(new CustomEvent('dl-auth-change',{detail:{event,userId:session?.user?.id||null}}))});
+// Feature separation, not authorization: database RLS remains the security boundary.
+function backend(client,accountOnly=false){
 function requireClient(){if(!client)throw new Error('Accounts and online submissions are not open in this beta. Email support@atlasdigital.dev for help.');return client}
-window.DLBackend={configured,client,authCallback,
+return {configured:!!client,client,authCallback,accountOnly,
  async session(){if(!client)return null;const {data,error}=await client.auth.getSession();if(error)throw error;return data.session||null},
  async user(){const s=await this.session();return s?.user||null},
  async signUp(email,password,metadata={}){return requireClient().auth.signUp({email:String(email).trim(),password,options:{data:metadata,emailRedirectTo:location.origin+'/account?confirmed=1'}})},
@@ -23,4 +26,14 @@ window.DLBackend={configured,client,authCallback,
  async update(table,values,eq={}){let q=requireClient().from(table).update(values);for(const [k,v] of Object.entries(eq))q=q.eq(k,v);const {data,error}=await q.select();if(error)throw error;return {data:data||[],local:false}},
  async list(table,opts={}){if(!client)return [];let q=client.from(table).select(opts.select||'*').limit(opts.limit||50);if(opts.eq)for(const [k,v] of Object.entries(opts.eq))q=q.eq(k,v);if(opts.order)q=q.order(opts.order,{ascending:opts.ascending===true});const {data,error}=await q;if(error)throw error;return data||[]}
 };
+}
+window.DLBackend=backend(configured?sharedClient:null);
+const accountClient=sharedClient&&cfg.readOnlyBeta?{
+ auth:sharedClient.auth,
+ from(table){
+  if(!['dl_truck_setups','account_deletion_requests'].includes(table))throw new Error('This feature is not open in the account beta.');
+  return sharedClient.from(table);
+ }
+}:sharedClient;
+window.DLAccountBackend=backend(accountClient,!!cfg.readOnlyBeta);
 })();

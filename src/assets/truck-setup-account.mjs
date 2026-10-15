@@ -1,9 +1,10 @@
 import {createSetupSync,setupTransport} from './truck-setup-sync.mjs';
 
 export function mountSetupAccount({element,kind,read,validate,apply,reset=()=>{},automatic=()=>false}) {
-  const B=window.DLBackend,M=window.DLTruckSetupMemory;
+  const B=window.DLAccountBackend||window.DLBackend,M=window.DLTruckSetupMemory;
   element.innerHTML='<strong>Truck setup across devices</strong><p data-status role="status" aria-live="polite"></p><p data-summary></p><div class="setup-actions"><button type="button" data-save>Save setup to account</button><button type="button" data-use>Use account setup</button><button type="button" data-refresh>Check for updates</button><button type="button" data-remove>Delete account setup</button><a href="/account" data-signin>Sign in</a></div><small>Sign in to the same account on your computer and phone. Current load checks and permits remain separate. Permit files and trips stay in this device’s wallet.</small>';
   const $=selector=>element.querySelector(selector),say=text=>$('[data-status]').textContent=text;
+  $('[data-signin]').href='/account?return='+encodeURIComponent(location.pathname+location.search+location.hash);
   const details=document.createElement('details'),summaryControl=document.createElement('summary');summaryControl.textContent='Manage saved setup';details.append(summaryControl);
   details.append($('[data-summary]'),$('.setup-actions'),$('small'));element.append(details);
   let deviceSetup=null;

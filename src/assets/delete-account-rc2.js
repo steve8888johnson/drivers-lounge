@@ -1,5 +1,5 @@
 (async function(){
-const B=window.DLBackend,$=s=>document.querySelector(s),status=$('#delete-status'),guest=$('#delete-guest'),form=$('#delete-web-form'),email=$('#delete-email'),existing=$('#delete-existing'),requestStatus=$('#delete-request-status'),requestDate=$('#delete-request-date'),requestHelp=$('#delete-request-help'),cancelBtn=$('#cancel-delete-request');
+const B=window.DLAccountBackend||window.DLBackend,$=s=>document.querySelector(s),status=$('#delete-status'),guest=$('#delete-guest'),form=$('#delete-web-form'),email=$('#delete-email'),existing=$('#delete-existing'),requestStatus=$('#delete-request-status'),requestDate=$('#delete-request-date'),requestHelp=$('#delete-request-help'),cancelBtn=$('#cancel-delete-request');
 function setStatus(t,bad=false){status.textContent=t;status.style.borderColor=bad?'#c82835':'#315269'}
 function label(value){return String(value||'requested').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}
 function formatDate(value){if(!value)return '';const d=new Date(value);return Number.isNaN(d.getTime())?'':`Requested ${d.toLocaleString()}`}
