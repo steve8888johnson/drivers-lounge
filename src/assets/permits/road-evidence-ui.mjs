@@ -13,6 +13,16 @@ export function createRoadEvidence({stopSpeech=()=>{},readRow=()=>{},changeRow=(
   const $=s=>document.querySelector(s);let packet=null,review=null,index=0,map=null,group=null,row=null,selected='',generation=0,wantsMap=false;
   const say=s=>$('#printed-road-status').textContent=s;
   const checkLabels={supports:'Supports part of the match',conflict:'Conflict',unresolved:'Still to check'};
+  function renderSources(features){
+    const box=$('#printed-road-source');box.replaceChildren();if(!row)return;
+    const sources=new Map();
+    for(const f of features){const s=f.provenance||{label:'Primary road inventory',url:row.source,dataDate:row.dataDate,retrievedAt:row.retrievedAt};sources.set(JSON.stringify(s),s);}
+    for(const s of sources.values()){
+      const line=document.createElement('span'),a=document.createElement('a');a.href=s.url;a.target='_blank';a.rel='noopener noreferrer';a.textContent=s.label;
+      line.append(a,document.createTextNode(` · data date ${s.dataDate}; retrieved ${s.retrievedAt.slice(0,10)}. `));box.append(line);
+    }
+    box.append(document.createTextNode('Sources for the selected geometry. Imported labels do not independently authenticate a source.'));
+  }
   function renderChecks(){
     const box=$('#printed-road-checks');box.replaceChildren();box.hidden=!row?.checks.length;if(box.hidden)return;
     const details=document.createElement('details'),summary=document.createElement('summary');
@@ -32,6 +42,7 @@ export function createRoadEvidence({stopSpeech=()=>{},readRow=()=>{},changeRow=(
     selected=$('#printed-road-feature').value;stopSpeech();
     const movement=row?.movements.find(m=>`movement:${m.id}`===selected);
     const f=row?.features.find(f=>f.id===selected);
+    renderSources(movement?row.features.filter(f=>movement.parts.some(p=>p.featureId===f.id)):f?[f]:row?.features||[]);
     const conflict=movement?.disposition==='conflict',color=conflict?'#a62035':'#a94c00';
     $('#printed-road-detail').textContent=movement?`${conflict?'CONFLICT — DO NOT USE THIS OPTION':'CANDIDATE COMPARISON'} — ${movement.label}. ${movement.note} Geometry: ${(movement.lengthMeters/1609.344).toFixed(2)} mi. Drawn order: ${movement.parts.map((p,i)=>`${i+1}: ${p.compass} on record ${p.featureId}`).join('; ')}. Numbers show the comparison order, not driving instructions. Traffic direction and turn permission remain unverified.`:f?`${f.road} · ${f.kind} · record ${f.id}. Inventory reference direction: ${f.direction||'not supplied'}. This field describes inventory order, not allowed traffic direction.`:'No candidate selected. Inspect the whole junction or choose an individual record.';
     if(!map||!row)return;const L=window.L;group.clearLayers();
@@ -60,7 +71,6 @@ export function createRoadEvidence({stopSpeech=()=>{},readRow=()=>{},changeRow=(
     $('#printed-road-note').textContent=row?.note||'';
     renderChecks();
     $('#printed-road-source').replaceChildren();
-    if(row){const a=document.createElement('a');a.href=row.source;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Road inventory reference';$('#printed-road-source').append(a,document.createTextNode(` · data date ${row.dataDate}; retrieved ${row.retrievedAt.slice(0,10)}. Imported source label is not independent authentication.`));}
     say(row?'Road evidence found for this exact printed row. Choose a road record to inspect. No route has been approved.':packet?'No road evidence for this row. The previous map has been cleared.':'Optional: open a prepared road comparison file for this PDF. Files stay on this device.');
     if(row)selectFeature();
     if(follow&&row)void openMap();else wantsMap=false;

@@ -16,6 +16,12 @@ function readChecks(raw){
     return {outcome:c.outcome,label:c.label,detail:c.detail,date:c.date,source:sourceLink(c.source)};
   });
 }
+function readProvenance(raw,format){
+  if(raw===undefined)return null;
+  if(format!=='dl-road-evidence/v3')throw Error('Multiple map sources require comparison format v3.');
+  if(!raw||!text(raw.label,120)||!raw.label||!text(raw.dataDate,80)||!raw.dataDate||!text(raw.retrievedAt,40)||!Number.isFinite(Date.parse(raw.retrievedAt)))throw Error('Road record source/date details are missing.');
+  return {label:raw.label,url:sourceLink(raw.url),dataDate:raw.dataDate,retrievedAt:raw.retrievedAt};
+}
 export function rowIdentity(review,index) {
   const r=review?.rows?.[index];
   return r?JSON.stringify([review.state,index+1,r.page,norm(r.road),norm(r.instruction),norm(r.miles),norm(r.cumulative)]):'';
@@ -25,7 +31,7 @@ export function readRoadEvidence(raw,review) {
   const p=JSON.parse(raw);
   if(!/^[a-f0-9]{64}$/.test(review?.pdfSha256))throw Error('The PDF version check is unavailable. Reload this page and reopen the original PDF before loading its comparison.');
   if(!/^[a-f0-9]{64}$/.test(p?.pdfSha256)||p.pdfSha256!==review?.pdfSha256)throw Error('This road comparison belongs to a different PDF version. Use a comparison prepared for this exact original.');
-  if(!['dl-road-evidence/v1','dl-road-evidence/v2'].includes(p?.format)||p.state!==review?.state||p.rowCount!==review?.rows?.length||review.issues.length)throw Error('This comparison format or route table is not supported. Refresh the site and use a comparison for this exact PDF.');
+  if(!['dl-road-evidence/v1','dl-road-evidence/v2','dl-road-evidence/v3'].includes(p?.format)||p.state!==review?.state||p.rowCount!==review?.rows?.length||review.issues.length)throw Error('This comparison format or route table is not supported. Refresh the site and use a comparison for this exact PDF.');
   if(!Array.isArray(p.rows)||!p.rows.length||p.rows.length>1000)throw Error('Unsupported comparison rows.');
   let points=0;const seen=new Set();
   const rows=p.rows.map(r=>{
@@ -45,7 +51,7 @@ export function readRoadEvidence(raw,review) {
         for(let i=1;i<path.length;i++)if(meters(path[i-1],path[i])>5000||Math.abs(path[i][1]-path[i-1][1])>180)throw Error('Sparse or discontinuous road geometry. No line drawn across the gap.');
         return path.map(p=>p.slice());
       });
-      return {id:f.id,road:f.road,kind:f.kind,direction:f.direction,paths};
+      return {id:f.id,road:f.road,kind:f.kind,direction:f.direction,paths,provenance:readProvenance(f.provenance,p.format)};
     });
     return {index:r.index,identity:r.identity,note:r.note,source,retrievedAt:r.retrievedAt,dataDate:r.dataDate,checks:readChecks(r.checks),features,movements:readMovements(r.movements,features)};
   });

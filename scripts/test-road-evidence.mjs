@@ -5,6 +5,22 @@ import {sourcePiece,readMovements,compassOrder} from '../src/assets/permits/road
 import {createRoadEvidence} from '../src/assets/permits/road-evidence-ui.mjs';
 const review=()=>({state:'TX',pdfSha256:'a'.repeat(64),issues:[],rows:[{page:3,road:'IH35 s',instruction:'Take Exit 12',miles:'1.0',cumulative:'2.0'},{page:4,road:'IH35 Ramp s',instruction:'Continue on frontage road',miles:'0.3',cumulative:'2.3'}]});
 const packet=()=>({format:'dl-road-evidence/v1',pdfSha256:'a'.repeat(64),state:'TX',rowCount:2,rows:[{index:0,identity:rowIdentity(review(),0),source:'https://example.gov/roads',retrievedAt:'2026-10-15T12:00:00Z',dataDate:'2026-10-01',note:'Proximity only',features:[{id:'1',road:'IH0035-RP',kind:'Ramp',direction:'Unknown',paths:[[[32,-97],[32.001,-97.001]]]}]}]});
+const countySource=()=>({label:'County street records',url:'https://county.example.gov/streets',dataDate:'2026-04-16',retrievedAt:'2026-10-15T20:00:00Z'});
+test('v3 preserves per-record provenance without granting any movement permission',()=>{
+ const p=packet();p.format='dl-road-evidence/v3';p.rows[0].features[0].provenance={...countySource(),approved:true};p.rows[0].movements=[{...candidate(),approved:true,travelDirectionVerified:true}];
+ const r=readRoadEvidence(JSON.stringify(p),review());assert.deepEqual(r.rows[0].features[0].provenance,countySource());assert.equal(r.approved,false);assert.equal(r.rows[0].movements[0].travelDirectionVerified,false);assert.equal(r.rows[0].movements[0].approved,false);
+});
+test('alternate sources reject private links, malformed dates and older format labels',()=>{
+ for(const change of [p=>p.format='dl-road-evidence/v2',p=>p.rows[0].features[0].provenance.url='https://example.gov/?token=private',p=>p.rows[0].features[0].provenance.url='javascript:alert(1)',p=>p.rows[0].features[0].provenance.retrievedAt='unknown',p=>p.rows[0].features[0].provenance.label='',p=>p.rows[0].features[0].provenance.dataDate='']){const p=packet();p.format='dl-road-evidence/v3';p.rows[0].features[0].provenance=countySource();change(p);assert.throws(()=>readRoadEvidence(JSON.stringify(p),review()));}
+});
+test('selected geometry displays its own source and switching records clears the old attribution',async()=>{
+ const e=environment();try{
+  const p=packet();p.format='dl-road-evidence/v3';p.rows[0].features.push({...structuredClone(p.rows[0].features[0]),id:'county-1',provenance:countySource()});
+  await e.load(JSON.stringify(p));let box=e.el('#printed-road-source');assert.equal(box.children[0].children[0].href,'https://example.gov/roads');
+  e.el('#printed-road-feature').value='county-1';e.el('#printed-road-feature').onchange();assert.equal(box.children[0].children[0].href,countySource().url);assert.equal(box.children.length,2);
+  e.el('#printed-road-feature').value='1';e.el('#printed-road-feature').onchange();assert.equal(box.children[0].children[0].href,'https://example.gov/roads');e.ui.select(1);assert.equal(box.children.length,0);
+ }finally{e.cleanup();}
+});
 test('evidence is bound to literal source row, page, state and mileage without approving geometry',()=>{
  const r=review(),before=structuredClone(r),p=readRoadEvidence(JSON.stringify({...packet(),approved:true}),r);assert.deepEqual(r,before);assert.equal(p.approved,false);assert.equal(p.rows[0].features[0].road,'IH0035-RP');assert.equal(evidenceForRow(p,r,1),null);r.rows[0].instruction='Different exit';assert.equal(evidenceForRow(p,r,0),null);
 });
