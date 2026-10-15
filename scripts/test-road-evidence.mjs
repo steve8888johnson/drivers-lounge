@@ -30,11 +30,11 @@ test('a crossing road and a separated level cannot be promoted by geometric prox
 });
 
 function environment(){
- const old={document:globalThis.document,window:globalThis.window,Option:globalThis.Option},elements=new Map(),state={removed:0,created:0,fail:false,read:0,stops:0};
+ const old={document:globalThis.document,window:globalThis.window,Option:globalThis.Option},elements=new Map(),state={removed:0,created:0,fail:false,read:0,stops:0,changes:[],fits:[]};
  const el=id=>{if(!elements.has(id))elements.set(id,{textContent:'',value:'',hidden:true,disabled:false,open:true,children:[],replaceChildren(...children){this.children=children;this.value=children[0]?.value||'';},append(...children){this.children.push(...children);}});return elements.get(id);};
  globalThis.document={hidden:false,querySelector:el,createElement:()=>({textContent:''}),createTextNode:s=>s};globalThis.Option=class{constructor(text,value){this.text=text;this.value=value;}};
- globalThis.window={L:{map(){if(state.fail)throw Error('Map unavailable');state.created++;return {remove(){state.removed++;},fitBounds(){}};},layerGroup(){return {addTo(){return this;},clearLayers(){}};},polyline(){return {bindTooltip(){return this;},addTo(){return this;}};},latLngBounds:x=>x}};
- const ui=createRoadEvidence({readRow:()=>state.read++,stopSpeech:()=>state.stops++});ui.reset(review());
+ globalThis.window={L:{map(){if(state.fail)throw Error('Map unavailable');state.created++;return {remove(){state.removed++;},fitBounds(bounds){state.fits.push(bounds);}};},layerGroup(){return {addTo(){return this;},clearLayers(){}};},polyline(){return {bindTooltip(){return this;},addTo(){return this;}};},latLngBounds:x=>x}};
+ const ui=createRoadEvidence({readRow:()=>state.read++,stopSpeech:()=>state.stops++,changeRow:i=>state.changes.push(i)});ui.reset(review());
  const load=(raw=JSON.stringify(packet()))=>el('#printed-road-file').onchange({target:{files:[{size:raw.length,text:async()=>raw}],value:'file'}});
  return {ui,el,state,load,cleanup(){ui.stop();Object.assign(globalThis,old);}};
 }
@@ -49,4 +49,16 @@ test('invalid replacement evidence removes the previous map and read association
 });
 test('late file completion cannot revive a hidden or closed review',async()=>{
  const e=environment();try{let resolve;const promise=new Promise(r=>resolve=r),pending=e.el('#printed-road-file').onchange({target:{files:[{size:100,text:()=>promise}],value:'file'}});e.ui.stop();resolve(JSON.stringify(packet()));await pending;assert(e.el('#printed-road-open').disabled);assert(e.el('#printed-road-map').hidden);assert.equal(e.state.created,0);}finally{e.cleanup();}
+});
+
+test('opened map follows the next evidence row without automatically speaking',async()=>{
+ const e=environment();try{const p=packet();p.rows.push({...structuredClone(p.rows[0]),index:1,identity:rowIdentity(review(),1),features:[{...p.rows[0].features[0],id:'2',road:'Frontage road'}]});await e.load(JSON.stringify(p));await e.el('#printed-road-open').onclick();const stops=e.state.stops;e.ui.select(1);await Promise.resolve();assert.equal(e.state.created,2);assert.equal(e.state.removed,1);assert.match(e.el('#printed-road-turn').textContent,/Continue on frontage/);assert.match(e.el('#printed-road-detail').textContent,/Frontage road/);assert.equal(e.state.read,0);assert(e.state.stops>stops);assert(!e.el('#printed-road-map').hidden);assert.match(e.el('#printed-road-coverage').textContent,/2 of 2/);assert.match(e.el('#printed-road-coverage').textContent,/not a continuous or approved/);}finally{e.cleanup();}
+});
+
+test('stopping an opening map prevents late rendering and automatic restart on row change',async()=>{
+ const e=environment();try{await e.load();const pending=e.el('#printed-road-open').onclick();e.ui.stop();await pending;assert.equal(e.state.created,0);assert(e.el('#printed-road-map').hidden);e.ui.select(0);await Promise.resolve();assert.equal(e.state.created,0);assert(e.el('#printed-road-fit').disabled);}finally{e.cleanup();}
+});
+
+test('whole-junction view includes alternatives while turn buttons respect source boundaries',async()=>{
+ const e=environment();try{const p=packet();p.rows[0].features.push({id:'2',road:'Other branch',kind:'Ramp',direction:'Unknown',paths:[[[32.002,-97.003],[32.004,-97.005]]]});await e.load(JSON.stringify(p));assert(e.el('#printed-road-previous').disabled);e.el('#printed-road-previous').onclick();assert.deepEqual(e.state.changes,[]);e.el('#printed-road-next').onclick();assert.deepEqual(e.state.changes,[1]);await e.el('#printed-road-open').onclick();e.el('#printed-road-fit').onclick();assert.deepEqual(e.state.fits.at(-1),p.rows[0].features.flatMap(f=>f.paths.flat()));e.ui.select(1);assert(e.el('#printed-road-next').disabled);assert(e.el('#printed-road-fit').disabled);e.el('#printed-road-next').onclick();assert.deepEqual(e.state.changes,[1]);}finally{e.cleanup();}
 });

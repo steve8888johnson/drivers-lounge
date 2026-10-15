@@ -8,7 +8,7 @@ export function createPrintedRouteReview(stopOtherSpeech=()=>{}) {
   const say=message=>$('#printed-route-status').textContent=message;
   const speech=createSpeech({synthesis:window.speechSynthesis,Utterance:window.SpeechSynthesisUtterance,visible:()=>!document.hidden&&dialog.open,onState:s=>{for(const id of ['#printed-route-voice-status','#printed-road-voice-status'])$(id).textContent=s.message;}});
   function readRow(){const text=printedRowSpeech(review,index);if(text){let prefs;try{prefs=speechPreferences(localStorage);}catch{prefs=speechPreferences(null);}speech.play(text,{...prefs,key:'printed-row',repeat:true});}}
-  const roadEvidence=createRoadEvidence({stopSpeech:()=>speech.stop(),readRow});
+  const roadEvidence=createRoadEvidence({stopSpeech:()=>speech.stop(),readRow,changeRow:select});
   function stop() {generation++;controller?.abort();controller=null;speech.stop();roadEvidence.stop();}
   function render() {
     const row=review?.rows[index];
