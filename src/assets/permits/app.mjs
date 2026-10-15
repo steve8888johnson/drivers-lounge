@@ -589,7 +589,7 @@ async function launchWallet() {
     await openScanner();
   }
 }
-window.addEventListener('hashchange', safe(async () => { const params = new URLSearchParams(location.hash.slice(1)); if (!['trip','tab','new'].some(key => params.has(key))) return; if (await changeGuard()) await launchWallet(); else switchTab(tab); }));
+window.addEventListener('hashchange', safe(async () => { const params = new URLSearchParams(location.hash.slice(1)); if (!['trip','tab','new','texas'].some(key => params.has(key))) return; if (await changeGuard()) await launchWallet(); else switchTab(tab); }));
 try { await launchWallet(); connection(); if ('serviceWorker' in navigator) void navigator.serviceWorker.register('/sw.js').catch(() => {}); }
 catch (e) { status(`Device storage unavailable: ${e.message}. Enable browser storage before using the permit wallet.`, true); document.querySelectorAll('button,input,select,textarea').forEach(el => el.disabled = true); }
 
