@@ -31,10 +31,10 @@ test('a crossing road and a separated level cannot be promoted by geometric prox
 });
 
 function environment(){
- const old={document:globalThis.document,window:globalThis.window,Option:globalThis.Option},elements=new Map(),state={removed:0,created:0,fail:false,read:0,stops:0,changes:[],fits:[]};
+ const old={document:globalThis.document,window:globalThis.window,Option:globalThis.Option},elements=new Map(),state={removed:0,created:0,fail:false,read:0,stops:0,changes:[],fits:[],lines:[]};
  const el=id=>{if(!elements.has(id))elements.set(id,{textContent:'',value:'',hidden:true,disabled:false,open:true,children:[],replaceChildren(...children){this.children=children;this.value=children[0]?.value||'';},append(...children){this.children.push(...children);}});return elements.get(id);};
- globalThis.document={hidden:false,querySelector:el,createElement:()=>({textContent:''}),createTextNode:s=>s};globalThis.Option=class{constructor(text,value){this.text=text;this.value=value;}};
- globalThis.window={L:{map(){if(state.fail)throw Error('Map unavailable');state.created++;return {remove(){state.removed++;},fitBounds(bounds){state.fits.push(bounds);}};},layerGroup(){return {addTo(){return this;},clearLayers(){}};},polyline(){return {bindTooltip(){return this;},addTo(){return this;}};},circleMarker(){return {bindTooltip(){return this;},addTo(){return this;}};},latLngBounds:x=>x}};
+ globalThis.document={hidden:false,querySelector:el,createElement:()=>({textContent:'',children:[],append(...children){this.children.push(...children);}}),createTextNode:s=>s};globalThis.Option=class{constructor(text,value){this.text=text;this.value=value;}};
+ globalThis.window={L:{map(){if(state.fail)throw Error('Map unavailable');state.created++;return {remove(){state.removed++;},fitBounds(bounds){state.fits.push(bounds);}};},layerGroup(){return {addTo(){return this;},clearLayers(){}};},polyline(path,options){state.lines.push({path,options});return {bindTooltip(){return this;},addTo(){return this;}};},circleMarker(){return {bindTooltip(){return this;},addTo(){return this;}};},latLngBounds:x=>x}};
  const ui=createRoadEvidence({readRow:()=>state.read++,stopSpeech:()=>state.stops++,changeRow:i=>state.changes.push(i)});ui.reset(review());
  const load=(raw=JSON.stringify(packet()))=>el('#printed-road-file').onchange({target:{files:[{size:raw.length,text:async()=>raw}],value:'file'}});
  return {ui,el,state,load,cleanup(){ui.stop();Object.assign(globalThis,old);}};
@@ -84,9 +84,25 @@ test('disconnected, wrong-branch, nonexistent and repeated movement references f
  const m=candidate();assert.throws(()=>readMovements([m,m],features));
 });
 test('nearby pieces remain separate without a fabricated line through their gap',()=>{
- const features=packet().rows[0].features;features.push({...features[0],id:'2',paths:[[[32.00103,-97.001],[32.002,-97.002]]]});
+ const features=packet().rows[0].features;features.push({...features[0],id:'2',paths:[[[32.001003,-97.001],[32.002,-97.002]]]});
  const m=candidate();m.parts.push({...m.parts[0],featureId:'2'});const result=readMovements([m],features)[0];
- assert(result.gaps[0]>3&&result.gaps[0]<4);assert.equal(result.parts.length,2);assert.equal(result.parts[0].path.length,2);assert.equal(result.parts[1].path.length,2);assert.equal(result.approved,false);
+ assert(result.gaps[0]>.3&&result.gaps[0]<.4);assert.equal(result.parts.length,2);assert.equal(result.parts[0].path.length,2);assert.equal(result.parts[1].path.length,2);assert.equal(result.approved,false);
+});
+
+test('an eight-metre near miss cannot become an ordered ramp connection',()=>{
+ const features=packet().rows[0].features;features.push({...features[0],id:'2',paths:[[[32.001074,-97.001],[32.002,-97.002]]]});
+ const m=candidate();m.parts.push({...m.parts[0],featureId:'2'});assert.throws(()=>readMovements([m],features),/1 m comparison tolerance/);
+});
+
+const check=()=>({outcome:'supports',label:'Exit sign',detail:'Historical plan supports one ramp; current conditions unknown.',date:'2025-02-21',source:'https://example.gov/plan.pdf'});
+test('checks retain provenance and uncertainty without granting approval',()=>{
+ const p=packet();p.format='dl-road-evidence/v2';p.rows[0].checks=[{...check(),approved:true}];const result=readRoadEvidence(JSON.stringify(p),review());assert.deepEqual(result.rows[0].checks,[check()]);assert.equal(result.approved,false);assert.equal(result.format,'dl-road-evidence/v2');assert.throws(()=>readRoadEvidence(JSON.stringify({...p,format:'dl-road-evidence/v99'}),review()));
+ for(const mutate of [c=>c.outcome='approved',c=>c.source='javascript:alert(1)',c=>c.source='https://example.gov/?token=x',c=>c.date='',c=>c.detail='x'.repeat(1501)]){const c=check();mutate(c);p.rows[0].checks=[c];assert.throws(()=>readRoadEvidence(JSON.stringify(p),review()));}
+ const m=candidate();m.disposition='approved';assert.throws(()=>readMovements([m],packet().rows[0].features));
+});
+
+test('conflicting geometry is never selected by default and uses a text label plus dashed red',async()=>{
+ const e=environment();try{const p=packet();p.rows[0].movements=[{...candidate(),disposition:'conflict'}];p.rows[0].checks=[{...check(),outcome:'conflict'}];await e.load(JSON.stringify(p));assert.equal(e.el('#printed-road-feature').value,'');assert(!e.el('#printed-road-checks').hidden);const details=e.el('#printed-road-checks').children[0];assert.match(details.children[0].textContent,/1 conflict/);assert.match(details.children[1].children[0].textContent,/Conflict/);await e.el('#printed-road-open').onclick();assert(!e.state.lines.some(l=>l.options.color==='#a94c00'));e.el('#printed-road-feature').value='movement:split';e.el('#printed-road-feature').onchange();assert.match(e.el('#printed-road-detail').textContent,/CONFLICT — DO NOT USE/);assert.equal(e.state.lines.at(-1).options.dashArray,'9 7');assert.equal(e.state.lines.at(-1).options.color,'#a62035');assert.equal(e.state.read,0);e.ui.select(1);assert(e.el('#printed-road-checks').hidden);assert.equal(e.el('#printed-road-checks').children.length,0);}finally{e.cleanup();}
 });
 test('candidate selection fits only its referenced pieces, keeps speech manual and exposes direction uncertainty',async()=>{
  const e=environment();try{const p=packet();p.rows[0].movements=[candidate()];await e.load(JSON.stringify(p));await e.el('#printed-road-open').onclick();assert.match(e.el('#printed-road-detail').textContent,/CANDIDATE COMPARISON/);assert.match(e.el('#printed-road-detail').textContent,/Traffic direction and turn permission remain unverified/);assert.deepEqual(e.state.fits.at(-1),p.rows[0].features[0].paths[0]);assert.equal(e.state.read,0);const stops=e.state.stops;e.el('#printed-road-feature').value='1';e.el('#printed-road-feature').onchange();assert(e.state.stops>stops);assert.match(e.el('#printed-road-detail').textContent,/inventory order, not allowed traffic/);assert.equal(e.state.read,0);}finally{e.cleanup();}

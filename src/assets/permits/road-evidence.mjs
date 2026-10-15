@@ -3,6 +3,19 @@ import { meters, pointOK } from './core.mjs';
 import { readMovements } from './road-movement.mjs';
 const text=(value,max=1000)=>typeof value==='string'&&value.length<=max;
 const norm=value=>String(value).trim().replace(/\s+/g,' ');
+function sourceLink(value){
+  let url;try{url=new URL(value);}catch{throw Error('Invalid source link.');}
+  if(!text(value,1000)||url.protocol!=='https:'||url.username||url.password||url.search||url.hash)throw Error('Source must be a plain HTTPS reference, not a credential or private query.');
+  return url.href;
+}
+function readChecks(raw){
+  if(raw===undefined)return [];
+  if(!Array.isArray(raw)||raw.length>8)throw Error('Unsupported comparison checks.');
+  return raw.map(c=>{
+    if(!c||!['supports','conflict','unresolved'].includes(c.outcome)||!text(c.label,120)||!c.label||!text(c.detail,1500)||!c.detail||!text(c.date,80)||!c.date)throw Error('Invalid comparison check.');
+    return {outcome:c.outcome,label:c.label,detail:c.detail,date:c.date,source:sourceLink(c.source)};
+  });
+}
 export function rowIdentity(review,index) {
   const r=review?.rows?.[index];
   return r?JSON.stringify([review.state,index+1,r.page,norm(r.road),norm(r.instruction),norm(r.miles),norm(r.cumulative)]):'';
@@ -12,15 +25,14 @@ export function readRoadEvidence(raw,review) {
   const p=JSON.parse(raw);
   if(!/^[a-f0-9]{64}$/.test(review?.pdfSha256))throw Error('The PDF version check is unavailable. Reload this page and reopen the original PDF before loading its comparison.');
   if(!/^[a-f0-9]{64}$/.test(p?.pdfSha256)||p.pdfSha256!==review?.pdfSha256)throw Error('This road comparison belongs to a different PDF version. Use a comparison prepared for this exact original.');
-  if(p?.format!=='dl-road-evidence/v1'||p.state!==review?.state||p.rowCount!==review?.rows?.length||review.issues.length)throw Error('This comparison does not match the recognized PDF route table.');
+  if(!['dl-road-evidence/v1','dl-road-evidence/v2'].includes(p?.format)||p.state!==review?.state||p.rowCount!==review?.rows?.length||review.issues.length)throw Error('This comparison format or route table is not supported. Refresh the site and use a comparison for this exact PDF.');
   if(!Array.isArray(p.rows)||!p.rows.length||p.rows.length>1000)throw Error('Unsupported comparison rows.');
   let points=0;const seen=new Set();
   const rows=p.rows.map(r=>{
     if(!Number.isInteger(r.index)||r.index<0||r.index>=p.rowCount||seen.has(r.index)||r.identity!==rowIdentity(review,r.index))throw Error('A source row changed, is repeated, or belongs to a different PDF. Rebuild the comparison.');
     seen.add(r.index);
     if(!text(r.note,3000)||!text(r.source,500)||!text(r.retrievedAt,40)||!Number.isFinite(Date.parse(r.retrievedAt))||!text(r.dataDate,80))throw Error('Comparison source/date details are missing.');
-    let url;try{url=new URL(r.source);}catch{throw Error('Invalid source link.');}
-    if(url.protocol!=='https:'||url.username||url.password||url.search||url.hash)throw Error('Source must be a plain HTTPS reference, not a credential or private query.');
+    const source=sourceLink(r.source);
     if(!Array.isArray(r.features)||!r.features.length||r.features.length>80)throw Error('Unsupported road feature count.');
     const ids=new Set();
     const features=r.features.map(f=>{
@@ -35,7 +47,7 @@ export function readRoadEvidence(raw,review) {
       });
       return {id:f.id,road:f.road,kind:f.kind,direction:f.direction,paths};
     });
-    return {index:r.index,identity:r.identity,note:r.note,source:url.href,retrievedAt:r.retrievedAt,dataDate:r.dataDate,features,movements:readMovements(r.movements,features)};
+    return {index:r.index,identity:r.identity,note:r.note,source,retrievedAt:r.retrievedAt,dataDate:r.dataDate,checks:readChecks(r.checks),features,movements:readMovements(r.movements,features)};
   });
   return {format:p.format,pdfSha256:p.pdfSha256,state:p.state,rowCount:p.rowCount,rows,approved:false};
 }

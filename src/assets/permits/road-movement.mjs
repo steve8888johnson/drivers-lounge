@@ -31,6 +31,7 @@ export function readMovements(raw,features) {
   const ids=new Set();
   return raw.map(m=>{
     if(!m||typeof m.id!=='string'||!/^[a-z0-9-]{1,60}$/.test(m.id)||ids.has(m.id)||typeof m.label!=='string'||!m.label||m.label.length>160||typeof m.note!=='string'||m.note.length>2000||!Array.isArray(m.parts)||!m.parts.length||m.parts.length>12)throw Error('Invalid movement comparison.');
+    if(m.disposition!==undefined&&!['candidate','conflict'].includes(m.disposition))throw Error('Unknown movement evidence status.');
     ids.add(m.id);const seen=new Set();let count=0;
     const parts=m.parts.map(p=>{
       const f=features.find(f=>f.id===p.featureId);
@@ -44,7 +45,7 @@ export function readMovements(raw,features) {
     });
     const gaps=parts.slice(1).map((p,i)=>meters(parts[i].path.at(-1),p.path[0]));
     // Reject disconnected selections; never bridge gaps or reverse pieces silently.
-    if(gaps.some(d=>d>10))throw Error('Movement pieces do not meet within the 10 m comparison tolerance. No connection inferred.');
-    return {id:m.id,label:m.label,note:m.note,parts,gaps,lengthMeters:parts.reduce((n,p)=>n+p.lengthMeters,0),approved:false,travelDirectionVerified:false};
+    if(gaps.some(d=>d>1))throw Error('Movement pieces do not meet within the 1 m comparison tolerance. No connection inferred.');
+    return {id:m.id,label:m.label,note:m.note,disposition:m.disposition||'candidate',parts,gaps,lengthMeters:parts.reduce((n,p)=>n+p.lengthMeters,0),approved:false,travelDirectionVerified:false};
   });
 }
