@@ -25,3 +25,43 @@ Live browser shows new controls and preserves the owner's actual Draper–Brunsw
 Updated private phone ZIP **Texas-parked-test-20261015.zip** contains only the unchanged Texas PDF, comparison JSON and parked-test instructions. Use a separate practice load; files remain device-local and are not synced by account truck setup. Full permits, measured load/axles, permitted road direction/ramp/entrance, current restrictions and physical parked testing remain required.
 
 No routing-provider calls, purchases, new charges, credential/DNS changes, PR4 merge or operational guidance activation.57 historicaldist modifications preserved. Source pushed; release receipt kept separately. Evidence: texas-movement-live-check-20261015.json,texas-movement-tests-20261015.txt,texas-movement-browser-check-20261015.json,texas-movement-mobile-qa-20261015.png; private movement-comparison-findings.json and original query files.
+# Three-ramp review published — October 15, 2026, 20:14 UTC
+
+Live at https://driverslounge.app/permitted-loads. Production source **82384ebd6e9dc543d3856c0c376a94020b99e5a2**, deployment **dpl_4cwmxRLzqTvLWSik8F1HcWfxpiTL**, READY with driverslounge.app alias. Remote build completed in34 seconds:363 tests passed, zero failures;172 JavaScript files plus4 inline scripts parsed;57 pages/833 references checked. Eight live asset hashes match source; permit/account pages return200. accountsEnabled=true,readOnlyBeta=true,permitGuidanceEnabled=false. Immediate deployment-scoped10-minute error/fatal query returned no groups; this is not sustained monitoring.
+
+## Evidence and remaining decisions
+
+- Hillsboro: TxDOT's signed February21,2025 sign plan, PDF43/60/68, identifies sign147 as368A and sign144 as368B. Their positions are respectively6.1m from ramp508456 and6.0m from ramp508453. This supports the nearer ramp's historical exit identity and conflicts with substituting the earlier ramp. Current installation/closures are unverified;0.226/0.374mi geometry still differs from printed0.4/0.3mi; the SH22 left turn remains unverified.
+- Lake Worth: Tarrant County record58818 labels the loop an I-820 WB exit to SH199 EB. Corresponding TxDOT loop468405 has mean vertex proximity1.3m, max8.1m to that record; county source order/FT code oppose the former entry hypothesis. The old loop chain is now an explicit conflict. County frontage/entrance records128552/58572 share an exact endpoint and measure0.076/0.168mi, but do not establish the first printed0.2mi ramp. The app offers only the0.122mi TxDOT entrance segment10581 as a partial comparison, not a full junction route. The8.20m loop/frontage near miss is not bridged.
+- SH171/SH31 near Hubbard: short-slip and full-connector candidates measure0.334/0.314mi, both rounding to0.3mi. Assuming the printed southeast approach, first30m deflections are about19/80 degrees. This supports investigating the short slip, not an allowed turn. Independent current one-way/lane evidence remains absent. Printed cumulative increment differs from segment mileage by0.1mi; rounded numbers are not precise road boundaries.
+
+The2025 sign plan is a construction design, not an as-built clearance certificate. County update dates are April2026, not current field observations. Fort Worth's bounded street layer was also inspected; some relevant city record dates are2015/2020/2024, and it does not cover the full loop. The SH199/I820 current project page says construction could start as early2033; old proposed concepts were not used as current geometry.
+
+## Product behavior
+
+Source-linked comparison checks distinguish support, conflict and unknowns. Conflicting geometry uses dashed red and an explicit DO NOT USE label; it is never the default selected movement. The private comparison uses format v2, so older viewers reject it instead of ignoring new conflict status. v1 support remains. Ordered pieces now require joins within1m, with an8m regression. Even coincident source geometry cannot grant approval or verified direction.
+
+Actual local browser testing used the unchanged original Texas PDF and final v2 comparison:36 rows,9 distinct movement options,27 source checks across9 rows. Hillsboro conflict rendered2 red paths; Lake Worth conflict5. SH31 speech reported playing; moving to the next row stopped it.390px responsive view had342px dialog/client/scroll width and66.4px reading controls. No warning/error logs. Screenshot is desktop responsive QA, not physical Safari/Bluetooth/background/GPS evidence. The final v2 file was reimported after a fresh reload.
+
+The live owner's Draper–Brunswick draft remains unchanged with its empty state placeholder and Needs your confirmation. No friend's permit was inserted into that trip or deployed publicly. Private phone ZIP refreshed with only unchanged Texas PDF, v2 comparison JSON and current step-by-step parked guide; ZIP integrity and PDF SHA checked. Permits/comparisons remain device-local and do not ride along with account truck-setup sync.
+
+## Saved evidence
+
+- outputs/three-ramp-live-check-20261015.json
+- outputs/three-ramp-browser-check-20261015.json
+- outputs/three-ramp-tests-20261015.txt and three-ramp-focused-tests-20261015.txt
+- outputs/three-ramp-iphone-layout-20261015.png
+- outputs/Texas-parked-test-20261015.zip
+- outputs/friend-permits-20261014/three-ramp-check-findings.json
+- outputs/friend-permits-20261014/hillsboro-sign-plan-2025.pdf and rendered PDF43/63 pages
+- outputs/friend-permits-20261014/tc911-layer.json,tc911-lake-worth-streets.json,cfw-streets-layer.json,cfw-lake-worth-streets.json
+- outputs/add-texas-movements-20261015.mjs then add-three-ramp-checks-20261015.mjs reproduce the current packet after the base comparison builder. The second step is required to restore v2 and checks.
+
+Primary references:
+- https://ftp.txdot.gov/plans/State-Let-Construction/2025/05%20May/05%20Contract%20Plans/McLennan%200909-22-221.pdf
+- https://mapit.tarrantcounty.com/arcgis/rest/services/Dynamic/TC911_Streets/MapServer/0
+- https://mapit.fortworthtexas.gov/ags/rest/services/CIVIC/OpenData_Infrastructure/MapServer/16
+- https://services.arcgis.com/KTcxiTD9dsQw4r7Z/arcgis/rest/services/TxDOT_Roadways/FeatureServer/0
+- https://www.txdot.gov/projects/projects-studies/fort-worth/sh199-i820.html
+
+No provider calls, purchases, charges, credentials/DNS changes, account/guidance activation or PR4 merge. Existing57 tracked dist changes preserved. Source commit pushed to GitHub; this receipt is saved separately. Local test tab closed, viewport reset and QA server stopped after verification.
