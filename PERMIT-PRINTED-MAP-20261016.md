@@ -24,3 +24,21 @@ Verified existing target: drivers-lounge / steves-projects-c46af6ff, Node 22.x, 
 ## Parked phone test
 
 Refresh Drivers Lounge, open the saved Texas original with **Read printed route**, select a row and tap **Show this row on scanned map**. Use **Read turn aloud** or **Next & read** and compare the heard words with the displayed row. If the action is disabled, read its reason; do not substitute a different road to force a match. This is parked review, not driving guidance. Account transfer still requires Save trip to account / Open account trip; actual owner-to-phone transfer remains the owner's pending check.
+
+## Production verification — October 16, 18:37 UTC
+
+- URL: https://driverslounge.app/permitted-loads
+- Source: `805ea50586ae43cd29ccb569b42728109252b1ae`
+- READY production deployment: `dpl_6QgDGCnsDatJHhs4BwX3X8uTftPv`
+- Deployment URL: https://drivers-lounge-8u1ixhom3-steves-projects-c46af6ff.vercel.app
+- Existing drivers-lounge project/team and exact Git source confirmed; driverslounge.app is assigned. Remote Node 22.x checks passed: 443 tests, 194 JS plus four inline scripts, 57 pages / 833 references and all static build gates. Build output reports 16 seconds.
+
+Seven changed JavaScript/service-worker assets match Git exactly; all new HTML controls are present. Permit, account and navigation pages return 200. Flags remain accountsEnabled=true, readOnlyBeta=true, permitGuidanceEnabled=false. No backend or operational activation.
+
+The live browser repeated the actual Texas 36-row identity/full-table match, selected PDF page 4 row 34, opened the corresponding map row and read row 35's literal SH31 merge through Next & read. Opening the map cancelled previous audio without starting new speech. Closing restored the printed review. A deliberately changed saved-map direction blocked all connections and displayed the differing PDF/map wording. Kansas retained its three-row text rehearsal with the map action disabled. Original map coordinates remained unchanged. 390px dialogs measured 356px client/scroll, voice buttons 48px; no page errors.
+
+The first live browser pass exceeded the harness's 45-second PDF-startup wait. Public PDF library/worker probes both returned HTTP200; retry with a 70-second harness wait passed. No application timeout or production setting was changed to obtain that result. Cold-load performance on the physical iPhone remains unverified. API interception in this isolated browser also disables its normal HTTP cache. Speech was mocked; actual speaker/Bluetooth audibility and owner account transfer remain owner tests. Public map assets/tiles were allowed, but full street coverage was not asserted. Real originals existed only in temporary browser storage, never in repository/deployment or the owner's account.
+
+One deployment-scoped ten-minute error/fatal log query returned zero records at 18:34 UTC; not sustained monitoring. No new paid service, provider call, upgrade, credential, DNS, migration or PR4 change. Existing Vercel allowance had about $19.48 remaining before release. Supabase's previously confirmed Free plan unchanged. Historical 57 dist edits preserved. Temporary test browsers and servers closed.
+
+Evidence outside Git: permit-printed-map-live-deployment-detail-20261016.json, permit-printed-map-live-build-20261016.txt, permit-printed-map-live-assets-20261016.json, permit-printed-map-live-browser-20261016.json, permit-printed-map-live-errors-20261016.txt, live phone/mismatch screenshots. This receipt is a separate documentation commit; application source above remains deployed.
