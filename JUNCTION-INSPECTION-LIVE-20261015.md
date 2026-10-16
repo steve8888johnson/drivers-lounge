@@ -1,0 +1,15 @@
+# Parked junction inspection release
+
+Production https://driverslounge.app is READY on source `ce1f60c2ba12b1929224c60c2a472ac8450c9fab`, deployment `dpl_6V2NCzYHFmpyx7vvUNwSxAUghsVh`. Framework: static HTML/JavaScript with Node API. Remote build13seconds;402tests passed,183JavaScript+4inline syntax,57pages/833links and existing static contracts passed. Both changed public JavaScript assets match their exact Git blobs; permit/navigation/account pages return200. accountsEnabled=true,readOnlyBeta=true,permitGuidanceEnabled=false.
+
+The selected permit instruction can now be inspected against official nearby TxDOT road shapes. No record is selected by default, no original line is snapped/replaced, and no turn anchors or approvals are created. The selected shape zooms with the same visible instruction; speech reads the issued words. Row changes, hiding and closing clear evidence and cancel obsolete requests. Voice controls were moved beside the instruction; an initial hidden-wrapper issue was caught and fixed in actual browser QA before release.
+
+Actual local browser: SH31 record509173 displayed45m disagreement with the issuer line, and row34 speech reported finished. Next selected row35's merge wording, stopped speech and cleared old evidence.390×844 view:342px dialog client/scroll widths, no overflow. No warning/error logs. This does not prove physical iPhone audibility or Bluetooth/background behavior.
+
+Fresh public inventory confirms19.124m short-slip and44.649m full-connector differences; exact turn/merge locations remain unresolved. Historical2024plan direction evidence is retained separately. See PERMIT-JUNCTION-INSPECTION-20261015.md. The original US83 dashed-span comparison remains available unchanged.
+
+Fresh live lookup returned11SH31records. Both connector offsets matched the independent analysis. Live row34 speech reported finished; Next displayed row35 merge wording, stopped voice and cleared evidence.390px viewport gave342px client/scroll width. An immediate deployment-scoped10minute error/fatal count query returned no groups; this is not sustained monitoring and drains were not assessed. Live browser record and screenshot are in workspace outputs. No changes to owner actual load, credentials, emailDNS, account/payment gates, PR4 or operational guidance. No paid provider calls, purchases or charges. Private permits/IDs/coordinates excluded from source.57historicaldist modifications preserved; source pushed. Local QA server stopped and temporary QA tab closed.
+
+Evidence: `outputs/junction-inspection-final-tests-20261015.txt`, `junction-ui-final-tests-20261015.txt`, `junction-local-browser-20261015.json`, `sh31-context-findings-20261015.json`, `junction-live-assets-20261015.json`, `junction-live-browser-20261015.json`, `junction-live-phone-20261015.png`. Parked phone steps: `outputs/TEXAS-QR-IPHONE-TEST-20261015.md`.
+
+Final browser check: row35 merge speech also reported finished, warning/error logs empty. Voice stopped; viewport reset; live practice rehearsal left open as deliverable. Physical audibility is still unverified.

@@ -1,0 +1,13 @@
+# Texas QR parked rehearsal live — 2026-10-16 00:09 UTC
+
+Production source **b938c1f466da97c76e849264b2839803d7e849cb**, deployment **dpl_4v2AASxm6ik9tMbt7Fqj4EkGkiow**, READY with driverslounge.app alias. Remote build passed387 tests,177 JavaScript files plus4 inline scripts,57 pages/833 links and existing static contracts; build11seconds. Five changed public assets match exact Git blobs. accountsEnabled=true,readOnlyBeta=true,permitGuidanceEnabled=false.
+
+Fresh live Texas QR import succeeded, then Save & plot refreshed only the separate practice load.36 issuer rows retained; local on-device speech reported playing row20, changing to row21 cancelled it and kept the frontage wording. Saved preview reopened after reload with36rows and area highlighting available, without requesting the issuer again. These browser events do not prove physical iPhone audibility.
+
+Map preview now preserves all2,818 source coordinates and2,817 edges, including the5,907m span formerly hidden by the5km display filter. That original span is dashed red, explicitly unknown road shape; no new vertices or substitute roads. Approximate row areas use absolute issuer cumulative mileage, no scaling, within a one-mile viewing window. Total map565.425544mi versus issued565.6mi does not prove local turn positions. No precise turn pins, GPS maneuvers, approvals or automatic speech were created. Missing/stale/mismatched metadata reject; oldv1saved maps retain text-only rehearsal until QR refreshed.
+
+Phone-width browser:342px dialog client/scroll,300px map,68.4px read control. Live warning/error log list empty. Deployment-scoped immediate10minute error/fatal count query returned no groups; not sustained monitoring. Physical Safari, audio/Bluetooth and lifecycle test remain pending. Image texas-rehearsal-live-phone-20261015.png is responsive desktop proof, not an actual iPhone screenshot.
+
+Friend's map remains separate from the owner's Draper–Brunswick load. Private source files and permit identifier stay outside repository/deployment. No paid routing calls, purchases, credential/email-DNS changes, account-gate changes, PR4 merge or operational guidance activation.57historical tracked dist edits preserved. Source pushed; receipt committed separately locally. QA server stopped, temporary tab closed, viewport reset, live saved practice map left open.
+
+Evidence: outputs/texas-rehearsal-actual-data-20261015.json;texas-rehearsal-all-tests-20261015.txt;texas-rehearsal-ui-tests-20261015.txt;texas-rehearsal-live-assets-20261015.json;texas-rehearsal-live-browser-20261015.json;texas-rehearsal-live-phone-20261015.png. Private steps: outputs/TEXAS-QR-IPHONE-TEST-20261015.md. Implementation: PERMIT-TEXAS-REHEARSAL-20261015.md.

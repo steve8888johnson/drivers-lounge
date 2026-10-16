@@ -1,0 +1,1 @@
+{"name":"drivers-lounge-mobile","version":"0.1.0","private":true,"scripts":{"prepare:web":"node prepare-web.mjs","sync":"cap sync"},"dependencies":{"@capacitor/core":"8.5.3","@capacitor/android":"8.5.3","@capacitor/ios":"8.5.3"},"devDependencies":{"@capacitor/cli":"8.5.3"}}
