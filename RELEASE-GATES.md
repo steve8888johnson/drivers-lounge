@@ -545,3 +545,9 @@ Do not advertise this as live. Supabase/Vercel connectors return unavailable-to-
 ### Later backend activation, October 16
 
 The earlier access/migration blocker above is superseded for Supabase. Owner-approved CLI authentication succeeded and owner reconfirmed Free. The single prepared migration is applied and recorded. Live table isolation/rollback checks, actual privileged Storage transport/hash/removal and anonymous REST denial passed; zero fixtures remain. Advisors show the same nine pre-existing notices and no new ones. No website deployment or actual owner/phone transfer proof yet; Vercel CLI browser approval is pending. See PERMIT-WALLET-BACKEND-20261016.md. Operational guidance, PR4, DNS and the 57 historical dist edits remain unchanged.
+
+### Website controls live — October 16, 15:47 UTC
+
+Vercel browser approval completed. Earlier pending-release entries are historical. Production source `1da87ad362f018a6f9d8f74878398b3492088486` is READY as `dpl_2jXkoAKCXmSFZfv76aHLjQH9h7NL`. Remote 431 tests and build/static checks pass; ten assets match Git; four public pages return 200. Signed-out live 390px UI, disabled account controls, correct missing-session message, no overflow and 48px buttons verified. Real auth outages still hold transfers. No page errors/failed requests; bounded deployment error/fatal query returned zero records. Flags remain true/true/false for accounts/read-only beta/permit guidance.
+
+Supabase Free reconfirmed; Vercel's existing Pro allowance had $19.51 remaining before release. No upgrade or new paid service. Actual authenticated owner upload and iPhone download still require the owner's test; mock browser transfers and privileged Storage checks do not prove that. No claims of operational route readiness. See `PERMIT-WALLET-LIVE-20261016.md` for exact evidence and phone steps. Historical 57 dist edits, DNS and PR4 preserved.

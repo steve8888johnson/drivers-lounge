@@ -2,7 +2,7 @@
 
 ## Scope and status
 
-Backend applied to the existing Drivers Lounge Supabase project. Website code remains local pending Vercel approval and exact-source deployment. The owner approved official CLI browser authentication and confirmed organization Free in its billing page. No upgrade, purchase, routing activation, PR4 merge or email DNS change.
+Backend applied to the existing Drivers Lounge Supabase project. The subsequent website release is live; see `PERMIT-WALLET-LIVE-20261016.md` for the exact source and verification. Real owner-to-iPhone transfer still needs confirmation. The owner approved official CLI browser authentication and confirmed organization Free in its billing page. No upgrade, purchase, routing activation, PR4 merge or email DNS change.
 
 Migration `20261016135203_private_permit_wallet_sync.sql` is recorded remotely. An isolated directory fetched the existing remote migration history, received only this reviewed new file, and the dry run listed exactly that file. The real push skipped Vault, roles and seeds. Historical local migrations were not replayed.
 

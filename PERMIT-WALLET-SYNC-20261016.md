@@ -2,13 +2,13 @@
 
 ## Status
 
-**Backend migrated and verified; website controls not yet deployed.** After both chat connectors remained unavailable, Steve explicitly authorized official local-tool browser sign-ins and completed Supabase authentication. He reconfirmed the existing organization still shows Free. Only migration `20261016135203_private_permit_wallet_sync.sql` was applied, using a staging directory populated from actual remote migration history and a dry run proving exactly one pending change. No plan upgrade or charge.
+**Backend and website controls are live; real owner-to-iPhone transfer still needs confirmation.** After both chat connectors remained unavailable, Steve explicitly authorized official local-tool browser sign-ins and completed Supabase and Vercel authentication. He reconfirmed the existing Supabase organization still shows Free. Only migration `20261016135203_private_permit_wallet_sync.sql` was applied, using a staging directory populated from actual remote migration history and a dry run proving exactly one pending change. No plan upgrade or purchase.
 
 Live rollback tests pass for table owner access, cross-owner/anonymous denial, stale writes, archive requirements and empty-wallet removal. Actual Storage API upload/download preserved a small public test image's SHA-256; unsigned reads failed and API removal was verified. This privileged CLI transport test does not establish an authenticated driver's browser upload. Zero test wallets and originals remain. Post-migration advisors have the same nine pre-existing notices and no new ones. See `PERMIT-WALLET-BACKEND-20261016.md`.
 
-Vercel CLI is installed and its browser approval is pending. No website deployment or real phone sync proof yet. User-approved local CLI logins are the only credential-related change in this pass; no passwords/keys were copied into source or reports. DNS and production account settings are unchanged.
+Production https://driverslounge.app/permitted-loads is READY at source `1da87ad362f018a6f9d8f74878398b3492088486`, deployment `dpl_2jXkoAKCXmSFZfv76aHLjQH9h7NL`. Ten public asset hashes match Git. Remote 431 tests and all build checks pass; signed-out live mobile layout and controls were verified. A real SDK missing-session response exposed misleading error copy; it now shows the normal sign-in state while other authentication failures still disable transfers. See `PERMIT-WALLET-LIVE-20261016.md`.
 
-Last previously verified production source remains b8900abeb315855976bd379e5ed66e962b02d94e (permit scanner release), not this change. Keep PR4 unmerged and operational guidance disabled.
+Vercel already uses Pro; its checked allowance had $19.51 of $20 monthly included credit remaining before these releases. No paid service or upgrade was added. User-approved CLI logins were the only credential-related change; no secrets entered source or reports. DNS, account/payment settings, PR4 and operational guidance remain unchanged. Do not describe all hosting as free or the actual iPhone transfer as proven.
 
 ## User flow
 
@@ -23,7 +23,7 @@ Transfer copies text, QR references, issuer geometry, load details and originals
 
 - New owner-only `dl_permit_wallets` table and private `permit-wallet` bucket. Server RLS, column grants, path checks, immutable objects and version guards, independent of existing crew tables.
 - UUID owner/trip prefixes and content hashes identify originals. No public links, client secret keys, paid routing calls or new subscriptions.
-- Application limits: 20 account trips, 45 MiB current originals/trip, 15 MiB/file, 200 references/trip, 4 MiB snapshot. Free-service allowance is shared across the project, not per driver. The earlier connected check showed the existing Supabase organization on Free; recheck before release. No upgrade is authorized.
+- Application limits: 20 account trips, 45 MiB current originals/trip, 15 MiB/file, 200 references/trip, 4 MiB snapshot. Free-service allowance is shared across the project, not per driver. The owner reconfirmed the Supabase organization on Free before activation. No upgrade is authorized.
 - Removed/replaced and interrupted-upload files remain under that trip until explicit account removal. This avoids breaking concurrent or last-complete snapshots; it also consumes storage. Removal archives the trip, deletes its Storage objects and finally deletes its row. Interrupted cleanup stays visible and retryable. Row deletion is blocked while originals remain.
 - Account files already downloaded stay in IndexedDB. Account switching filters linked copies; explicit sign-out clears the last-account display preference. While offline, that local preference permits reopening the last account's downloaded copies without authorizing any cloud transfers. Local browser files are **not encrypted** and are not a secure boundary against someone controlling the device. Exported copies/guest imports are separate; use a trusted device.
 - Fresh offline install caches all transitive permit modules. No Supabase/API/authentication responses or map tiles are added to the service-worker cache. No claim of complete offline street maps.
@@ -39,10 +39,10 @@ Evidence outside Git: `outputs/permit-cloud-browser-20261016.json`, `outputs/per
 
 ## Release checklist and account deletion runbook
 
-1. Reconnect Supabase/Vercel and verify exact project `opwaikfrnpvovnaslvfz`, organization Free plan, current migrations, all existing Storage policies and target Vercel `drivers-lounge` / `steves-projects-c46af6ff`.
-2. Apply only `supabase/migrations/20261016135203_private_permit_wallet_sync.sql` after confirming it has not already run. Created with Supabase CLI 2.121.0. Do not replay the full historical migration directory against production.
-3. Verify grants/RLS/private bucket, run security advisors and bounded rollback-only isolation checks. Use the authenticated owner's UI for an actual upload/download/cleanup test. Do not extract browser tokens or create credentials.
-4. Push reviewed source, deploy the exact commit, inspect READY status and verify public asset hashes and unchanged safety flags. Record actual live results separately. Test phone Safari while parked.
+1. DONE: Official local CLI access, exact Supabase project `opwaikfrnpvovnaslvfz`, owner-confirmed Free plan, existing policies and Vercel `drivers-lounge` / `steves-projects-c46af6ff` verified. Chat connectors are still unavailable; do not repeatedly reconnect them.
+2. DONE: Only `supabase/migrations/20261016135203_private_permit_wallet_sync.sql` applied and recorded. Created with Supabase CLI 2.121.0. Do not replay the full historical migration directory against production.
+3. DONE for backend checks: grants/RLS/private bucket, security advisors, rollback isolation, anonymous denial and privileged Storage transport/removal. PENDING: authenticated owner browser upload/download and physical iPhone Safari. Do not extract browser tokens or create credentials.
+4. DONE: Reviewed source pushed, exact production commit READY, public asset hashes and unchanged safety flags verified. Phone test: refresh both devices, save the existing trip to account on the computer, then check account trips and open it on the iPhone under the same account. Confirm original PDFs and route; save explicitly after later edits.
 5. For an account deletion request: verify authority and any required retention, revoke/sign out sessions through the supported auth workflow, archive each account wallet, delete each bucket prefix through the **Storage API**, confirm empty prefixes, then remove wallet rows and auth user. Never delete Storage metadata with SQL as a substitute for deleting the actual object. Retry incomplete cleanup before completing the request; device/exported backups remain under the device owner's control.
 
 No claim of live sync or completed deletion may be made until the corresponding operation is verified.
