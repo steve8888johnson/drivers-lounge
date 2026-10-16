@@ -33,3 +33,5 @@ dialog{max-width:min(520px,calc(100vw - 32px));border:1px solid var(--line);bord
 #issuer-rehearsal-heading .eyebrow{margin:10px 0 4px}#issuer-rehearsal-heading h3{margin:6px 0}.issuer-map-legend{font-size:13px;margin:8px 0 12px}#issuer-rehearsal label{margin:12px 0 6px}
 
 #issuer-rehearsal-heading{scroll-margin-top:90px}
+
+#issuer-junction-details select{min-width:0;max-width:100%;width:100%;text-overflow:ellipsis}#issuer-chain-section{border-top:1px solid #ccd5e2;padding-top:12px;margin-top:12px}#issuer-chain-section button{min-height:48px}#issuer-chain-note{font-size:14px;overflow-wrap:anywhere}

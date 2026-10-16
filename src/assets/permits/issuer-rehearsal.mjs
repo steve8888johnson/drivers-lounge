@@ -26,10 +26,10 @@ export function issuerRehearsal(permit, index = 0) {
   return {...result,estimated:true,reason:'Blue highlights an approximate area from rounded issuer mileage. It is not a confirmed turn or ramp location; errors can vary along the route.'};
 }
 
-export function issuerRowSpeech(view) {
+export function issuerRowSpeech(view,{candidateComparison=false}={}) {
   if (!view?.available) return null;
   const row=view.row;
-  return `Parked Texas permit review. Row ${view.index+1} of ${view.total}. ${row.road?`Road column: ${pronouncePrintedRoad(row.road)}. `:''}Issued instruction: ${pronouncePrintedRoad(row.instruction)}. ${view.estimated?'The highlighted map area is approximate.':'No turn position has been established.'} This is not live guidance.`;
+  return `Parked Texas permit review. Row ${view.index+1} of ${view.total}. ${row.road?`Road column: ${pronouncePrintedRoad(row.road)}. `:''}Issued instruction: ${pronouncePrintedRoad(row.instruction)}. ${candidateComparison?'The displayed road shapes are candidates. Their endpoints are not verified turn locations.':view.estimated?'The highlighted map area is approximate.':'No turn position has been established.'} This is not live guidance.`;
 }
 
 // Pair only adjacent, literal entry/merge wording for the same road and direction.
