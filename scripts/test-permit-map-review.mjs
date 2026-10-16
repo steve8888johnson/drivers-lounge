@@ -99,13 +99,13 @@ test('joined candidate focuses original endpoints across the pair, reads literal
     await env.el('#issuer-junction-load').onclick();env.el('#issuer-junction-select').value='0';env.el('#issuer-junction-select').onchange();
     assert(!env.el('#issuer-chain-section').hidden);assert.equal(env.el('#issuer-chain-select').value,'');assert(env.el('#issuer-chain-fit').disabled);
     env.el('#issuer-chain-select').value='1:0:2:1:3';env.el('#issuer-chain-select').onchange();assert(!env.el('#issuer-chain-fit').disabled);assert(env.el('#issuer-endpoints').hidden);assert.equal(env.state.spoken.length,0);assert.match(env.el('#issuer-junction-summary').textContent,/not verified turn/);
-    assert.match(env.el('#issuer-chain-contacts').innerHTML,/Both candidate ends/);assert.match(env.el('#issuer-chain-contacts').innerHTML,/Approach · SH171 se/);assert.match(env.el('#issuer-chain-contacts').innerHTML,/Merge · SH31 sw/);assert.match(env.el('#issuer-junction-select').innerHTML,/SH171 · Single Roadbed/);
+    assert.match(env.el('#issuer-chain-order').innerHTML,/Route order comparison/);assert.match(env.el('#issuer-chain-order').innerHTML,/Closest line positions run in the printed order/);assert.match(env.el('#issuer-chain-contacts').innerHTML,/Both candidate ends/);assert.match(env.el('#issuer-chain-contacts').innerHTML,/Approach · SH171 se/);assert.match(env.el('#issuer-chain-contacts').innerHTML,/Merge · SH31 sw/);assert.match(env.el('#issuer-junction-select').innerHTML,/SH171 · Single Roadbed/);
     const whole=structuredClone(env.state.bounds);assert.equal(whole.length,4);assert.match(env.el('#issuer-junction-detail').innerHTML,/from this joined candidate/);assert.match(env.el('#issuer-junction-detail').innerHTML,/Joined records 1 \+ 2/);
     env.el('#issuer-pair-entry').onclick();const entry=structuredClone(env.state.bounds);assert.equal(entry.length,2);assert.notDeepEqual(entry,whole);env.el('#issuer-row-read').onclick();assert.match(env.state.spoken.at(-1).text,/Take State Highway 31 Ramp southwest/);assert.match(env.state.spoken.at(-1).text,/endpoints are not verified turn locations/);
     const cancel=env.state.cancelled;env.el('#issuer-pair-merge').onclick();assert(env.state.cancelled>cancel);assert.notDeepEqual(env.state.bounds,entry);assert.equal(env.state.spoken.length,1);assert.equal(env.el('#issuer-chain-select').value,'1:0:2:1:3');assert.equal(calls,1);
     env.el('#issuer-row-read').onclick();assert.match(env.state.spoken.at(-1).text,/Merge onto State Highway 31 southwest/);env.el('#issuer-chain-fit').onclick();assert.deepEqual(env.state.bounds,whole);
     env.el('#issuer-row-next').onclick();assert(env.el('#issuer-junction-details').hidden);assert.equal(env.el('#issuer-chain-select').value,'');assert.equal(JSON.stringify(p),before);assert.equal(p.steps.length,0);
-    assert.equal(env.el('#issuer-chain-contacts').innerHTML,'');
+    assert.equal(env.el('#issuer-chain-contacts').innerHTML,'');assert.equal(env.el('#issuer-chain-order').innerHTML,'');
     env.events.pagehide();assert(env.el('#issuer-junction-details').hidden);
   }finally{globalThis.fetch=oldFetch;env.cleanup();}
 });

@@ -1,4 +1,4 @@
-const CACHE='drivers-lounge-rc2-ramp-road-contact-20261016';
+const CACHE='drivers-lounge-rc2-ramp-route-order-20261016';
 const PERMIT_SHELL=['/permitted-loads','/assets/permits/permit-trip.css','/assets/permits/app.mjs','/assets/permits/core.mjs','/assets/permits/drafts.mjs','/assets/permits/walkthrough.mjs','/assets/permits/hazmat.mjs','/assets/permits/hazmat-ui.mjs','/assets/permits/hazmat-sources.mjs','/assets/permits/import.mjs','/assets/permits/intake.mjs','/assets/permits/qr-flow.mjs','/assets/permits/provider.mjs','/assets/permits/qr-scan.mjs','/assets/permits/qr-worker.mjs','/assets/permits/storage.mjs','/assets/permits/examples.mjs','/assets/permits/crew.mjs','/assets/vendor/jsQR-1.4.0.js','/assets/backend.js'];
 PERMIT_SHELL.push('/assets/truck-setup-account.mjs','/assets/truck-setup-sync.mjs','/assets/truck-setup-account.css','/assets/truck-setup-memory.js','/assets/permits/saved-setup.mjs','/assets/permits/gps-watch.mjs','/assets/permits/route-sketch.mjs','/assets/permits/route-coverage.mjs');
 PERMIT_SHELL.push('/assets/permits/pdf-scan.mjs','/assets/permits/map-review.mjs','/assets/permits/map-review-ui.mjs','/assets/vendor/leaflet-1.9.4/leaflet.js','/assets/vendor/leaflet-1.9.4/leaflet.css','/assets/vendor/pdfjs-6.4.299/pdf.min.mjs','/assets/vendor/pdfjs-6.4.299/pdf.worker.min.mjs');
@@ -6,7 +6,7 @@ PERMIT_SHELL.push("/assets/permits/pdf-route-review.mjs","/assets/permits/pdf-ro
 PERMIT_SHELL.push('/assets/permits/document-intake.mjs','/assets/permits/printed-map-match.mjs');
 PERMIT_SHELL.push('/assets/permits/cloud-packet.mjs','/assets/permits/cloud-sync.mjs','/assets/permits/cloud-ui.mjs');
 PERMIT_SHELL.push('/assets/permits/wallet-account-state.mjs');
-PERMIT_SHELL.push('/assets/permits/issuer-map.mjs','/assets/permits/issuer-span-check.mjs','/assets/permits/road-movement.mjs','/assets/permits/issuer-rehearsal.mjs','/assets/permits/junction-evidence.mjs','/assets/permits/ramp-comparison.mjs','/assets/permits/ramp-road-match.mjs');
+PERMIT_SHELL.push('/assets/permits/issuer-map.mjs','/assets/permits/issuer-span-check.mjs','/assets/permits/road-movement.mjs','/assets/permits/issuer-rehearsal.mjs','/assets/permits/junction-evidence.mjs','/assets/permits/ramp-comparison.mjs','/assets/permits/ramp-road-match.mjs','/assets/permits/ramp-route-order.mjs');
 const REFERENCE_SHELL=['/compliance','/assets/compliance/reference.css','/assets/compliance/app.mjs','/assets/compliance/core.mjs','/assets/compliance/glossary.mjs','/assets/compliance/rules.mjs','/assets/compliance/sources.mjs','/assets/compliance/states.mjs'];
 PERMIT_SHELL.push('/assets/permits/launch.mjs','/assets/permits/preparation.mjs','/assets/permits/guidance.mjs','/assets/trip-preparation.js');
 PERMIT_SHELL.push('/permit-phone-check','/assets/permits/speech.mjs','/assets/permits/phone-check.mjs','/assets/permits/phone-check-core.mjs','/assets/permits/phone-check.css');
