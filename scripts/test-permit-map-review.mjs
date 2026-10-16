@@ -165,6 +165,19 @@ test('parked row changes align speech with selected text, cancel old audio and k
   }finally{env.cleanup();}
 });
 
+test('Next and read speaks only the newly selected literal row, never auto-advances or wraps',async()=>{
+  const env=environment();try{
+    const rows=[{sequence:1,road:'SH31 s',instruction:'Take SH31 Ramp sw',miles:1,cumulativeMiles:1},{sequence:2,road:'SH31 Ramp sw',instruction:'Merge onto SH31 sw',miles:1,cumulativeMiles:2}];
+    const p={...blankPermit(),state:'TX',number:'TEST',routeText:rows.map(issuerRowText).join('\n'),entry:{label:'A'},exit:{label:'B'}};
+    p.issuerMap={format:'txpros-issuer-map/v2',sourceUrl:'https://txpros.txdmv.gov/PermitDetails02.aspx?PermitID=10000001&QRUSER=1',permitNumber:p.number,routeText:p.routeText,entryLabel:'A',exitLabel:'B',retrievedAt:'2026-10-15T12:00:00Z',paths:[[[32,-100],[32.001,-100]]],rows};
+    const before=JSON.stringify(p),review=createMapReview();review.open(p);assert.equal(env.state.spoken.length,0);
+    document.hidden=true;env.el('#issuer-row-next-read').onclick();assert.equal(env.el('#issuer-row-select').value,'0');assert.equal(env.state.spoken.length,0);document.hidden=false;
+    env.el('#issuer-row-next-read').onclick();assert.equal(env.el('#issuer-row-select').value,'1');assert.equal(env.state.spoken.length,1);assert.match(env.state.spoken[0].text,/Merge onto State Highway 31 southwest/);assert.match(env.state.spoken[0].text,/not live guidance/);assert(env.el('#issuer-row-next-read').disabled);
+    env.el('#issuer-row-next-read').onclick();assert.equal(env.state.spoken.length,1);assert.equal(env.el('#issuer-row-select').value,'1');assert.equal(JSON.stringify(p),before);
+    env.el('#issuer-row-previous').onclick();assert.equal(env.state.spoken.length,1);env.el('#permit-map-dialog').open=false;env.el('#issuer-row-next-read').onclick();assert.equal(env.state.spoken.length,1);
+  }finally{env.cleanup();}
+});
+
 test('inventory comparison is inspection-only and cannot linger across speech, rows or a map with missing evidence',async()=>{
   const env=environment();try{
     const rows=[{sequence:1,road:'US83 s',instruction:'Continue straight on US62 s',miles:20,cumulativeMiles:20}],original=[[35,-100],[35.055,-100]];

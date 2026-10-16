@@ -104,3 +104,11 @@ test('IndexedDB transaction failure leaves old trip intact and no half-imported 
 test('unsafe route text cannot be silently shortened during sync',()=>{
   const f=fixture();f.trip.permits[0].routeText='x'.repeat(20001);assert.throws(()=>cleanCloudTrip(f.trip),/Nothing was shortened/);
 });
+
+test('account transfer preserves bounded PDF scan history without granting permit approval',async()=>{
+  const f=fixture(),progress={schema:'dl-pdf-qr-progress/v1',totalPages:4,pages:[{page:1,status:'qr-found',count:1},{page:2,status:'failed',count:0}]};
+  f.trip.permits[0].documents[0].pdfScan={...progress,approved:true};
+  const s=server(),c=client(s,f);await c.save(f.trip);const packet=await c.download(f.trip.id),copy=await importAccountTrip(packet);
+  assert.deepEqual(copy.permits[0].documents[0].pdfScan,progress);assert.equal(copy.permits[0].review,null);assert.equal(copy.permits[0].geometryReview,null);assert.equal(copy.acknowledged,false);assert(await getDocument(copy.permits[0].documents[0].id));await deleteTrip(copy);
+  f.trip.permits[0].documents[0].pdfScan.totalPages=10001;assert.equal(cleanCloudTrip(f.trip).permits[0].documents[0].pdfScan,undefined);
+});

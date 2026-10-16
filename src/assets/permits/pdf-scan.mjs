@@ -1,5 +1,32 @@
 // Read local PDF pixels only. No URL, text extraction, form actions or inferred routes.
 export const PDF_SCAN_LIMITS = Object.freeze({ pages: 40, bytes: 15 * 1024 * 1024, longestSide: 2300, pixels: 4000000, timeoutMs: 120000 });
+// Processing history only: a scanned page is not a verified permit or route.
+export function cleanPDFProgress(value) {
+  if(value?.schema!=='dl-pdf-qr-progress/v1'||!Number.isInteger(value.totalPages)||value.totalPages<1||value.totalPages>10000||!Array.isArray(value.pages)||value.pages.length>value.totalPages)return null;
+  const seen=new Set(),pages=[];
+  for(const p of value.pages){
+    if(!Number.isInteger(p?.page)||p.page<1||p.page>value.totalPages||seen.has(p.page)||!['qr-found','no-readable-qr','failed'].includes(p.status)||!Number.isInteger(p.count)||p.count<0||p.count>64||(p.status==='qr-found')!==(p.count>0))return null;
+    seen.add(p.page);pages.push({page:p.page,status:p.status,count:p.count});
+  }
+  return {schema:'dl-pdf-qr-progress/v1',totalPages:value.totalPages,pages:pages.sort((a,b)=>a.page-b.page)};
+}
+export function mergePDFProgress(previous,result) {
+  const pass=cleanPDFProgress({schema:'dl-pdf-qr-progress/v1',totalPages:result?.totalPages,pages:result?.pages});
+  if(!pass)return null;
+  const old=cleanPDFProgress(previous),pages=new Map((old?.totalPages===pass.totalPages?old.pages:[]).map(p=>[p.page,p]));
+  // The latest attempt controls. A failed rescan must not keep an old success.
+  for(const p of pass.pages)pages.set(p.page,p);
+  return cleanPDFProgress({...pass,pages:[...pages.values()]});
+}
+export function pdfProgressView(value) {
+  const progress=cleanPDFProgress(value);if(!progress)return null;
+  const pages=new Map(progress.pages.map(p=>[p.page,p])),failed=progress.pages.filter(p=>p.status==='failed').length;
+  const checked=progress.pages.length-failed,unscanned=progress.totalPages-progress.pages.length;
+  let nextPage=null;for(let p=1;p<=progress.totalPages;p++)if(!pages.has(p)||pages.get(p).status==='failed'){nextPage=p;break;}
+  return {checked,failed,unscanned,nextPage,complete:nextPage===null,
+    summary:`QR scan checked ${checked} of ${progress.totalPages} pages; ${failed} failed; ${unscanned} not yet scanned. Scanning does not verify the route.`,
+    action:nextPage===null?'Scan PDF pages again':`${pages.get(nextPage)?.status==='failed'?'Retry':'Continue from'} page ${nextPage}`};
+}
 export function scanViewport(width, height) {
   if (![width, height].every(n => Number.isFinite(n) && n > 0)) throw Error('Invalid PDF page size.');
   const scale = Math.min(3, PDF_SCAN_LIMITS.longestSide / Math.max(width, height), Math.sqrt(PDF_SCAN_LIMITS.pixels / (width * height)));

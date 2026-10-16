@@ -1,10 +1,38 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { scanPDFPages, scanViewport, PDF_SCAN_LIMITS } from '../src/assets/permits/pdf-scan.mjs';
+import { scanPDFPages, scanViewport, PDF_SCAN_LIMITS, cleanPDFProgress, mergePDFProgress, pdfProgressView } from '../src/assets/permits/pdf-scan.mjs';
 import { parkedSource } from '../src/assets/permits/speech.mjs';
 import { saveOriginalBatch, originalBatchSummary } from '../src/assets/permits/document-intake.mjs';
 import { scanImage } from '../src/assets/permits/import.mjs';
 const fakeRender = released => async page => ({ canvas: { page }, release: () => released.push(page) });
+
+test('stopped PDF history resumes the first unscanned page and later passes complete the same original',()=>{
+  const first=mergePDFProgress(null,{totalPages:4,pages:[{page:1,status:'qr-found',count:1},{page:2,status:'no-readable-qr',count:0}]});
+  const before=JSON.stringify(first);assert.equal(pdfProgressView(first).nextPage,3);assert.equal(pdfProgressView(first).checked,2);
+  const rest=mergePDFProgress(first,{totalPages:4,pages:[{page:3,status:'no-readable-qr',count:0},{page:4,status:'qr-found',count:1}]});
+  assert(pdfProgressView(rest).complete);assert.equal(pdfProgressView(rest).checked,4);assert.equal(JSON.stringify(first),before);assert.match(pdfProgressView(rest).summary,/does not verify the route/);assert(!('approved' in rest));
+});
+test('failed pages remain unresolved across later passes and are the next explicit retry',()=>{
+  const first=mergePDFProgress(null,{totalPages:3,pages:[{page:1,status:'failed',count:0},{page:2,status:'qr-found',count:1}]});
+  const later=mergePDFProgress(first,{totalPages:3,pages:[{page:3,status:'no-readable-qr',count:0}]});
+  assert.equal(pdfProgressView(later).nextPage,1);assert.equal(pdfProgressView(later).action,'Retry page 1');assert.equal(pdfProgressView(later).checked,2);assert(!pdfProgressView(later).complete);
+  const retried=mergePDFProgress(later,{totalPages:3,pages:[{page:1,status:'no-readable-qr',count:0}]});assert(pdfProgressView(retried).complete);
+});
+test('retrying does not double-count and a latest failure replaces a previous successful scan',()=>{
+  const pass={totalPages:1,pages:[{page:1,status:'qr-found',count:1}]},first=mergePDFProgress(null,pass);
+  assert.equal(mergePDFProgress(first,pass).pages.length,1);
+  const failed=mergePDFProgress(first,{totalPages:1,pages:[{page:1,status:'failed',count:0}]});assert.equal(pdfProgressView(failed).checked,0);assert(!pdfProgressView(failed).complete);
+});
+test('changed page count resets incompatible history and empty cancelled passes never claim completion',()=>{
+  const old=mergePDFProgress(null,{totalPages:1,pages:[{page:1,status:'qr-found',count:1}]});
+  const reset=mergePDFProgress(old,{totalPages:3,pages:[{page:2,status:'qr-found',count:1}]});assert.equal(pdfProgressView(reset).nextPage,1);assert.equal(pdfProgressView(reset).checked,1);
+  const empty=mergePDFProgress(null,{totalPages:2,pages:[]});assert.equal(pdfProgressView(empty).nextPage,1);assert(!pdfProgressView(empty).complete);
+});
+test('untrusted scan metadata cannot fabricate a complete report or carry arbitrary fields',()=>{
+  const good={schema:'dl-pdf-qr-progress/v1',totalPages:2,pages:[{page:1,status:'qr-found',count:1,approved:true}],complete:true};
+  assert(!pdfProgressView(good).complete);assert(!('approved' in cleanPDFProgress(good).pages[0]));
+  for(const bad of [{...good,totalPages:10001},{...good,pages:[...good.pages,...good.pages]},{...good,pages:[{page:3,status:'qr-found',count:1}]},{...good,pages:[{page:1,status:'failed',count:1}]},{...good,pages:[{page:1,status:'qr-found',count:0}]}]){assert.equal(cleanPDFProgress(bad),null);assert.equal(pdfProgressView(bad),null);}
+});
 
 test('PDF QR pages retain duplicate provenance without duplicating payloads or inferring routes', async () => {
   const released = [], updates = [];

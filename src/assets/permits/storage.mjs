@@ -1,6 +1,7 @@
 import { sanitizePermit, blankTrip, clean } from './core.mjs';
 import { sanitizeHazmat } from './hazmat.mjs';
 import { planningPlaces } from './preparation.mjs';
+import { cleanPDFProgress } from './pdf-scan.mjs';
 const DB = 'dl-permit-wallet-v1';
 let connection;
 export async function database() {
@@ -82,7 +83,7 @@ export async function importPacket(packet) {
     const metadata = { id: crypto.randomUUID(), name: clean(doc.name, 200), type, size: blob.size };
     mappings.set(doc.id, metadata); docs.push({ ...metadata, tripId: trip.id, blob });
   }
-  trip.permits = packet.trip.permits.map(value => { const permit = sanitizePermit(value); permit.documents = (value.documents || []).map(doc => { if (!mappings.has(doc.id)) throw Error('Original permit missing from packet.'); return mappings.get(doc.id); }); return permit; });
+  trip.permits = packet.trip.permits.map(value => { const permit = sanitizePermit(value); permit.documents = (value.documents || []).map(doc => { if (!mappings.has(doc.id)) throw Error('Original permit missing from packet.'); const metadata=mappings.get(doc.id),pdfScan=metadata.type==='application/pdf'?cleanPDFProgress(doc.pdfScan):null;return {...metadata,...(pdfScan?{pdfScan}:{})}; }); return permit; });
   await transaction(['trips', 'documents'], 'readwrite', tx => { docs.forEach(doc => tx.objectStore('documents').put(doc)); tx.objectStore('trips').put(trip); });
   return trip;
 }

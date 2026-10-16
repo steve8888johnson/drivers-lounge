@@ -14,6 +14,7 @@ export function createPrintedRouteReview(stopOtherSpeech=()=>{}) {
     const row=review?.rows[index];
     $('#printed-route-previous').disabled=!row||index===0;$('#printed-route-next').disabled=!row||index===review.rows.length-1;
     $('#printed-route-read').disabled=!row||!!review.issues.length;
+    $('#printed-route-next-read').disabled=!row||!!review.issues.length||index===review.rows.length-1;
     $('#printed-route-select').disabled=!row;
     $('#printed-route-select').replaceChildren(...(review?.rows||[]).map((r,i)=>new Option(`${i+1}. Page ${r.page} · ${r.instruction}`,String(i))));
     $('#printed-route-select').value=String(index);
@@ -24,10 +25,11 @@ export function createPrintedRouteReview(stopOtherSpeech=()=>{}) {
     $('#printed-route-issues').textContent=review?.issues.join('\n')||'';
     roadEvidence.select(index);
   }
-  function select(value) {speech.stop('Row changed. Tap to read this row.');index=value;render();}
+  function select(value) {if(!dialog.open||!Number.isInteger(value)||!review?.rows[value])return false;speech.stop('Row changed. Tap to read this row.');index=value;render();return true;}
   $('#printed-route-select').onchange=()=>select(Number($('#printed-route-select').value));
   $('#printed-route-previous').onclick=()=>select(index-1);$('#printed-route-next').onclick=()=>select(index+1);
   $('#printed-route-read').onclick=readRow;
+  $('#printed-route-next-read').onclick=()=>{if(document.hidden||review?.issues.length)return;if(select(index+1))readRow();};
   $('#printed-route-stop-voice').onclick=()=>speech.stop();
   $('#printed-route-stop').onclick=()=>{stop();say('Reading stopped. Original unchanged.');$('#printed-route-stop').disabled=true;};
   dialog.addEventListener('close',stop);

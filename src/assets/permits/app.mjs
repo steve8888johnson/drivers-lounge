@@ -17,7 +17,7 @@ import { createGuidanceWatch } from './gps-watch.mjs';
 import { routeSketch } from './route-sketch.mjs';
 import { coverageMarkup, maneuverChoices } from './route-coverage.mjs';
 import { applySavedPermitSetup, REUSABLE_MEASUREMENTS } from './saved-setup.mjs';
-import { scanPDF } from './pdf-scan.mjs';
+import { scanPDF, mergePDFProgress, pdfProgressView } from './pdf-scan.mjs';
 import { createMapReview } from './map-review-ui.mjs';
 import { createPrintedRouteReview } from './pdf-route-review-ui.mjs';
 import { qrAction, retainScannedQR } from './qr-flow.mjs';
@@ -120,7 +120,15 @@ function renderList() {
   $('#permit-list').innerHTML = trip.permits.length ? trip.permits.map((p, i) => `<button class="permit-item ${p.id === selected ? 'selected' : ''}" data-permit="${esc(p.id)}"><b>${i + 1}. ${esc(p.state || 'New state')} <span>${esc(p.number)}</span></b><small>${esc(p.entry.label || 'Origin needed')} → ${esc(p.exit.label || 'Destination needed')}</small><small>${geometryReviewed(p) ? 'Route geometry confirmed' : reviewed(p) ? 'Permit confirmed · geometry needed' : 'Needs your confirmation'}</small></button>`).join('') : '<p class="muted">No permits yet. Add a permit or import its original.</p>';
   document.querySelectorAll('[data-permit]').forEach(b => b.onclick = safe(async () => { if (!await changeGuard()) return; selected = b.dataset.permit; renderReview(); renderList(); switchTab('review'); }));
 }
-function documentRows(p) { return p.documents.map(doc => `<div class="doc-row"><span>${esc(doc.name)}<br><small>${(doc.size / 1024).toFixed(0)} KB · original</small>${doc.scanSummary ? `<br><small>${esc(doc.scanSummary)}</small>` : ''}</span><button data-open-doc="${esc(doc.id)}">Open original</button>${doc.type === 'application/pdf' ? `<button data-scan-pdf="${esc(doc.id)}">Scan PDF QR codes</button><button data-read-route-pdf="${esc(doc.id)}">Read printed route</button>` : `<button data-scan-photo="${esc(doc.id)}">Scan saved photo</button>`}</div>`).join(''); }
+function documentRows(p) { return p.documents.map(doc => { const progress=doc.type==='application/pdf'?pdfProgressView(doc.pdfScan):null,summary=progress?.summary||doc.scanSummary;return `<div class="doc-row"><span>${esc(doc.name)}<br><small>${(doc.size / 1024).toFixed(0)} KB · original</small>${summary ? `<br><small>${esc(summary)}</small>` : ''}</span><button data-open-doc="${esc(doc.id)}">Open original</button>${doc.type === 'application/pdf' ? `<button data-scan-pdf="${esc(doc.id)}">${esc(progress?.nextPage?progress.action:'Scan PDF QR codes')}</button><button data-read-route-pdf="${esc(doc.id)}">Read printed route</button>` : `<button data-scan-photo="${esc(doc.id)}">Scan saved photo</button>`}</div>`; }).join(''); }
+function preparePDFScan(metadata) {
+  const progress=pdfProgressView(metadata.pdfScan);
+  $('#pdf-scan-name').textContent=metadata.name;
+  $('#pdf-start-page').value=String(progress?.nextPage||1);
+  $('#pdf-scan-run').textContent=progress?.action||'Scan PDF pages';
+  $('#pdf-scan-result').textContent='';
+  $('#pdf-scan-status').textContent=progress?progress.summary+' Saved scan history; choose any start page to rescan.':'Ready to scan this saved original. No file is uploaded.';
+}
 function wireDocuments(container) {
 container.querySelectorAll('[data-scan-photo]').forEach(button => button.onclick = safe(async () => {
   if (dirty) throw Error('Save changes before scanning an original.');
@@ -141,9 +149,7 @@ container.querySelectorAll('[data-scan-pdf]').forEach(button => button.onclick =
   if (!permit) throw Error('Original no longer belongs to this load.');
   selected = permit.id; renderList(); renderReview(); switchTab('review');
   pdfSelection = { tripId: trip.id, permitId: permit.id, docId: button.dataset.scanPdf };
-  $('#pdf-scan-name').textContent = permit.documents.find(d => d.id === pdfSelection.docId).name;
-  $('#pdf-start-page').value = '1'; $('#pdf-scan-result').textContent = '';
-  $('#pdf-scan-status').textContent = 'Ready to scan this saved original. No file is uploaded.';
+  preparePDFScan(permit.documents.find(d => d.id === pdfSelection.docId));
   $('#pdf-scan-dialog').showModal();
 }));
 container.querySelectorAll('[data-open-doc]').forEach(button => button.onclick = safe(async () => {
@@ -302,7 +308,7 @@ async function attach(files, split = false, scanPDFNow = true, decodedCodes = nu
     if (file.type.startsWith('image/')) await scanSavedPhoto(doc.id, decodedCodes);
     else if (scanPDFNow) {
       pdfSelection = { tripId: trip.id, permitId: p.id, docId: doc.id };
-      $('#pdf-scan-name').textContent = doc.name; $('#pdf-start-page').value = '1'; $('#pdf-scan-dialog').showModal();
+      preparePDFScan(p.documents.find(d=>d.id===doc.id)); $('#pdf-scan-dialog').showModal();
       const result = await runPDFScan();
       if (result?.scanComplete && result.retained > 0 && result.retained === result.codes.length) $('#pdf-scan-dialog').close();
     }
@@ -358,18 +364,22 @@ async function runPDFScan() {
     if (!intakeContextMatches(context, trip.id, currentPermit())) throw Error('The load or original changed. Scan results were not applied.');
     const { references, retained } = retainScannedQR(p.qr, result.codes);
     p.qr = references;
-    const summary = `${result.pages.length} of ${result.totalPages} PDF pages checked from page ${result.startPage}; ${result.pages.filter(page => page.status === 'failed').length} scan failure(s); ${retained} unique QR reference(s) retained${result.stopped ? '; stopped early' : ''}.`;
-    edit(); p.documents.find(d => d.id === selectedPDF.docId).scanSummary = summary;
+    const metadata=p.documents.find(d=>d.id===selectedPDF.docId);
+    const progress=mergePDFProgress(metadata.pdfScan,result),view=pdfProgressView(progress);
+    const summary=(view?.summary||`${result.pages.length} pages attempted from page ${result.startPage} of ${result.totalPages} in this pass.`)+` ${retained} unique QR reference(s) retained in this pass${result.stopped ? '; stopped early' : ''}.`;
+    edit(); metadata.scanSummary = summary;if(progress)metadata.pdfScan=progress;else delete metadata.pdfScan;
     p.review = null; p.geometryReview = null;
     await persist(summary + ' Scanning does not confirm route completeness.'); renderList(); renderReview();
     $('#pdf-scan-status').textContent = summary;
-    $('#pdf-scan-result').textContent = result.pages.map(page => `Page ${page.page}: ${page.status === 'failed' ? 'SCAN FAILED — check original / use QR photo' : page.status === 'qr-found' ? `${page.count} QR code(s) found` : 'No readable QR — inspect original'}`).join('\n') + `\n${result.nextPage ? `Pages remain. Start at page ${result.nextPage} to continue; failed pages need a separate retry.` : 'Every scanned page still requires original review.'}${retained < result.codes.length ? '\nQR storage limit reached. Some codes were not retained; keep the original.' : ''}\nQR codes are references only until reviewed. No permit text, route or approval was applied.`;
-    if (result.nextPage) $('#pdf-start-page').value = String(result.nextPage);
+    $('#pdf-scan-result').textContent = (progress?.pages||result.pages).map(page => `Page ${page.page}: ${page.status === 'failed' ? 'SCAN FAILED — check original / use QR photo' : page.status === 'qr-found' ? `${page.count} QR code(s) found` : 'No readable QR — inspect original'}`).join('\n') + `\n${view?.nextPage ? `${view.action} to continue. Earlier successes are kept; failed pages stay unresolved until scanned successfully.` : result.nextPage&&!view ? `Pages remain. Start at page ${result.nextPage}.` : 'Every scanned page still requires original review.'}${retained < result.codes.length ? '\nQR storage limit reached. Some codes were not retained; keep the original.' : ''}\nQR codes are references only until reviewed. No permit text, route or approval was applied.`;
+    $('#pdf-start-page').value = String(view?(view.nextPage||1):(result.nextPage||1));
+    $('#pdf-scan-run').textContent=view?.action||'Scan PDF pages';
     return { ...result, retained };
   } catch (error) { $('#pdf-scan-status').textContent = error.message; }
   finally { if (pdfAbort === controller) pdfAbort = null; $('#pdf-scan-run').disabled = false; $('#pdf-start-page').disabled = false; $('#pdf-scan-stop').disabled = true; }
 }
 on('#pdf-scan-run', 'click', runPDFScan);
+$('#pdf-start-page').addEventListener('input',()=>{$('#pdf-scan-run').textContent='Scan PDF pages';});
 $('#pdf-scan-stop').onclick = () => pdfAbort?.abort();
 $('#pdf-scan-dialog').addEventListener('close', () => pdfAbort?.abort());
 async function startCamera() {

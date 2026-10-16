@@ -1,6 +1,7 @@
 import {blankTrip, sanitizePermit, clean} from './core.mjs';
 import {sanitizeHazmat} from './hazmat.mjs';
 import {planningPlaces} from './preparation.mjs';
+import {cleanPDFProgress} from './pdf-scan.mjs';
 
 export const CLOUD_LIMITS = Object.freeze({file:15*1024*1024, trip:45*1024*1024, files:200, snapshot:4*1024*1024, trips:20});
 export const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -24,7 +25,8 @@ export function cleanCloudTrip(value) {
     p.documents=raw.documents.map(d=>{
       if(!uuid(d.id)||docIds.has(d.id)||!types[d.type]||!Number.isSafeInteger(d.size)||d.size<=0||d.size>CLOUD_LIMITS.file)throw Error('Invalid original permit file.');
       docIds.add(d.id);bytes+=d.size;
-      return {id:d.id,name:clean(d.name,200),type:d.type,size:d.size,...(d.scanSummary?{scanSummary:clean(d.scanSummary,500)}:{})};
+      const pdfScan=d.type==='application/pdf'?cleanPDFProgress(d.pdfScan):null;
+      return {id:d.id,name:clean(d.name,200),type:d.type,size:d.size,...(d.scanSummary?{scanSummary:clean(d.scanSummary,500)}:{}),...(pdfScan?{pdfScan}:{})};
     });
     // Account transfer is never a new load/route approval or crew invitation.
     p.review=null;p.geometryReview=null;return p;

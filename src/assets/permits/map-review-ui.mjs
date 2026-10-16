@@ -109,6 +109,7 @@ export function createMapReview() {
     $('#issuer-row-location').textContent=focus==='sparse'?whole.issues.join(' '):rehearsal.reason;
     $('#issuer-row-distance').textContent=Number.isFinite(rehearsal.row.cumulativeMiles)?`Issued cumulative mileage: ${rehearsal.row.cumulativeMiles} mi. Not distance from your position.`:'';
     $('#issuer-row-previous').disabled=rowIndex===0;$('#issuer-row-next').disabled=rowIndex===rehearsal.total-1;
+    $('#issuer-row-next-read').disabled=rowIndex===rehearsal.total-1;
     $('#issuer-row-area').disabled=!rehearsal.estimated;
     $('#issuer-row-area').setAttribute('aria-pressed',String(focus==='row'));
     $('#issuer-row-read').disabled=false;
@@ -150,7 +151,9 @@ export function createMapReview() {
   $('#issuer-row-previous').onclick=()=>selectRow(rowIndex-1);
   $('#issuer-row-next').onclick=()=>selectRow(rowIndex+1);
   $('#issuer-row-area').onclick=async()=>{if(!rehearsal?.estimated)return;clearJunction();focus='row';render();if(!map)await showMap();$('#issuer-rehearsal-heading').scrollIntoView?.({block:'start'});};
-  $('#issuer-row-read').onclick=()=>{const text=issuerRowSpeech(rehearsal,{candidateComparison:!!selectedChain()});if(!text)return;if(focus!=='junction')focus='row';render();let prefs;try{prefs=speechPreferences(localStorage);}catch{prefs=speechPreferences(null);}speech.play(text,{...prefs,key:'issuer-row',repeat:true});};
+  function readIssuerRow(){const text=issuerRowSpeech(rehearsal,{candidateComparison:!!selectedChain()});if(!text)return;if(focus!=='junction')focus='row';render();let prefs;try{prefs=speechPreferences(localStorage);}catch{prefs=speechPreferences(null);}speech.play(text,{...prefs,key:'issuer-row',repeat:true});}
+  $('#issuer-row-read').onclick=readIssuerRow;
+  $('#issuer-row-next-read').onclick=()=>{if(!dialog.open||document.hidden||!rehearsal?.available||rowIndex>=rehearsal.total-1)return;selectRow(rowIndex+1);readIssuerRow();};
   $('#issuer-junction-select').onchange=()=>{const value=Number($('#issuer-junction-select').value);if(!Number.isInteger(value)||(value!==-1&&!junction?.features[value]))return;speech.stop();chainId='';chainFocus=false;junctionIndex=value;endpointIndex=-1;junctionWide=value===-1;render();$('#issuer-rehearsal-heading').scrollIntoView?.({block:'start'});};
   $('#issuer-junction-fit').onclick=()=>{speech.stop();chainId='';chainFocus=false;junctionWide=true;endpointIndex=-1;render();$('#issuer-rehearsal-heading').scrollIntoView?.({block:'start'});};
   $('#issuer-chain-select').onchange=()=>{const value=$('#issuer-chain-select').value;if(value&&!chains().some(c=>c.id===value))return;speech.stop();chainId=value;chainFocus=false;endpointIndex=-1;render();$('#issuer-rehearsal-heading').scrollIntoView?.({block:'start'});};
