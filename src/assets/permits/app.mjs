@@ -43,7 +43,7 @@ const speech = createSpeech({ synthesis: window.speechSynthesis, Utterance: wind
   onState: state => { $('#permit-speech-status').textContent = state.message; },
   onFailure: message => { if (watching !== null) stopGuidance('Spoken guidance failed. Stop when safe and check the device audio.'); $('#permit-speech-status').textContent = message; }
 });
-const printedRoute = createPrintedRouteReview(() => speech.stop());
+const printedRoute = createPrintedRouteReview(() => speech.stop(), (permit,review,row,name) => permitMap.open(permit,0,()=>{},{showMap:true,printedReview:review,issuerRow:row,printedName:name}));
 function voiceSettings() { try { return speechPreferences(localStorage); } catch { return speechPreferences(null); } }
 const currentPermit = () => trip?.permits.find(p => p.id === selected);
 function status(text, error = false) { $('#status').textContent = text; $('#status').dataset.error = String(error); }
@@ -140,8 +140,9 @@ container.querySelectorAll('[data-scan-photo]').forEach(button => button.onclick
 container.querySelectorAll('[data-read-route-pdf]').forEach(button => button.onclick = safe(async () => {
   if(dirty || watching!==null) throw Error('Park and save changes before reading the original.');
   const doc=await getDocument(button.dataset.readRoutePdf);
-  if(!doc?.blob || !trip.permits.some(p=>p.documents.some(d=>d.id===doc.id))) throw Error('The original is unavailable for this load.');
-  await printedRoute.open(doc.blob,doc.name);
+  const permit=trip.permits.find(p=>p.documents.some(d=>d.id===doc?.id));
+  if(!doc?.blob || !permit) throw Error('The original is unavailable for this load.');
+  await printedRoute.open(doc.blob,doc.name,permit);
 }));
 container.querySelectorAll('[data-scan-pdf]').forEach(button => button.onclick = safe(async () => {
   if (dirty) throw Error('Save changes before scanning an original.');

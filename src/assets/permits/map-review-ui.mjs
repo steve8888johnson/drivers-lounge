@@ -3,6 +3,7 @@ import { issuerRehearsal, issuerRowSpeech, issuerRampPair } from './issuer-rehea
 import { createSpeech, speechPreferences } from './speech.mjs';
 import { junctionRequest, junctionView, roadEndpointContacts, sanitizeRoadContext, compareRoadShape } from './junction-evidence.mjs';
 import { joinedRampComparisons } from './ramp-comparison.mjs';
+import { comparePrintedIssuerRoute } from './printed-map-match.mjs';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 let leafletPromise;
@@ -21,7 +22,7 @@ function leaflet() {
 export function createMapReview() {
   const $ = selector => document.querySelector(selector), dialog = $('#permit-map-dialog');
   let permit, index = 0, map, layers, token = 0, streetRequested = false, onSelection = () => {}, tileTimer, overview = false, whole;
-  let rowIndex=0, rehearsal, focus='all';
+  let rowIndex=0, rehearsal, focus='all',printedReview=null,printedName='';
   let chainId='',chainFocus=false;
   const chains=()=>joinedRampComparisons(junction?.features[junctionIndex],junction,rehearsal);
   const selectedChain=()=>focus==='junction'?chains().find(c=>c.id===chainId):null;
@@ -70,6 +71,9 @@ export function createMapReview() {
   }
   function renderRehearsal() {
     rehearsal=whole.issuerOverview?issuerRehearsal(permit,rowIndex):null;
+    const printedRow=printedReview?.rows[rowIndex];
+    $('#issuer-printed-match').hidden=!printedRow||focus==='sparse';
+    $('#issuer-printed-match').textContent=printedRow?`${printedName} · PDF page ${printedRow.page}, row ${rowIndex+1}. Text matches; turn location unverified.`:'';
     $('#issuer-rehearsal').hidden=!rehearsal?.available;
     $('#issuer-rehearsal-heading').hidden=!rehearsal?.available;
     $('#issuer-rehearsal-voice').hidden=!rehearsal?.available;
@@ -151,7 +155,7 @@ export function createMapReview() {
   $('#issuer-row-previous').onclick=()=>selectRow(rowIndex-1);
   $('#issuer-row-next').onclick=()=>selectRow(rowIndex+1);
   $('#issuer-row-area').onclick=async()=>{if(!rehearsal?.estimated)return;clearJunction();focus='row';render();if(!map)await showMap();$('#issuer-rehearsal-heading').scrollIntoView?.({block:'start'});};
-  function readIssuerRow(){const text=issuerRowSpeech(rehearsal,{candidateComparison:!!selectedChain()});if(!text)return;if(focus!=='junction')focus='row';render();let prefs;try{prefs=speechPreferences(localStorage);}catch{prefs=speechPreferences(null);}speech.play(text,{...prefs,key:'issuer-row',repeat:true});}
+  function readIssuerRow(){const text=issuerRowSpeech(rehearsal,{candidateComparison:!!selectedChain(),printedPage:printedReview?.rows[rowIndex]?.page});if(!text)return;if(focus!=='junction')focus='row';render();let prefs;try{prefs=speechPreferences(localStorage);}catch{prefs=speechPreferences(null);}speech.play(text,{...prefs,key:'issuer-row',repeat:true});}
   $('#issuer-row-read').onclick=readIssuerRow;
   $('#issuer-row-next-read').onclick=()=>{if(!dialog.open||document.hidden||!rehearsal?.available||rowIndex>=rehearsal.total-1)return;selectRow(rowIndex+1);readIssuerRow();};
   $('#issuer-junction-select').onchange=()=>{const value=Number($('#issuer-junction-select').value);if(!Number.isInteger(value)||(value!==-1&&!junction?.features[value]))return;speech.stop();chainId='';chainFocus=false;junctionIndex=value;endpointIndex=-1;junctionWide=value===-1;render();$('#issuer-rehearsal-heading').scrollIntoView?.({block:'start'});};
@@ -198,5 +202,9 @@ export function createMapReview() {
   dialog.addEventListener('close', dispose);
   document.addEventListener('visibilitychange', () => { if (document.hidden && dialog.open) { dispose(); status('Map stopped while page was hidden. Tap Show street map to reload while parked.'); } });
   window.addEventListener('pagehide', dispose);
-  return { open(value, selected = 0, selectionChanged = () => {}, options = {}) { dispose(); rowIndex=0;focus='all'; onSelection = selectionChanged; permit = structuredClone(value); index = selected; whole = routeOverview(permit); overview = options.overview === true || whole.issuerOverview === true; render(); status('Compare the original permit with the saved instruction. The map is off until requested.'); dialog.showModal(); if (options.showMap && whole.available) return showMap(); } };
+  return { open(value, selected = 0, selectionChanged = () => {}, options = {}) {
+    const nextPermit=structuredClone(value),nextReview=options.printedReview?structuredClone(options.printedReview):null;
+    if(nextReview){const match=comparePrintedIssuerRoute(nextReview,nextPermit);if(!match.matched)throw Error(match.message);if(!Number.isInteger(options.issuerRow)||!nextReview.rows[options.issuerRow])throw Error('The printed row is unavailable. Reopen its PDF.');}
+    dispose();printedReview=nextReview;printedName=String(options.printedName||'Printed permit');rowIndex=nextReview?options.issuerRow:0;focus=nextReview?'row':'all';onSelection=selectionChanged;permit=nextPermit;index=selected;whole=routeOverview(permit);overview=options.overview===true||whole.issuerOverview===true;render();status('Compare the original permit with the saved instruction. The map is off until requested.');dialog.showModal();if(options.showMap&&whole.available)return showMap();
+  } };
 }

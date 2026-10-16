@@ -11,6 +11,24 @@ const permit = () => ({ ...blankPermit(), state:'UT', number:'SYNTHETIC', routeT
   {text:'Use I-15 north',road:'I-15',routeLine:1,points:[[40,-111],[40.001,-111]]},
   {text:'Take the issued exit',road:'Issued ramp',routeLine:2,points:[[40.001,-111],[40.002,-111]]}
 ] });
+
+test('printed-map handoff selects the exact row, keeps page attribution with speech, and clears it on unrelated reopening',()=>{
+  const env=environment();try{
+    const rows=[{sequence:1,road:'SH171 se',instruction:'Take SH31 Ramp sw',miles:1,cumulativeMiles:1},{sequence:2,road:'SH31 Ramp sw',instruction:'Merge onto SH31 sw',miles:1,cumulativeMiles:2}];
+    const p={...blankPermit(),state:'TX',number:'TEST',routeText:rows.map(issuerRowText).join('\n'),entry:{label:'A'},exit:{label:'B'}};
+    p.issuerMap={format:'txpros-issuer-map/v2',sourceUrl:'https://txpros.txdmv.gov/PermitDetails02.aspx?PermitID=10000001&QRUSER=1',permitNumber:p.number,routeText:p.routeText,entryLabel:'A',exitLabel:'B',retrievedAt:'2026-10-15T12:00:00Z',paths:[[[32,-100],[32.001,-100]]],rows};
+    const printed={state:'TX',permitNumber:'TEST',issues:[],pageCount:3,rows:rows.map((r,i)=>({page:2+i,row:i+1,road:r.road,instruction:r.instruction,miles:String(r.miles),cumulative:String(r.cumulativeMiles)}))};
+    const before=JSON.stringify(p),ui=createMapReview();ui.open(p,0,()=>{},{printedReview:printed,issuerRow:1,printedName:'Synthetic.pdf'});
+    assert.equal(env.el('#issuer-row-select').value,'1');assert(!env.el('#issuer-printed-match').hidden);assert.match(env.el('#issuer-printed-match').textContent,/PDF page 3, row 2/);assert.equal(env.state.spoken.length,0);
+    // Caller changes cannot mutate the open source-bound review.
+    printed.rows[1].page=9;env.el('#issuer-row-read').onclick();assert.match(env.state.spoken.at(-1).text,/printed text on PDF page 3/);assert.match(env.state.spoken.at(-1).text,/Merge onto State Highway 31 southwest/);
+    env.el('#issuer-row-previous').onclick();assert.match(env.el('#issuer-printed-match').textContent,/PDF page 2, row 1/);env.el('#issuer-row-next-read').onclick();assert.match(env.state.spoken.at(-1).text,/PDF page 3/);
+    assert.equal(JSON.stringify(p),before);ui.open(p);assert(env.el('#issuer-printed-match').hidden);env.el('#issuer-row-read').onclick();assert(!env.state.spoken.at(-1).text.includes('printed text on PDF'));
+    assert.throws(()=>ui.open(p,0,()=>{},{printedReview:printed,issuerRow:1}));printed.rows[1].page=3;
+    for(const i of [-1,2,NaN,1.5])assert.throws(()=>ui.open(p,0,()=>{},{printedReview:printed,issuerRow:i}));
+    printed.rows[1].instruction='Merge onto SH31 ne';assert.throws(()=>ui.open(p,0,()=>{},{printedReview:printed,issuerRow:0}));assert.equal(JSON.stringify(p),before);
+  }finally{env.cleanup();}
+});
 test('comparison preserves exact supplied points and source without confirming or snapping', () => {
   const p=permit(), before=JSON.stringify(p),v=mapReview(p);
   assert.equal(v.source,p.routeText.split('\n')[0]);assert.deepEqual(v.segments,[[[40,-111],[40.001,-111]]]);assert.equal(v.next.gap,0);assert.deepEqual(v.issues,[]);

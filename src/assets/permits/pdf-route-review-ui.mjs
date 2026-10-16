@@ -1,10 +1,11 @@
 import { readPDFRoute, printedRowSpeech } from './pdf-route-review.mjs';
 import { createSpeech, speechPreferences } from './speech.mjs';
 import { createRoadEvidence } from './road-evidence-ui.mjs';
+import { comparePrintedIssuerRoute } from './printed-map-match.mjs';
 
-export function createPrintedRouteReview(stopOtherSpeech=()=>{}) {
+export function createPrintedRouteReview(stopOtherSpeech=()=>{}, openMap=()=>{}) {
   const $=s=>document.querySelector(s), dialog=$('#printed-route-dialog');
-  let controller, generation=0, review=null,index=0;
+  let controller, generation=0, review=null,index=0,permit=null,name='';
   const say=message=>$('#printed-route-status').textContent=message;
   const speech=createSpeech({synthesis:window.speechSynthesis,Utterance:window.SpeechSynthesisUtterance,visible:()=>!document.hidden&&dialog.open,onState:s=>{for(const id of ['#printed-route-voice-status','#printed-road-voice-status'])$(id).textContent=s.message;}});
   function readRow(){const text=printedRowSpeech(review,index);if(text){let prefs;try{prefs=speechPreferences(localStorage);}catch{prefs=speechPreferences(null);}speech.play(text,{...prefs,key:'printed-row',repeat:true});}}
@@ -12,6 +13,11 @@ export function createPrintedRouteReview(stopOtherSpeech=()=>{}) {
   function stop() {generation++;controller?.abort();controller=null;speech.stop();roadEvidence.stop();}
   function render() {
     const row=review?.rows[index];
+    const match=comparePrintedIssuerRoute(review,permit);
+    $('#printed-route-map-status').textContent=match.message;
+    $('#printed-route-map-differences').textContent=match.differences.slice(0,5).map(d=>`Row ${d.row} · ${d.field}\nPDF: ${d.printed}\nSaved map: ${d.issuer}`).join('\n\n')+(match.differences.length>5?'\nMore differences remain; check the full originals.':'');
+    $('#printed-route-map-differences').hidden=!match.differences.length;
+    $('#printed-route-map').disabled=!match.matched||!row;
     $('#printed-route-previous').disabled=!row||index===0;$('#printed-route-next').disabled=!row||index===review.rows.length-1;
     $('#printed-route-read').disabled=!row||!!review.issues.length;
     $('#printed-route-next-read').disabled=!row||!!review.issues.length||index===review.rows.length-1;
@@ -31,12 +37,17 @@ export function createPrintedRouteReview(stopOtherSpeech=()=>{}) {
   $('#printed-route-read').onclick=readRow;
   $('#printed-route-next-read').onclick=()=>{if(document.hidden||review?.issues.length)return;if(select(index+1))readRow();};
   $('#printed-route-stop-voice').onclick=()=>speech.stop();
+  $('#printed-route-map').onclick=()=>{
+    if(!dialog.open||document.hidden||!comparePrintedIssuerRoute(review,permit).matched)return;
+    stop();stopOtherSpeech();
+    try{openMap(structuredClone(permit),structuredClone(review),index,name);}catch(error){say(error.message||'Could not open the matching map. Read the original.');}
+  };
   $('#printed-route-stop').onclick=()=>{stop();say('Reading stopped. Original unchanged.');$('#printed-route-stop').disabled=true;};
   dialog.addEventListener('close',stop);
   document.addEventListener('visibilitychange',()=>{if(document.hidden&&dialog.open){stop();say('Review paused while the page was hidden. Reopen the PDF review if extraction was unfinished.');$('#printed-route-stop').disabled=true;}});
   window.addEventListener('pagehide',stop);
-  return {async open(file,name) {
-    stop();stopOtherSpeech();review=null;index=0;roadEvidence.reset(null);render();$('#printed-route-name').textContent=name;$('#printed-route-voice-status').textContent='Audio has not been checked.';
+  return {async open(file,filename,sourcePermit=null) {
+    stop();stopOtherSpeech();review=null;index=0;permit=sourcePermit?structuredClone(sourcePermit):null;name=filename;roadEvidence.reset(null);render();$('#printed-route-name').textContent=name;$('#printed-route-voice-status').textContent='Audio has not been checked.';
     dialog.showModal();controller=new AbortController();const token=++generation;$('#printed-route-stop').disabled=false;say('Reading printed route columns locally…');
     try {const result=await readPDFRoute(file,{signal:controller.signal,onPage:(page,total)=>{if(token===generation)say(`Reading PDF page ${page} of ${total} locally…`);}});
       if(token!==generation||!dialog.open)return;review=result;roadEvidence.reset(result);render();say(`${result.rows.length} printed rows on page${result.tablePages.length===1?'':'s'} ${result.tablePages.join(', ')}. Compare every row and all condition pages with the original. Nothing was added to the route.`);

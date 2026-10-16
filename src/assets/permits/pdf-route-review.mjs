@@ -48,7 +48,15 @@ export function extractRouteTables(pages) {
     if(!r.road || !/^(Head|Turn|Continue|Take|Keep|Bear|Merge|Left lane|Right lane|Arrive)\b/i.test(r.instruction) || !/^\d+(?:\.\d+)?$/.test(r.cumulative) || !/^\d{2}:\d{2}$/.test(r.time)) issues.push(`Page ${r.page}, row ${r.row}: incomplete or unsupported columns. Compare the original before rehearsal.`);
     if(i && Number(r.cumulative)<Number(rows[i-1].cumulative)) issues.push(`Row ${r.row}: printed cumulative mileage decreases. Possible duplicate, missing or out-of-order pages.`);
   }
-  return {state:texas?'TX':'KS',rows,tablePages:[...new Set(tablePages)],pageCount:pages.length,issues,geometry:[],approved:false};
+  // Only explicit Texas Permit Number labels identify a map counterpart. Multiple
+  // distinct numbers are ambiguous; never infer identity from a road or filename.
+  const permitNumbers = new Set();
+  if (texas) for (const p of prepared) for (const line of p.lines) {
+    for (const value of line.text.split('Permit Number:').slice(1)) {
+      permitNumbers.add(value.trim().match(/^([A-Za-z0-9][A-Za-z0-9-]{0,63})(?=\s|$)/)?.[1] || null);
+    }
+  }
+  return {state:texas?'TX':'KS',permitNumber:permitNumbers.size===1?[...permitNumbers][0]:null,rows,tablePages:[...new Set(tablePages)],pageCount:pages.length,issues,geometry:[],approved:false};
 }
 
 // Expand only recognized printed abbreviations for voice; never change the

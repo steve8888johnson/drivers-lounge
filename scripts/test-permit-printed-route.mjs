@@ -1,9 +1,46 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {pageLines,extractRouteTables,printedRowSpeech,pronouncePrintedRoad} from '../src/assets/permits/pdf-route-review.mjs';
+import {comparePrintedIssuerRoute} from '../src/assets/permits/printed-map-match.mjs';
+import {issuerRowText} from '../src/assets/permits/issuer-map.mjs';
 const item=(str,x,y)=>({str,transform:[1,0,0,1,x,y]});
 const line=(y,cells)=>cells.map((s,i)=>item(s,[30,130,230,530,600][i],y));
 const page=(number,rows,title='Texas Oversize/Overweight Single-Trip Permit')=>({page:number,items:[item(title,30,760),...line(700,['Miles','Route','To','Distance','Est. Time']),...rows.flatMap((cells,i)=>line(680-i*20,cells)),item('Final Destination: SYNTHETIC SITE',30,100)]});
+
+function pair(){
+  const pdf=page(1,[['1.00','SH171 se','Take SH31 Ramp sw','1.00','00:01'],['< 0.1','SH31 Ramp sw','Merge onto SH31 sw','1.00','00:00']]);
+  pdf.items.push(item('Permit Number: TEST-1',300,740));
+  const review=extractRouteTables([pdf]),rows=review.rows.map((r,i)=>({sequence:i+1,road:r.road,instruction:r.instruction,miles:i?0:1,cumulativeMiles:1}));
+  const permit={state:'TX',number:'TEST-1',routeText:rows.map(issuerRowText).join('\n'),entry:{label:'A'},exit:{label:'B'},steps:[]};
+  permit.issuerMap={format:'txpros-issuer-map/v2',sourceUrl:'https://txpros.txdmv.gov/PermitDetails02.aspx?PermitID=10000001&QRUSER=1',permitNumber:permit.number,routeText:permit.routeText,entryLabel:'A',exitLabel:'B',retrievedAt:'2026-10-15T12:00:00Z',paths:[[[32,-100],[32.001,-100]]],rows};
+  return {review,permit,pdf};
+}
+
+test('full printed table binds to matching issuer rows without modifying either source or establishing turns',()=>{
+  const {review,permit}=pair(),before=JSON.stringify({review,permit});
+  const match=comparePrintedIssuerRoute(review,permit);assert(match.matched);assert.equal(match.rowCount,2);assert.deepEqual(match.differences,[]);assert.match(match.message,/not a verified turn location/);assert.equal(JSON.stringify({review,permit}),before);
+  review.rows[1].instruction='Merge  onto SH31\n sw';assert(comparePrintedIssuerRoute(review,permit).matched);
+});
+
+test('one wrong direction, ramp, branch, lane or mileage blocks every map-row handoff',()=>{
+  for(const [field,value] of [['instruction','Merge onto SH31 ne'],['road','SH31 sw'],['road','SH31 Ramp ne'],['instruction','Left lane: Merge onto SH31 sw'],['road','IH35W'],['miles','0.1'],['miles','0'],['cumulative','1.01']]){
+    const {review,permit}=pair();review.rows[1][field]=value;const match=comparePrintedIssuerRoute(review,permit);assert(!match.matched);assert.equal(match.status,'mismatch');assert.equal(match.differences[0].row,2);assert.match(match.message,/No rows are connected/);
+  }
+});
+
+test('missing rows, conflicting identity, extraction failures and unsupported maps cannot borrow a nearby match',()=>{
+  for(const mutate of [r=>r.permitNumber='OTHER',r=>r.permitNumber=null,r=>r.rows.pop(),r=>r.rows.reverse(),r=>r.rows[0].page=2,r=>r.rows[0].row=5,r=>r.issues.push('incomplete table'),r=>r.issues=null,r=>r.pageCount=41]){const {review,permit}=pair();mutate(review);assert(!comparePrintedIssuerRoute(review,permit).matched);}
+  const {review,permit}=pair();permit.routeText+=' edited';assert(!comparePrintedIssuerRoute(review,permit).matched);
+  assert(!comparePrintedIssuerRoute(review,{}).matched);assert(!comparePrintedIssuerRoute(null,permit).matched);review.state='KS';assert.equal(comparePrintedIssuerRoute(review,permit).status,'unavailable');
+});
+
+test('permit identity comes only from an explicit unambiguous printed label',()=>{
+  const {pdf}=pair();assert.equal(extractRouteTables([pdf]).permitNumber,'TEST-1');
+  pdf.items.push(item('Permit Number: TEST-1',300,720));assert.equal(extractRouteTables([pdf]).permitNumber,'TEST-1');
+  pdf.items.push(item('Permit Number: OTHER',300,710));assert.equal(extractRouteTables([pdf]).permitNumber,null);
+  pdf.items.pop();pdf.items.push(item('Permit Number: ???',300,710));assert.equal(extractRouteTables([pdf]).permitNumber,null);
+  assert.equal(extractRouteTables([page(1,[['1','SH31','Arrive at destination.','1','00:01']])]).permitNumber,null);
+});
 test('continued tables preserve row order, literal road suffixes and source pages without geometry',()=>{
   const input=[page(3,[['0.40','IH35W Connector','Keep right toward IH35W South/Waco','487.30','00:00'],['','e','','','']]),page(4,[['44.40','IH35W s','Continue straight on IH-35 s [IH35W]','532.20','00:41']])];
   const before=JSON.stringify(input),r=extractRouteTables(input);assert.equal(r.rows.length,2);assert.equal(r.rows[0].road,'IH35W Connector e');assert.equal(r.rows[1].page,4);assert.equal(r.rows[1].row,2);assert.equal(r.rows[1].instruction,'Continue straight on IH-35 s [IH35W]');assert.deepEqual(r.issues,[]);assert.deepEqual(r.geometry,[]);assert.equal(r.approved,false);assert.equal(JSON.stringify(input),before);
