@@ -21,3 +21,20 @@ The actual private Texas fixture passes a 390px local browser test: forward orde
 Private evidence: outputs/sh31-order-audit-20261016.json, ramp-route-order-browser-20261016.json and phone screenshot. Actual originals, IDs and precise route data remain outside Git and deployment. The 57 historical tracked dist edits remain untouched; all build work uses a staging directory. No paid routing calls, services, upgrades, DNS/credential/database changes or PR4 merge. Exact full-build and production evidence follows verification.
 
 Local gate: the existing 449-test suite passed with these application changes; the six new order regressions also passed in the targeted run. The new test file was then added to package.json so the production build will run all455 together.197JS+4inline syntax,57pages/833links, all static contracts and isolated build pass. No application source changed after the targeted/browser checks.
+
+## Production verification — October 16, 2026, 20:12 UTC
+
+- URL: https://driverslounge.app/permitted-loads
+- Source: 593af18ebd05b89bc7aeeddf744ce42730cf240f
+- Target/status: production, READY
+- Deployment: dpl_91Xe63b2VhA4wSEpnqrtHsTbT4Rs
+- Deployment URL: https://drivers-lounge-n612mr5x9-steves-projects-c46af6ff.vercel.app
+- Existing static multi-page frontend / Node functions; remote build 29 seconds.
+
+Exact Git source, existing drivers-lounge project and domain assignment verified. The combined production suite passed all 455 tests, 197 JS plus four inline syntax checks, 57 pages / 833 links and static contracts. Three changed public JS/service-worker hashes match Git; new HTML control is present. Permit/account/navigation return HTTP200. Flags remain accountsEnabled=true, readOnlyBeta=true, permitGuidanceEnabled=false.
+
+Fresh live 390px browser repeated the actual private Texas check with one real public inventory request. It displayed forward order, candidate0.33mi versus printed0.3mi and unchanged45m disagreement. Pair switching preserved evidence, requested exact literal merge speech only on Read, and ordinary Next cleared the comparison. Original issuer geometry unchanged; no maneuver steps created. Client/scroll widths356px, no page errors. Speech mocked, other provider APIs blocked; physical iPhone audio/Bluetooth/background, current road conditions and owner account transfer remain unverified. Temporary browser/server closed.
+
+One scoped ten-minute error/fatal log query returned zero records at20:12UTC; no sustained monitoring or drain assessment. Existing Vercel included balance was $19.47 before release; no new paid service, upgrade or paid routing request. Supabase/DNS/credentials/PR4 remain unchanged.57historicaldist edits preserved. Source pushed; this receipt is a separate documentation commit. Private artifacts remain outside Git and the owner account.
+
+Evidence: outputs/ramp-route-order-live-deployment-detail-20261016.json, ramp-route-order-live-build-20261016.txt, ramp-route-order-live-assets-20261016.json, ramp-route-order-live-browser-20261016.json, ramp-route-order-live-phone-20261016.png and ramp-route-order-live-errors-20261016.txt.
