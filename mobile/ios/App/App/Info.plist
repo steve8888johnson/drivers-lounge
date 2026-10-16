@@ -24,6 +24,10 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Scan QR codes on your issued permits when you choose to use the camera.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Show your location and GPS accuracy during the parked phone check when you choose to start it.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

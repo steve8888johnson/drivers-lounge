@@ -1,0 +1,67 @@
+name: iOS simulator build check
+
+on:
+  push:
+    branches: [release/atlas-20261006]
+    paths:
+      - mobile/**
+      - .github/workflows/ios-build-check.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-simulator-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulator:
+    # Standard hosted runners are free for public repositories. Never run this
+    # job against a private repository or switch it to a larger paid runner.
+    if: github.repository == 'steve8888johnson/drivers-lounge' && github.event.repository.private == false
+    runs-on: macos-15
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+        working-directory: mobile
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    steps:
+      - name: Check out reviewed source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Use Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - name: Install locked mobile dependencies
+        run: npx --yes pnpm@10.18.3 install --frozen-lockfile --ignore-scripts
+      - name: Prepare and check bundled pages
+        run: |
+          node prepare-web.mjs
+          node check-bundle.mjs
+          plutil -lint ios/App/App/Info.plist
+      - name: Sync iOS development project
+        run: node node_modules/@capacitor/cli/bin/capacitor sync ios
+      - name: Compile for iPhone Simulator without signing
+        run: |
+          xcodebuild -version
+          xcodebuild -project ios/App/App.xcodeproj -scheme App \
+            -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/DriversLoungeDerivedData" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            -quiet build
+      - name: Record the limits of this check
+        run: |
+          printf '%s\n' \
+            '## iOS simulator compile passed' \
+            'The native shell and bundled pages compiled without signing.' \
+            'This is not an installable iPhone IPA, device test, TestFlight upload or App Store approval.' \
+            'Native account callbacks and server API integration still require implementation and device validation.' \
+            'Operational guidance remains disabled.' >> "$GITHUB_STEP_SUMMARY"
+
+# No signing credentials, caches, artifact uploads, publishing, or paid services.

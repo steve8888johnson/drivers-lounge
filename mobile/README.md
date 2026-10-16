@@ -2,6 +2,8 @@
 
 Development source only. Not a signed APK/AAB/IPA, not device tested and not store-ready.
 
+October 16 update: Apple membership checkout completed; activation is pending. A free, unsigned GitHub Mac simulator compile check is prepared. Camera/foreground-location purpose strings are present; native API transport and account callbacks still need work. See [APPLE-RELEASE-PREPARATION.md](APPLE-RELEASE-PREPARATION.md) for scope, app-record draft and release blockers.
+
 - Capacitor core, CLI, Android and iOS pinned to8.5.3 in pnpm-lock.yaml.
 - Proposed identifier app.driverslounge.mobile; Google availability checked October13,2026, not reserved/created.
 - Android target/compile API36, minimum API24 from the current Capacitor template.
