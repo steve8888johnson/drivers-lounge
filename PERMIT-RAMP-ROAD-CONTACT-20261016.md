@@ -32,3 +32,18 @@ Private evidence: `outputs/ramp-road-contact-build-20261016.txt`, `ramp-road-con
 Refresh Drivers Lounge, open the saved Texas scanned route and select the SH31 ramp row. Tap **Compare nearby official roads**, explicitly choose a ramp record and joined candidate, then inspect **Approach and merge comparison**. **Ramp entry** and **Merge** switch the two printed rows without starting speech. Tap **Read turn aloud** to compare the heard words with the original permit. A nearby line is not proof of an authorized movement; the 45 m disagreement remains a hold on exact GPS-triggered turns.
 
 Production verification will be recorded after deployment; this section is local evidence only.
+
+## Production verification — October 16, 2026, 19:49 UTC
+
+- URL: https://driverslounge.app/permitted-loads
+- Source: c90ad0ae653302bd28b4f1767a65dc849cd3290d
+- READY production deployment: dpl_FDUVK17xWSsFnZyGQf5Z2icteZ3j
+- Deployment URL: https://drivers-lounge-ld6vplpxi-steves-projects-c46af6ff.vercel.app
+
+The exact Git source, existing project and driverslounge.app assignment are verified. Remote Node22 build passed 449 tests,195 JS+4 inline syntax checks,57 pages/833 links and static contracts; build reported17seconds. Five changed public JavaScript/service-worker hashes match Git exactly. New HTML controls and privacy copy are present; permit/account/navigation return200. Flags remain accountsEnabled=true,readOnlyBeta=true,permitGuidanceEnabled=false.
+
+A fresh production-asset browser at390px used the actual private saved Texas map and one real public road-context request. It returned the SH171/SH31 drawing contacts while retaining45m disagreement. No default candidate or automatic speech. Pair switching retained the comparison without another request; manual merge speech matched the literal SH31 wording and unverified-endpoint warning. Next cleared evidence. Original issuer geometry was byte-equivalent as JSON and no maneuver steps were created. Dialog/client scroll widths356px, no page errors. Normal public assets/tiles were allowed, speech mocked and other provider APIs blocked. This does not prove physical iPhone audio, all street tiles, current road permission or owner account transfer.
+
+A bounded deployment-scoped ten-minute error/fatal query returned zero records at19:49UTC; not sustained monitoring. Temporary browser/server closed. Historical57dist edits preserved. Source pushed to the release branch; PR4 remains unmerged. No new paid service, upgrade, provider charge, database, credential or DNS change. Existing Pro credit was $19.47 before release; no claim that the existing hosting subscription itself is free. This receipt is a separate documentation commit, with the application source above deployed.
+
+Private evidence: ramp-road-contact-live-deployment-detail-20261016.json, ramp-road-contact-live-build-20261016.txt, ramp-road-contact-live-assets-20261016.json, ramp-road-contact-live-browser-20261016.json, ramp-road-contact-live-phone-20261016.png, ramp-road-contact-live-errors-20261016.txt under outputs/. Private original data and images remain outside Git/deployment and the owner's actual trip/account.
