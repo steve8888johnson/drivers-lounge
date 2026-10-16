@@ -520,3 +520,7 @@ Post-deploy observability: immediate deployment-scoped10minute error/fatal query
 
 Evidence: outputs/ramp-pair-tests-20261015.txt; outputs/sh31-connections-20261015.json; outputs/ramp-pair-live-assets-20261015.json; outputs/ramp-pair-live-browser-20261015.json; outputs/ramp-pair-live-phone-20261015.png. Screenshot is responsive desktop browser testing, not a physical iPhone. Private phone instructions: outputs/TEXAS-QR-IPHONE-TEST-20261015.md. Private source permits and precise route data were not committed/deployed.
 
+
+
+## SH31 aerial research — October 16, 2026 UTC
+No release or application change. Dated July 8, 2022 NAIP imagery supports the short-slip / southwest-ramp comparison chain and shows the issuer overview cuts inside its curve. Exact instruction coordinates and current conditions remain unresolved; guidance stays disabled. Private comparison packet passes actual PDF/36-row identity and source-preservation checks. See PERMIT-SH31-AERIAL-EVIDENCE-20261016.md. Historical 57 dist changes preserved.
