@@ -15,6 +15,9 @@ export function joinedRampComparisons(first,context,view) {
   const results=[];
   for(const second of context.features){
     if(second===first||!connector(second)||first.date!==second.date)continue;
+    // A related approach road may now be present in the same response. Never
+    // join its connector to the target road merely because vertices touch.
+    if([first,second].some(f=>f.prefix!==context.query.prefix||f.number!==context.query.number||f.suffix!=null&&f.suffix!=='_'))continue;
     const b=second.paths[0],bk=b.map(key);if(new Set(bk).size!==b.length)continue;
     const aset=new Set(ak),shared=bk.map((k,i)=>aset.has(k)?i:-1).filter(i=>i>=0);
     // No near-vertex snapping, overlapping/retraced records or ambiguous joins.

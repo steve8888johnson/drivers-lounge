@@ -4,6 +4,7 @@ import { createSpeech, speechPreferences } from './speech.mjs';
 import { junctionRequest, junctionView, roadEndpointContacts, sanitizeRoadContext, compareRoadShape } from './junction-evidence.mjs';
 import { joinedRampComparisons } from './ramp-comparison.mjs';
 import { comparePrintedIssuerRoute } from './printed-map-match.mjs';
+import { rampRoadContacts } from './ramp-road-match.mjs';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 let leafletPromise;
@@ -84,13 +85,15 @@ export function createMapReview() {
     $('#issuer-junction-summary').hidden=focus!=='junction';$('#issuer-junction-summary').textContent=junctionMessage;
     $('#issuer-junction-details').hidden=focus!=='junction'||!junction;
     $('#issuer-junction-load').disabled=!!junctionController||!rehearsal?.estimated;
-    $('#issuer-junction-select').innerHTML='<option value="-1">Choose a road shape to inspect</option>'+(junction?.features||[]).map((f,i)=>`<option value="${i}">${esc(junction.query.prefix+junction.query.number)} · ${esc(f.kind)} · record ${f.id}</option>`).join('');$('#issuer-junction-select').value=String(junctionIndex);
+    $('#issuer-junction-select').innerHTML='<option value="-1">Choose a road shape to inspect</option>'+(junction?.features||[]).map((f,i)=>`<option value="${i}">${esc(f.prefix+String(f.number)+(f.suffix&&f.suffix!=='_'?f.suffix:''))} · ${esc(f.kind)} · record ${f.id}</option>`).join('');$('#issuer-junction-select').value=String(junctionIndex);
     const jf=junction?.features[junctionIndex];let jm='';
     const candidates=chains(),chain=selectedChain();
     $('#issuer-chain-section').hidden=!candidates.length;
     $('#issuer-chain-select').innerHTML='<option value="">Inspect one record only</option>'+candidates.map(c=>`<option value="${esc(c.id)}">Records ${c.recordIds.join(' + ')} · ${(c.lengthMeters/1609.344).toFixed(2)} mi · drawn ${c.drawnDirection}</option>`).join('');$('#issuer-chain-select').value=chain?.id||'';
     $('#issuer-chain-fit').disabled=!chain;
     $('#issuer-chain-note').textContent=chain?`Joined comparison only. These two shapes share an exact recorded vertex and are drawn ${chain.drawnDirection}, as worded in the permit. That does not verify traffic direction or permission. A/B are comparison endpoints, not confirmed turn locations. Use Ramp entry / Merge to inspect them; tap Read separately.`:'Optional joined shapes share one exact recorded vertex. No gap is bridged. Each is a candidate; none is automatically selected or approved.';
+    const contacts=chain?rampRoadContacts(chain,junction,rehearsal):null;
+    $('#issuer-chain-contacts').innerHTML=contacts?`<strong>Approach and merge comparison</strong><p>${esc(contacts.message)}</p>${contacts.available?['approach','merge'].map(key=>`<p><strong>${key==='approach'?'Approach':'Merge'} · ${esc(contacts.roads[key].label)}</strong><br>${contacts[key].length?contacts[key].map(c=>`${esc(c.road)} · ${esc(c.kind)} · record ${c.id}, part ${c.pathIndex+1} · within 1 m of this candidate end`).join('<br>'):'No matching main-road record at this end.'}</p>`).join(''):''}<p>Road lines can cross at different heights. This does not confirm an allowed movement, live conditions or a GPS turn location.</p>`:'';
     if(chain)$('#issuer-junction-summary').textContent='Purple: joined candidate. Amber: unchanged issuer overview. A/B: comparison endpoints, not verified turn locations.';
     if(jf){try{const c=compareRoadShape(chain?{paths:[chain.path]}:jf,junctionView(permit,rowIndex).area);jm=`<strong>${c.closeShape?'Close shape · turn unverified':'Shapes differ · turn unresolved'}</strong><p>Largest sampled distance from this ${chain?'joined candidate':'road record'} to the issuer line: ${Math.ceil(c.maxOffset)} m. Only the portion in this viewing area is compared. Distances run from the displayed comparison to the issuer line. They do not identify a permitted turn or travel direction.</p>`;}catch{jm='<strong>Turn unresolved · shape comparison exceeds the inspection limit.</strong>';}
       jm+=`<p>${chain?`Joined records ${chain.recordIds.join(' + ')}`:`Record ${jf.id} · ${esc(jf.road)} · ${esc(jf.kind)}`}<br>Inventory: ${esc(jf.date)} · retrieved ${esc(new Date(junction.retrievedAt).toLocaleString())}. <a href="${esc(junction.source)}" target="_blank" rel="noopener noreferrer">TxDOT roadway source</a></p>`;}

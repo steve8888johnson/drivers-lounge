@@ -91,17 +91,21 @@ test('joined candidate focuses original endpoints across the pair, reads literal
     p.issuerMap={format:'txpros-issuer-map/v2',sourceUrl:'https://txpros.txdmv.gov/PermitDetails02.aspx?PermitID=10000001&QRUSER=1',permitNumber:p.number,routeText:p.routeText,entryLabel:'A',exitLabel:'B',retrievedAt:'2026-10-15T12:00:00Z',paths:[[[32.002,-99.999],[32.001,-100],[32,-100],[31.999,-100.001],[31.998,-100.002],[31.997,-100.003]]],rows};
     const before=JSON.stringify(p),review=createMapReview();await review.open(p,0,()=>{},{showMap:true});
     let context,calls=0;globalThis.fetch=async(url,init)=>{calls++;context=readRoadContext({spatialReference:{wkid:4326},features:[
-      {attributes:{OBJECTID:1,RTE_NM:'SH0031-CN',RTE_PRFX:'SH',RTE_NBR:'31',RDBD_TYPE:'Connector',EXT_DATE:'10-01-2026'},geometry:{paths:[[[-100,32.001],[-100,32]]]}},
-      {attributes:{OBJECTID:2,RTE_NM:'SH0031-RP',RTE_PRFX:'SH',RTE_NBR:'31',RDBD_TYPE:'Grade Separated Connector',EXT_DATE:'10-01-2026'},geometry:{paths:[[[-99.9998,32.0002],[-100,32],[-100.001,31.999],[-100.002,31.998]]]}}
+      {attributes:{OBJECTID:1,RTE_NM:'SH0031-CN',RTE_PRFX:'SH',RTE_NBR:'31',RTE_SFX:'_',RDBD_TYPE:'Connector',EXT_DATE:'10-01-2026'},geometry:{paths:[[[-100,32.001],[-100,32]]]}},
+      {attributes:{OBJECTID:2,RTE_NM:'SH0031-RP',RTE_PRFX:'SH',RTE_NBR:'31',RTE_SFX:'_',RDBD_TYPE:'Grade Separated Connector',EXT_DATE:'10-01-2026'},geometry:{paths:[[[-99.9998,32.0002],[-100,32],[-100.001,31.999],[-100.002,31.998]]]}},
+      {attributes:{OBJECTID:3,RTE_NM:'SH0171-KG',RTE_PRFX:'SH',RTE_NBR:'171',RTE_SFX:'_',RDBD_TYPE:'Single Roadbed',EXT_DATE:'10-01-2026'},geometry:{paths:[[[-100.001,32.001],[-99.999,32.001]]]}},
+      {attributes:{OBJECTID:4,RTE_NM:'SH0031-LG',RTE_PRFX:'SH',RTE_NBR:'31',RTE_SFX:'_',RDBD_TYPE:'Left Roadbed',EXT_DATE:'10-01-2026'},geometry:{paths:[[[-100.003,31.998],[-100.001,31.998]]]}}
     ]},JSON.parse(init.body));return Response.json({context});};
     await env.el('#issuer-junction-load').onclick();env.el('#issuer-junction-select').value='0';env.el('#issuer-junction-select').onchange();
     assert(!env.el('#issuer-chain-section').hidden);assert.equal(env.el('#issuer-chain-select').value,'');assert(env.el('#issuer-chain-fit').disabled);
     env.el('#issuer-chain-select').value='1:0:2:1:3';env.el('#issuer-chain-select').onchange();assert(!env.el('#issuer-chain-fit').disabled);assert(env.el('#issuer-endpoints').hidden);assert.equal(env.state.spoken.length,0);assert.match(env.el('#issuer-junction-summary').textContent,/not verified turn/);
+    assert.match(env.el('#issuer-chain-contacts').innerHTML,/Both candidate ends/);assert.match(env.el('#issuer-chain-contacts').innerHTML,/Approach · SH171 se/);assert.match(env.el('#issuer-chain-contacts').innerHTML,/Merge · SH31 sw/);assert.match(env.el('#issuer-junction-select').innerHTML,/SH171 · Single Roadbed/);
     const whole=structuredClone(env.state.bounds);assert.equal(whole.length,4);assert.match(env.el('#issuer-junction-detail').innerHTML,/from this joined candidate/);assert.match(env.el('#issuer-junction-detail').innerHTML,/Joined records 1 \+ 2/);
     env.el('#issuer-pair-entry').onclick();const entry=structuredClone(env.state.bounds);assert.equal(entry.length,2);assert.notDeepEqual(entry,whole);env.el('#issuer-row-read').onclick();assert.match(env.state.spoken.at(-1).text,/Take State Highway 31 Ramp southwest/);assert.match(env.state.spoken.at(-1).text,/endpoints are not verified turn locations/);
     const cancel=env.state.cancelled;env.el('#issuer-pair-merge').onclick();assert(env.state.cancelled>cancel);assert.notDeepEqual(env.state.bounds,entry);assert.equal(env.state.spoken.length,1);assert.equal(env.el('#issuer-chain-select').value,'1:0:2:1:3');assert.equal(calls,1);
     env.el('#issuer-row-read').onclick();assert.match(env.state.spoken.at(-1).text,/Merge onto State Highway 31 southwest/);env.el('#issuer-chain-fit').onclick();assert.deepEqual(env.state.bounds,whole);
     env.el('#issuer-row-next').onclick();assert(env.el('#issuer-junction-details').hidden);assert.equal(env.el('#issuer-chain-select').value,'');assert.equal(JSON.stringify(p),before);assert.equal(p.steps.length,0);
+    assert.equal(env.el('#issuer-chain-contacts').innerHTML,'');
     env.events.pagehide();assert(env.el('#issuer-junction-details').hidden);
   }finally{globalThis.fetch=oldFetch;env.cleanup();}
 });

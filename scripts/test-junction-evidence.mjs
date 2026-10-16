@@ -13,10 +13,23 @@ const paired=()=>{
  p.issuerMap={format:'txpros-issuer-map/v2',sourceUrl:'https://txpros.txdmv.gov/PermitDetails02.aspx?PermitID=10000001&QRUSER=1',permitNumber:p.number,routeText:p.routeText,entryLabel:'A',exitLabel:'B',retrievedAt:'2026-10-15T12:00:00Z',paths:[[[32,-100],[32.001,-100],[32.002,-100]]],rows};return p;
 };
 test('literal adjacent entry/merge pair shares a bounded query, never coordinates or approval',()=>{
- const p=paired(),before=JSON.stringify(p);assert.deepEqual(issuerRampPair(issuerRehearsal(p,0)),{entry:0,merge:1});assert.deepEqual(junctionRequest(p,0),junctionRequest(p,1));assert.equal(JSON.stringify(p),before);
+ const p=paired(),before=JSON.stringify(p);assert.deepEqual(issuerRampPair(issuerRehearsal(p,0)),{entry:0,merge:1});assert.deepEqual(junctionRequest(p,0),junctionRequest(p,1));assert.deepEqual(junctionRequest(p,0).approach,{prefix:'SH',number:171});assert.equal(JSON.stringify(p),before);
  for(const change of [v=>v.rows[1].instruction='Merge onto SH31 ne',v=>v.rows[1].road='SH31 FR sw',v=>v.rows[1].instruction='Merge onto SH32 sw',v=>v.rows[0].instruction='Take SH31 Ramp sw if open',v=>v.rows[1].cumulativeMiles=3,v=>v.rows[1].cumulativeMiles=0,v=>v.rows[1].cumulativeMiles=NaN]){const v=issuerRehearsal(p);change(v);assert.equal(issuerRampPair(v),null);}
  assert.equal(issuerRampPair({available:false}),null);p.routeText='stale';assert.throws(()=>junctionRequest(p,0));
  p.issuerMap.rows[1].cumulativeMiles=20;assert.throws(()=>junctionRequest(p,1));
+});
+
+test('approach lookup is limited to one distinct road and response identity cannot be relabelled',()=>{
+ const pairQ={...q,approach:{prefix:'SH',number:171}};
+ for(const approach of [[],null,{prefix:"SH' OR 1=1",number:171},{prefix:'SH',number:31},{prefix:'SH',number:171,url:'https://evil.test'},{prefix:'SH',number:'171'}])assert.throws(()=>validateContextRequest({...q,approach}));
+ const d=fixture();d.features.push({attributes:{...d.features[0].attributes,OBJECTID:124,RTE_PRFX:'SH',RTE_NBR:'171',RTE_NM:'SH0171-KG',RTE_SFX:'_',RDBD_TYPE:'Single Roadbed'},geometry:{paths:[[[-100.001,32.001],[-99.999,32.001]]]}});
+ const c=readRoadContext(d,pairQ);assert.equal(c.features.find(f=>f.id===124).number,171);assert.deepEqual(sanitizeRoadContext(c,pairQ),c);
+ delete c.features[0].prefix;assert.throws(()=>sanitizeRoadContext(c,pairQ));d.features[1].attributes.RTE_NBR='172';assert.throws(()=>readRoadContext(d,pairQ));
+});
+
+test('two-road query is one bounded public request with no permit data or arbitrary filters',async()=>{
+ const pairQ={...q,approach:{prefix:'SH',number:171}};let count=0;
+ await loadRoadContext(pairQ,async(url,options)=>{count++;const params=new URL(url).searchParams;assert.equal(params.get('where'),"(RTE_PRFX = 'SH' AND RTE_NBR = '31') OR (RTE_PRFX = 'SH' AND RTE_NBR = '171')");assert.equal(params.get('resultRecordCount'),'80');assert(params.get('outFields').includes('RTE_SFX'));assert.equal(options.credentials,'omit');return Response.json(fixture());});assert.equal(count,1);
 });
 test('endpoint inspection uses original endpoints and exposes all planar contacts without inventing a connection',()=>{
  const data=fixture();for(const [id,lon] of [[124,-100],[125,-100.000005],[126,-100.00002]])data.features.push({attributes:{...data.features[0].attributes,OBJECTID:id,RDBD_TYPE:'Left Roadbed'},geometry:{paths:[[[lon,31.999],[lon,32.003]]]}});
