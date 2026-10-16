@@ -54,8 +54,10 @@ export function mountWalletAccount({element,beforeSave,afterSave,open,ownerChang
     await sync.remove(row.id,row.version);await refresh();say('Account copy removed. Copies already downloaded on your devices are unchanged.');
   }));
   async function identify(){const sequence=++turn;let timer;try{
-    const {data,error}=await Promise.race([B.client.auth.getUser(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Sign-in check timed out')),10000);})]);if(sequence!==turn)return;if(error)throw error;
-    const user=data.user?.id||null;if(user===identity&&loaded)return;
+    const {data,error}=await Promise.race([B.client.auth.getUser(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Sign-in check timed out')),10000);})]);if(sequence!==turn)return;
+    // Supabase reports an absent session as an error; it is a normal signed-out state.
+    if(error&&error.name!=='AuthSessionMissingError')throw error;
+    const user=error?null:data?.user?.id||null;if(user===identity&&loaded)return;
     rememberWalletOwner(preferences,user);
     identity=user;sync.setOwner(user);rows=[];loaded=false;renderRows();await ownerChanged(user);
     if(sequence!==turn)return;
