@@ -23,6 +23,7 @@ import { createPrintedRouteReview } from './pdf-route-review-ui.mjs';
 import { qrAction, retainScannedQR } from './qr-flow.mjs';
 import { routeOverview } from './map-review.mjs';
 import { texasPracticeReference } from './issuer-map.mjs';
+import { saveOriginalBatch, originalBatchSummary } from './document-intake.mjs';
 
 const $ = selector => document.querySelector(selector);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -32,7 +33,7 @@ const guidanceSession = createGuidanceSession();
 const permitMap = createMapReview();
 let setupAccount;
 let trip, selected, tab = 'load', dirty = false, watching = null, gpsWatch = null, progress, master, crewTimer, crewBusy = false, lastCrew = 0, camera, cameraTimer, activeState = '', objectURLs = [], guidanceVersion = 0;
-let pdfSelection, pdfAbort;
+let pdfSelection, pdfAbort, photoAbort;
 let savedTrip, walkthroughIndex = 0, mapFocus = false, guidancePause = '', spokenState = '';
 const speech = createSpeech({ synthesis: window.speechSynthesis, Utterance: window.SpeechSynthesisUtterance, visible: () => !document.hidden,
   onState: state => { $('#permit-speech-status').textContent = state.message; },
@@ -115,8 +116,15 @@ function renderList() {
   $('#permit-list').innerHTML = trip.permits.length ? trip.permits.map((p, i) => `<button class="permit-item ${p.id === selected ? 'selected' : ''}" data-permit="${esc(p.id)}"><b>${i + 1}. ${esc(p.state || 'New state')} <span>${esc(p.number)}</span></b><small>${esc(p.entry.label || 'Origin needed')} → ${esc(p.exit.label || 'Destination needed')}</small><small>${geometryReviewed(p) ? 'Route geometry confirmed' : reviewed(p) ? 'Permit confirmed · geometry needed' : 'Needs your confirmation'}</small></button>`).join('') : '<p class="muted">No permits yet. Add a permit or import its original.</p>';
   document.querySelectorAll('[data-permit]').forEach(b => b.onclick = safe(async () => { if (!await changeGuard()) return; selected = b.dataset.permit; renderReview(); renderList(); switchTab('review'); }));
 }
-function documentRows(p) { return p.documents.map(doc => `<div class="doc-row"><span>${esc(doc.name)}<br><small>${(doc.size / 1024).toFixed(0)} KB · original</small>${doc.scanSummary ? `<br><small>${esc(doc.scanSummary)}</small>` : ''}</span><button data-open-doc="${esc(doc.id)}">Open original</button>${doc.type === 'application/pdf' ? `<button data-scan-pdf="${esc(doc.id)}">Scan PDF QR codes</button><button data-read-route-pdf="${esc(doc.id)}">Read printed route</button>` : ''}</div>`).join(''); }
+function documentRows(p) { return p.documents.map(doc => `<div class="doc-row"><span>${esc(doc.name)}<br><small>${(doc.size / 1024).toFixed(0)} KB · original</small>${doc.scanSummary ? `<br><small>${esc(doc.scanSummary)}</small>` : ''}</span><button data-open-doc="${esc(doc.id)}">Open original</button>${doc.type === 'application/pdf' ? `<button data-scan-pdf="${esc(doc.id)}">Scan PDF QR codes</button><button data-read-route-pdf="${esc(doc.id)}">Read printed route</button>` : `<button data-scan-photo="${esc(doc.id)}">Scan saved photo</button>`}</div>`).join(''); }
 function wireDocuments(container) {
+container.querySelectorAll('[data-scan-photo]').forEach(button => button.onclick = safe(async () => {
+  if (dirty) throw Error('Save changes before scanning an original.');
+  const permit = trip.permits.find(p => p.documents.some(d => d.id === button.dataset.scanPhoto));
+  if (!permit) throw Error('Original no longer belongs to this load.');
+  selected = permit.id; renderList(); renderReview(); switchTab('review');
+  await scanSavedPhoto(button.dataset.scanPhoto);
+}));
 container.querySelectorAll('[data-read-route-pdf]').forEach(button => button.onclick = safe(async () => {
   if(dirty || watching!==null) throw Error('Park and save changes before reading the original.');
   const doc=await getDocument(button.dataset.readRoutePdf);
@@ -141,6 +149,7 @@ container.querySelectorAll('[data-open-doc]').forEach(button => button.onclick =
 })); }
 function renderReview() {
   if (camera) void stopCamera();
+  $('#attachment-result').textContent = '';
   const p = currentPermit();
   $('#permit-form').hidden = !p; $('#remove-permit').disabled = !p;
   $('#panel-review').querySelectorAll('details,.originals').forEach(el => el.hidden = !p);
@@ -274,28 +283,59 @@ function renderQRCards(p) {
   $('#qr-results').append(el);
   }
 }
-async function attach(files, split = false, scanPDFNow = false, decodedCodes = null) {
+async function attach(files, split = false, scanPDFNow = true, decodedCodes = null) {
   if (!files.length) return; edit(); captureDrafts();
-  let found = 0, withoutQR = 0, scanFailures = 0, pdfs = 0;
   // Every selection is pages of ONE permit, never one inferred state per page.
   if (split) { const p = blankPermit(); trip.permits.push(p); selected = p.id; renderReview(); }
-  for (const file of files) {
-    const p = await ensurePermit();
-    const doc = await addDocument(trip, p, file); renderReview();
-    if (file.type.startsWith('image/')) { status('Original saved. Scanning QR codes on this device…'); let codes; try { codes = decodedCodes || await scanImage(file); } catch { scanFailures++; codes = null; } if (codes) { for (const code of codes) await handleQR(code); found += codes.length; if (!codes.length) withoutQR++; } }
+  const p = await ensurePermit();
+  const results = await saveOriginalBatch(files, file => addDocument(trip, p, file), (index, total) => status(`Saving original ${index} of ${total} on this device…`));
+  await persist(); renderList(); renderReview(); switchTab('review');
+  const summary = originalBatchSummary(results), saved = results.filter(result => result.document);
+  // Multi-file selections are fully saved first. Scanning is then explicit per
+  // original, so stopping one scan never silently drops the remaining files.
+  if (files.length === 1 && saved.length === 1) {
+    const { file, document: doc } = saved[0];
+    if (file.type.startsWith('image/')) await scanSavedPhoto(doc.id, decodedCodes);
     else if (scanPDFNow) {
-      await persist(); pdfSelection = { tripId: trip.id, permitId: p.id, docId: doc.id };
+      pdfSelection = { tripId: trip.id, permitId: p.id, docId: doc.id };
       $('#pdf-scan-name').textContent = doc.name; $('#pdf-start-page').value = '1'; $('#pdf-scan-dialog').showModal();
       const result = await runPDFScan();
-      found += result?.retained || 0;
       if (result?.scanComplete && result.retained > 0 && result.retained === result.codes.length) $('#pdf-scan-dialog').close();
-      else { pdfs++; break; }
-    } else pdfs++;
+    }
   }
-  await persist(); renderList(); switchTab('review');
-  status(`${files.length} original file(s) saved for this permit. ${found} QR result(s) retained. ${withoutQR ? `${withoutQR} photo(s) had no readable QR. ` : ''}${scanFailures ? `${scanFailures} photo scan(s) failed; originals are saved. Try a closer QR photo. ` : ''}${pdfs ? 'PDFs are saved. Tap Scan PDF QR codes beside each original. ' : ''}Choose a saved QR import action and check every original page.`);
-  if (found && !$('#pdf-scan-dialog').open) $('#qr-results').scrollIntoView({ block: 'start' });
+  $('#attachment-result').textContent = summary;
+  const nextStep = p.qr.some(raw => qrAction(raw).action)
+    ? '\nChoose a saved QR action to load its route; scanning alone does not plot it.'
+    : p.qr.length ? '\nQR reference saved. It contains no supported map route. Keep the full original and obtain the issuer’s route data.'
+    : '\nNo route loaded yet. Use the scan button beside an original or paste its QR link.';
+  status(summary + nextStep, saved.length !== files.length);
+  if (!$('#pdf-scan-dialog').open && !$('#photo-scan-dialog').open) (p.qr.length ? $('#qr-results') : $('#review-documents')).scrollIntoView({ block: 'start' });
 }
+async function scanSavedPhoto(docId, decodedCodes = null) {
+  const p = currentPermit(), metadata = p?.documents.find(doc => doc.id === docId);
+  if (!metadata || dirty) throw Error('Save and select the original state permit before scanning.');
+  const context = intakeContext(trip.id, p), doc = await getDocument(docId);
+  if (!doc?.blob) throw Error('Original is missing on this device. Choose the photo again.');
+  const controller = new AbortController(); photoAbort = controller;
+  const dialog = $('#photo-scan-dialog');
+  $('#photo-scan-name').textContent = doc.name;
+  $('#photo-scan-status').textContent = 'Scanning saved photo on this device…';
+  $('#photo-scan-stop').disabled = false; dialog.showModal();
+  try {
+    const codes = decodedCodes || await scanImage(doc.blob, { signal: controller.signal });
+    if (controller.signal.aborted) throw new DOMException('Scan stopped. Original remains saved.', 'AbortError');
+    if (!intakeContextMatches(context, trip.id, currentPermit())) throw Error('The load or original changed. Scan results were not applied.');
+    const result = retainScannedQR(p.qr, codes.map(raw => ({ raw })));
+    p.qr = result.references; edit(); p.review = null; p.geometryReview = null;
+    metadata.scanSummary = codes.length ? `${result.retained} QR reference(s) retained${result.omitted ? `; ${result.omitted} could not fit. Keep the original.` : '.'}` : 'No readable QR found. Try a closer photo or paste the QR link.';
+    await persist(); renderList(); renderReview();
+    $('#photo-scan-status').textContent = metadata.scanSummary;
+    if (codes.length && !result.omitted && dialog.open) dialog.close();
+  } catch (error) { $('#photo-scan-status').textContent = error.name === 'AbortError' ? 'Scan stopped. Original remains saved. Use Scan saved photo to try again.' : `${error.message} Original remains saved.`; }
+  finally { if (photoAbort === controller) photoAbort = null; $('#photo-scan-stop').disabled = true; }
+}
+$('#photo-scan-stop').onclick = () => photoAbort?.abort();
+$('#photo-scan-dialog').addEventListener('close', () => photoAbort?.abort());
 async function stopCamera() { cameraSession.cancel(); clearTimeout(cameraTimer); camera?.getTracks().forEach(track => track.stop()); camera = null; $('#qr-video').srcObject = null; $('#qr-video').hidden = true; $('#camera-stop').hidden = true; $('#camera-start').disabled = false; }
 async function runPDFScan() {
   const selectedPDF = pdfSelection, p = currentPermit();
@@ -487,7 +527,7 @@ on('#save-trip', 'click', async () => { captureDrafts(); await persist('Trip sav
 on('#new-trip', 'click', async () => { if (await changeGuard()) await openTrip(newDeviceTrip()); });
 on('#trip-picker', 'change', async e => { if (!await changeGuard()) { e.target.value = trip.id; return; } const all = await listTrips(); await openTrip(all.find(t => t.id === e.target.value)); });
 on('#examples', 'click', async () => { if (!await changeGuard()) return; await openTrip(exampleTrip()); status('Photo-reference example loaded. Originals, Ohio route remainder, Indiana permit, load dimensions and geometry must be supplied.'); switchTab('route'); });
-on('#add-permit', 'click', async () => { if (!await changeGuard()) return; edit(); const p = blankPermit(); trip.permits.push(p); selected = p.id; await persist(); renderList(); renderReview(); switchTab('review'); });
+on('#add-permit', 'click', async () => { if (!await changeGuard()) return; edit(); const p = blankPermit(); trip.permits.push(p); selected = p.id; await persist(); renderList(); renderReview(); await openScanner(); });
 on('#remove-permit', 'click', async () => { const p = currentPermit(); if (!p || !await confirmAction(`Remove ${p.state || 'this'} permit from this load?`, 'Remove permit')) return; captureDrafts(); edit(); trip.permits = trip.permits.filter(x => x.id !== p.id); selected = trip.permits[0]?.id; await persist(); render(); });
 on('#delete-trip', 'click', async () => { if (!await confirmAction('Delete this device copy and its original documents? Export a backup first. This does not close a shared crew trip.', 'Delete device copy')) return; stopGuidance(); await deleteTrip(trip); const all = await listTrips(); await openTrip(all[0] || blankTrip()); });
 on('#order-permits', 'click', async () => { if (dirty) throw Error('Save changes before ordering permits.'); const m = buildMaster(trip); edit(); trip.permits = m.permits; await persist(m.issues.find(i => /order|mismatch|gap|Overlapping/.test(i)) || 'Permits ordered by matching state border crossings.'); renderList(); switchTab('route'); });
@@ -561,8 +601,8 @@ on('#close-crew', 'click', async () => { if (!trip.shared?.owner) throw Error('O
 on('#refresh-crew', 'click', refreshCrew);
 function connection() { $('#connection').textContent = navigator.onLine ? 'Device wallet · online' : 'Offline · device wallet'; if (!navigator.onLine) { $('#crew-status').textContent = 'Offline — crew positions are unavailable.'; $('#crew-positions').textContent = ''; } }
 window.addEventListener('online', connection); window.addEventListener('offline', connection);
-document.addEventListener('visibilitychange', () => { if (document.hidden) { pdfAbort?.abort(); speech.stop('Page hidden. Speech stopped; tap to read again when parked.'); void stopCamera(); if (watching !== null) stopGuidance('Guidance paused while app was hidden. Restart when safely in the foreground.'); } });
-window.addEventListener('pagehide', () => { pdfAbort?.abort(); stopGuidance(); void stopCamera(); objectURLs.forEach(URL.revokeObjectURL); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { pdfAbort?.abort(); photoAbort?.abort(); speech.stop('Page hidden. Speech stopped; tap to read again when parked.'); void stopCamera(); if (watching !== null) stopGuidance('Guidance paused while app was hidden. Restart when safely in the foreground.'); } });
+window.addEventListener('pagehide', () => { pdfAbort?.abort(); photoAbort?.abort(); stopGuidance(); void stopCamera(); objectURLs.forEach(URL.revokeObjectURL); });
 window.addEventListener('beforeunload', event => { if (dirty) { event.preventDefault(); event.returnValue = ''; } });
 async function launchWallet() {
   const texas = texasPracticeReference(location.hash);

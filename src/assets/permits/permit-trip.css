@@ -35,3 +35,6 @@ dialog{max-width:min(520px,calc(100vw - 32px));border:1px solid var(--line);bord
 #issuer-rehearsal-heading{scroll-margin-top:90px}
 
 #issuer-junction-details select{min-width:0;max-width:100%;width:100%;text-overflow:ellipsis}#issuer-chain-section{border-top:1px solid #ccd5e2;padding-top:12px;margin-top:12px}#issuer-chain-section button{min-height:48px}#issuer-chain-note{font-size:14px;overflow-wrap:anywhere}
+
+/* Saved originals and scan controls must remain readable on phones. */
+.doc-row{flex-wrap:wrap}.doc-row>span{flex-basis:100%}.doc-row button{min-height:48px}#attachment-result{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px}#photo-scan-dialog{width:min(520px,calc(100vw - 32px));max-height:85vh;overflow:auto}#photo-scan-name,#photo-scan-status{overflow-wrap:anywhere}#photo-scan-dialog button{min-height:48px}

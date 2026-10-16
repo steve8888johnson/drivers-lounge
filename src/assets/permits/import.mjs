@@ -62,9 +62,11 @@ export async function importPublicQR(url, fetcher = fetch) {
 }
 
 export async function scanImage(file, { signal } = {}) {
+  if (signal?.aborted) throw new DOMException('Scan stopped.', 'AbortError');
   if (!/^image\/(jpeg|png|webp)$/.test(file.type)) throw Error('Scan a JPG, PNG or WebP photo. For PDFs, use Scan PDF QR codes beside the saved original.');
   const bitmap = await createImageBitmap(file);
   try {
+    if (signal?.aborted) throw new DOMException('Scan stopped.', 'AbortError');
     const canvas = document.createElement('canvas'), scale = Math.min(1, 2600 / Math.max(bitmap.width, bitmap.height));
     canvas.width = Math.round(bitmap.width * scale); canvas.height = Math.round(bitmap.height * scale);
     const ctx = canvas.getContext('2d', { willReadFrequently: true }); ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);

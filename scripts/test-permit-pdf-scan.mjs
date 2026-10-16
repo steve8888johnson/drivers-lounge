@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { scanPDFPages, scanViewport, PDF_SCAN_LIMITS } from '../src/assets/permits/pdf-scan.mjs';
 import { parkedSource } from '../src/assets/permits/speech.mjs';
+import { saveOriginalBatch, originalBatchSummary } from '../src/assets/permits/document-intake.mjs';
+import { scanImage } from '../src/assets/permits/import.mjs';
 const fakeRender = released => async page => ({ canvas: { page }, release: () => released.push(page) });
 
 test('PDF QR pages retain duplicate provenance without duplicating payloads or inferring routes', async () => {
@@ -54,4 +56,55 @@ test('spoken source comparison uses the exact saved line and never speaks an unr
   const view={available:true,permit:{state:'UT'},step:{routeLine:4},source:'Take exit 2; do not use ramp B.'};
   const spoken=parkedSource(view);assert(spoken.includes(view.source));assert(spoken.includes('line 4'));assert(spoken.includes('not live guidance'));
   assert.equal(parkedSource({...view,available:false}),null);assert.equal(parkedSource({...view,source:' '}),null);
+});
+
+test('a failed original save is counted explicitly and does not drop later selected pages', async () => {
+  const files = ['route.pdf', 'bad.heic', 'conditions.pdf'].map(name => ({ name, size: 50 }));
+  const calls = [], progress = [];
+  const results = await saveOriginalBatch(files, async file => {
+    calls.push(file.name);
+    if (file.name === 'bad.heic') throw Error('Choose JPG or PDF.');
+    return { id: file.name };
+  }, (index, total) => progress.push([index, total]));
+  assert.deepEqual(calls, files.map(file => file.name));
+  assert.deepEqual(progress, [[1,3],[2,3],[3,3]]);
+  assert.equal(results[2].document.id, 'conditions.pdf');
+  assert.match(originalBatchSummary(results), /^2 of 3 original file\(s\) saved/);
+  assert.match(originalBatchSummary(results), /NOT SAVED[\s\S]*bad.heic: Choose JPG or PDF/);
+  assert(!results.some(result => 'route' in result || 'approved' in result));
+});
+
+test('empty/fully failed batches never claim that originals were saved', async () => {
+  assert.match(originalBatchSummary(await saveOriginalBatch([], () => assert.fail())), /^0 of 0/);
+  const result = await saveOriginalBatch([{ name: 'route.pdf', size: 50 }], async () => { throw Error('Device storage full.'); });
+  assert.match(originalBatchSummary(result), /^0 of 1/);
+  assert.match(originalBatchSummary(result), /Device storage full/);
+});
+
+test('oversized selections reject before the first original is written', async () => {
+  let writes = 0;
+  for (const files of [Array.from({length:21}, () => ({size:1})), [{size:46*1024*1024}]]) {
+    await assert.rejects(() => saveOriginalBatch(files, () => { writes++; }), /Nothing from this selection was saved/);
+  }
+  assert.equal(writes, 0);
+});
+
+test('duplicate filenames preserve separate original files without merging their contents', async () => {
+  let index = 0;
+  const files = [{name:'permit.pdf',size:1},{name:'permit.pdf',size:2}];
+  const result = await saveOriginalBatch(files, async file => ({id:++index,size:file.size}));
+  assert.deepEqual(result.map(item => item.document), [{id:1,size:1},{id:2,size:2}]);
+  assert.match(originalBatchSummary(result), /^2 of 2/);
+});
+
+test('stopping a photo scan while image decoding is pending closes its bitmap and never reads QR pixels', async () => {
+  const old = globalThis.createImageBitmap, controller = new AbortController();
+  let closed = 0, calls = 0;
+  try {
+    globalThis.createImageBitmap = async () => { calls++; controller.abort(); return {close(){closed++;}}; };
+    await assert.rejects(() => scanImage({type:'image/png'}, {signal:controller.signal}), {name:'AbortError'});
+    assert.equal(calls,1); assert.equal(closed,1);
+    await assert.rejects(() => scanImage({type:'image/png'}, {signal:controller.signal}), {name:'AbortError'});
+    assert.equal(calls,1);
+  } finally { if (old) globalThis.createImageBitmap=old; else delete globalThis.createImageBitmap; }
 });
