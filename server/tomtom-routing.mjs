@@ -1,12 +1,14 @@
 import { createHash } from 'node:crypto';
 import { prepareTomTomRequest, reviewTomTomCandidate } from './tomtom-candidate.mjs';
+import { reviewTomTomGuidance } from './tomtom-guidance.mjs';
 const hold = code => ({status:'HOLD',guidanceAllowed:false,provider:'tomtom',reasons:[{code}]});
 
 // Not an HTTP endpoint. Only a trusted server caller may supply account evidence,
 // the current trip and the key. The account must remain Free with no paid usage.
 export async function requestTomTomCandidate(input, {
   enabled=false, freePlanVerified=false, apiKey, fetchImpl=fetch,
-  currentInput=()=>input, clock=Date.now, timeoutMs=10000, maxBytes=1048576
+  currentInput=()=>input, clock=Date.now, timeoutMs=10000, maxBytes=1048576,
+  includeInstructionDiagnostics=false
 } = {}) {
   if (enabled !== true) return hold('CONNECTION_DISABLED');
   if (freePlanVerified !== true) return hold('FREE_PLAN_NOT_VERIFIED');
@@ -18,7 +20,7 @@ export async function requestTomTomCandidate(input, {
   const createdAt = clock();
   const signature = candidate => createHash('sha256').update(JSON.stringify([candidate.endpoint,candidate.query,candidate.vehicleReviewBinding])).digest('hex');
   try {
-    prepared = prepareTomTomRequest({...input,now:createdAt}); fingerprint = signature(prepared);
+    prepared = prepareTomTomRequest({...input,now:createdAt},{instructions:includeInstructionDiagnostics===true}); fingerprint = signature(prepared);
     trip = structuredClone({origin:input.origin,destination:input.destination}); departure = input.departure;
   } catch { return hold('INVALID_TRUCK_OR_TRIP'); }
   const controller = new AbortController(); let timer;
@@ -43,9 +45,14 @@ export async function requestTomTomCandidate(input, {
     try {payload=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks)));}catch{return hold('INVALID_PROVIDER_RESPONSE');}
     const finishedAt=clock();
     if (!Number.isFinite(finishedAt) || finishedAt<createdAt || finishedAt>=createdAt+timeoutMs) return hold('REQUEST_EXPIRED');
-    try {if(signature(prepareTomTomRequest({...currentInput(),now:finishedAt}))!==fingerprint)return hold('REQUEST_CHANGED');}
+    try {if(signature(prepareTomTomRequest({...currentInput(),now:finishedAt},{instructions:includeInstructionDiagnostics===true}))!==fingerprint)return hold('REQUEST_CHANGED');}
     catch{return hold('REQUEST_CHANGED');}
-    return reviewTomTomCandidate(payload,{query:prepared.query,trip,departure});
+    const result=reviewTomTomCandidate(payload,{query:prepared.query,trip,departure});
+    if(includeInstructionDiagnostics===true && result.structurePassed===true) {
+      const guidance=reviewTomTomGuidance(payload.routes[0]);
+      if(guidance.structurePassed===true) result.instructionCount=guidance.instructions.length;
+    }
+    return result;
   };
   try {
     return await Promise.race([run(),new Promise(resolve=>{timer=setTimeout(()=>{controller.abort();resolve(hold('PROVIDER_TIMEOUT'));},timeoutMs);})]);

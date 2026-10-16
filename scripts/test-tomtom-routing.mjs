@@ -17,6 +17,20 @@ const opts=extra=>({enabled:true,freePlanVerified:true,apiKey:'synthetic-test-on
 const code=(result,name)=>result.reasons.some(reason=>reason.code===name);
 const review=p=>{const d=draft(),r=prepareTomTomRequest(d);return reviewTomTomCandidate(p,{query:r.query,trip:d,departure:d.departure});};
 
+test('reserved instruction evaluation requests real text guidance but returns only a verified count',async()=>{
+ const p=payload();p.routes[0].guidance={instructions:[
+  {point:{latitude:32,longitude:-102},pointIndex:0,routeOffsetInMeters:0,travelTimeInSeconds:0,instructionType:'LOCATION_DEPARTURE',maneuver:'DEPART',message:'Head north.'},
+  {point:{latitude:32.001,longitude:-102},pointIndex:1,routeOffsetInMeters:111,travelTimeInSeconds:60,instructionType:'LOCATION_ARRIVAL',maneuver:'ARRIVE',message:'You have arrived.'}
+ ]};let count=0;
+ const fetchImpl=async url=>{count++;assert.equal(url.searchParams.get('instructionsType'),'text');assert.equal(url.searchParams.get('travelMode'),'truck');return Response.json(p);};
+ const r=await requestTomTomCandidate(draft(),opts({fetchImpl,includeInstructionDiagnostics:true}));
+ assert.equal(count,1);assert.equal(r.structurePassed,true);assert.equal(r.instructionCount,2);assert.equal(r.guidanceAllowed,false);assert.equal(r.instructions,undefined);
+ assert(!JSON.stringify(r).includes('latitude'));assert(!JSON.stringify(r).includes('Head north'));
+ p.routes[0].guidance.instructions[1].point.longitude=-103;
+ const invalid=await requestTomTomCandidate(draft(),opts({fetchImpl,includeInstructionDiagnostics:true}));
+ assert.equal(invalid.structurePassed,false);assert.equal(invalid.instructionCount,undefined);assert.equal(invalid.guidanceAllowed,false);
+});
+
 test('TomTom requires explicit enablement, free-account evidence and a server key before any request',async()=>{
  let calls=0;const fetchImpl=async()=>{calls++;throw Error('must not send');};
  for(const [options,reason] of [[{fetchImpl},'CONNECTION_DISABLED'],[opts({fetchImpl,freePlanVerified:false}),'FREE_PLAN_NOT_VERIFIED'],[opts({fetchImpl,apiKey:''}),'PROVIDER_NOT_CONFIGURED'],[opts({fetchImpl,timeoutMs:10001}),'INVALID_SERVER_LIMITS'],[opts({fetchImpl,maxBytes:1048577}),'INVALID_SERVER_LIMITS']]){
