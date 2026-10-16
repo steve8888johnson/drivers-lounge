@@ -2,7 +2,11 @@
 
 ## Status
 
-Implemented and tested locally. **Not migrated, deployed or verified against live Storage.** Supabase and Vercel connector calls now return `MCP tool ... is not available to the model`; the CLI reports `AccessTokenRequiredError`. Reconnection was requested. No new credentials, services, billing, DNS or production account settings were created or changed.
+**Backend migrated and verified; website controls not yet deployed.** After both chat connectors remained unavailable, Steve explicitly authorized official local-tool browser sign-ins and completed Supabase authentication. He reconfirmed the existing organization still shows Free. Only migration `20261016135203_private_permit_wallet_sync.sql` was applied, using a staging directory populated from actual remote migration history and a dry run proving exactly one pending change. No plan upgrade or charge.
+
+Live rollback tests pass for table owner access, cross-owner/anonymous denial, stale writes, archive requirements and empty-wallet removal. Actual Storage API upload/download preserved a small public test image's SHA-256; unsigned reads failed and API removal was verified. This privileged CLI transport test does not establish an authenticated driver's browser upload. Zero test wallets and originals remain. Post-migration advisors have the same nine pre-existing notices and no new ones. See `PERMIT-WALLET-BACKEND-20261016.md`.
+
+Vercel CLI is installed and its browser approval is pending. No website deployment or real phone sync proof yet. User-approved local CLI logins are the only credential-related change in this pass; no passwords/keys were copied into source or reports. DNS and production account settings are unchanged.
 
 Last previously verified production source remains b8900abeb315855976bd379e5ed66e962b02d94e (permit scanner release), not this change. Keep PR4 unmerged and operational guidance disabled.
 
