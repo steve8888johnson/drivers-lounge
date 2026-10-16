@@ -26,7 +26,7 @@ function draw() {
   $('preview-action').textContent = v.arrived ? 'Preview complete' : v.turn.maneuver === 'arrive' ? 'Continue to' : `Turn ${v.turn.maneuver}`;
   $('preview-next').textContent = v.next ? `${icons[v.next.maneuver]}  Then ${v.next.maneuver === 'arrive' ? 'arrive at' : 'turn ' + v.next.maneuver + ' onto'} ${v.next.road}` : 'Then end the sample trip';
   $('preview-time').textContent = v.arrived ? 'Complete' : `${Math.max(1, Math.ceil(v.remainingSeconds / 60))} min`;
-  $('preview-remaining').textContent = `${formatDistance(v.remainingMeters)} left in sample`;
+  $('preview-remaining').textContent = v.arrived ? '0 mi · sample complete' : v.remainingMeters < 8 ? 'Under 25 ft left in sample' : `${formatDistance(v.remainingMeters)} left in sample`;
   $('preview-play').textContent = v.arrived ? 'Replay preview' : v.running ? 'Pause preview' : 'Play preview';
   $('preview-next-turn').disabled = v.arrived;
   $('preview-progress').value = v.fraction;
