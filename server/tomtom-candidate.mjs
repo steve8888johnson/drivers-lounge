@@ -1,8 +1,9 @@
 import { prepareHereRequest } from '../src/assets/truck-provider-review.mjs';
+import { reviewTomTomGuidance } from './tomtom-guidance.mjs';
 
 // Server-only evaluation adapter. Reuse existing vehicle/load/equipment gates;
 // changing provider must not bypass them. No credentials or network here.
-export function prepareTomTomRequest(input) {
+export function prepareTomTomRequest(input, { instructions = false } = {}) {
   const validated = prepareHereRequest(input), vehicle = input.vehicle;
   if (input.origin.lat === input.destination.lat && input.origin.lng === input.destination.lng) throw Error('Distinct trip endpoints required.');
   const query = new URLSearchParams({
@@ -19,6 +20,8 @@ export function prepareTomTomRequest(input) {
     vehicleAxleWeight: String(Math.ceil(Math.max(...vehicle.axleMeasurement.axles.map(axle => axle.weightLb)) * 0.45359237))
   });
   query.append('avoid', 'unpavedRoads'); query.append('avoid', 'ferries');
+  // Opt-in private evaluation only; ordinary transport stays unchanged.
+  if (instructions === true) { query.set('instructionsType', 'text'); query.set('language', 'en-US'); }
   const location = point => `${point.lat},${point.lng}`;
   return {
     endpoint: `https://api.tomtom.com/routing/1/calculateRoute/${location(input.origin)}:${location(input.destination)}/json`,
@@ -90,6 +93,10 @@ export function reviewTomTomCandidate(payload, request) {
   }
   const departure = timestamp(route?.summary?.departureTime), arrival = timestamp(route?.summary?.arrivalTime), seconds = route?.summary?.travelTimeInSeconds;
   if (departure !== Date.parse(request.departure) || !Number.isFinite(arrival) || typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0 || Math.abs(arrival-departure-seconds*1000)>1000) add('TRIP_TIME_MISMATCH');
+  if (new URLSearchParams(request.query).get('instructionsType') === 'text') {
+    const guidance = reviewTomTomGuidance(route);
+    if (!guidance.structurePassed) for (const reason of guidance.reasons) add(reason.code);
+  }
   const structurePassed = codes.size === 0;
   // A successful provider response cannot prove local access or a permit route.
   add('AUTHORITATIVE_RESTRICTIONS_AND_ENTRANCES_UNVERIFIED');
