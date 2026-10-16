@@ -24,6 +24,8 @@ import { qrAction, retainScannedQR } from './qr-flow.mjs';
 import { routeOverview } from './map-review.mjs';
 import { texasPracticeReference } from './issuer-map.mjs';
 import { saveOriginalBatch, originalBatchSummary } from './document-intake.mjs';
+import { mountWalletAccount } from './cloud-ui.mjs';
+import { rememberWalletOwner, offlineWalletOwner } from './wallet-account-state.mjs';
 
 const $ = selector => document.querySelector(selector);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -31,7 +33,9 @@ const crew = new Crew(window.DLBackend);
 const cameraSession = createCameraSession();
 const guidanceSession = createGuidanceSession();
 const permitMap = createMapReview();
-let setupAccount;
+let setupAccount, walletAccount, walletOwner = null;
+let walletOwnerChange=Promise.resolve(),walletOwnerSequence=0;
+const visibleTrips = () => listTrips(walletOwner);
 let trip, selected, tab = 'load', dirty = false, watching = null, gpsWatch = null, progress, master, crewTimer, crewBusy = false, lastCrew = 0, camera, cameraTimer, activeState = '', objectURLs = [], guidanceVersion = 0;
 let pdfSelection, pdfAbort, photoAbort;
 let savedTrip, walkthroughIndex = 0, mapFocus = false, guidancePause = '', spokenState = '';
@@ -71,7 +75,7 @@ function switchTab(next) {
   if (next === 'route') renderRoute(); if (next === 'wallet') renderWallet(); if (next === 'hazmat') renderHazmat(trip);
   if (trip) history.replaceState(null, '', location.pathname + location.search + '#trip=' + encodeURIComponent(trip.id) + '&tab=' + next);
 }
-async function persist(message) { await saveTrip(trip); savedTrip = structuredClone(trip); dirty = false; await renderPicker(); if (message) status(message); }
+async function persist(message) { await saveTrip(trip); savedTrip = structuredClone(trip); dirty = false; await renderPicker(); if (message) status(message); walletAccount?.changed(); }
 function edit() {
   speech.stop('Trip changed. Read the updated instruction only after saving and review.');
   guidanceSession.cancel(); guidanceVersion++;
@@ -85,7 +89,7 @@ async function changeGuard() {
   return true;
 }
 async function renderPicker() {
-  const all = await listTrips(); $('#trip-picker').innerHTML = all.map(t => `<option value="${esc(t.id)}">${esc(t.name || 'Untitled permitted load')}</option>`).join(''); $('#trip-picker').value = trip.id;
+  const all = await visibleTrips(); $('#trip-picker').innerHTML = all.map(t => `<option value="${esc(t.id)}">${esc(t.name || 'Untitled permitted load')}${t.accountSync ? ' · account copy' : ''}</option>`).join(''); $('#trip-picker').value = trip.id;
 }
 function setupStore() { try { return localStorage; } catch { return null; } }
 function newDeviceTrip() { return applySavedPermitSetup(blankTrip(), window.DLTruckSetupMemory?.read(setupStore(), 'permit')); }
@@ -525,11 +529,11 @@ on('#save-load-draft', 'click', async () => {
 on('#permit-form', 'submit', async e => { e.preventDefault(); captureDrafts(); await persist('Permit details saved. Confirmation is required after changes.'); renderList(); renderReview(); });
 on('#save-trip', 'click', async () => { captureDrafts(); await persist('Trip saved on this device.'); render(); });
 on('#new-trip', 'click', async () => { if (await changeGuard()) await openTrip(newDeviceTrip()); });
-on('#trip-picker', 'change', async e => { if (!await changeGuard()) { e.target.value = trip.id; return; } const all = await listTrips(); await openTrip(all.find(t => t.id === e.target.value)); });
+on('#trip-picker', 'change', async e => { if (!await changeGuard()) { e.target.value = trip.id; return; } const all = await visibleTrips(); await openTrip(all.find(t => t.id === e.target.value)); });
 on('#examples', 'click', async () => { if (!await changeGuard()) return; await openTrip(exampleTrip()); status('Photo-reference example loaded. Originals, Ohio route remainder, Indiana permit, load dimensions and geometry must be supplied.'); switchTab('route'); });
 on('#add-permit', 'click', async () => { if (!await changeGuard()) return; edit(); const p = blankPermit(); trip.permits.push(p); selected = p.id; await persist(); renderList(); renderReview(); await openScanner(); });
 on('#remove-permit', 'click', async () => { const p = currentPermit(); if (!p || !await confirmAction(`Remove ${p.state || 'this'} permit from this load?`, 'Remove permit')) return; captureDrafts(); edit(); trip.permits = trip.permits.filter(x => x.id !== p.id); selected = trip.permits[0]?.id; await persist(); render(); });
-on('#delete-trip', 'click', async () => { if (!await confirmAction('Delete this device copy and its original documents? Export a backup first. This does not close a shared crew trip.', 'Delete device copy')) return; stopGuidance(); await deleteTrip(trip); const all = await listTrips(); await openTrip(all[0] || blankTrip()); });
+on('#delete-trip', 'click', async () => { if (!await confirmAction('Delete this device copy and its original documents? Export a backup first. Account copies and shared crew trips are unchanged.', 'Delete device copy')) return; stopGuidance(); await deleteTrip(trip); const all = await visibleTrips(); await openTrip(all[0] || blankTrip()); });
 on('#order-permits', 'click', async () => { if (dirty) throw Error('Save changes before ordering permits.'); const m = buildMaster(trip); edit(); trip.permits = m.permits; await persist(m.issues.find(i => /order|mismatch|gap|Overlapping/.test(i)) || 'Permits ordered by matching state border crossings.'); renderList(); switchTab('route'); });
 on('#confirm-permit', 'click', async () => { captureDrafts(); const p = currentPermit(); confirmPermit(p); await persist('Permit confirmed against original. Geometry must be reviewed separately.'); renderList(); renderReview(); });
 on('#save-geometry', 'click', async () => { edit(); captureDrafts(); const p = currentPermit(); $('#geometry-json').value = JSON.stringify(p.steps, null, 2); await persist('Geometry saved; check it against every authorized route instruction.'); renderList(); renderReview(); renderRoute(); });
@@ -614,7 +618,7 @@ async function launchWallet() {
     return;
   }
   let lastId = ''; try { lastId = JSON.parse(localStorage.getItem('dl-last-permit-trip') || 'null') || ''; } catch { /* Use the available device trips. */ }
-  const launch = walletLaunch(await listTrips(), location.hash, lastId);
+  const launch = walletLaunch(await visibleTrips(), location.hash, lastId);
   const params = new URLSearchParams(location.hash.slice(1));
   const handoff = params.get('new') === '1' && params.get('prepare') === '1';
   const next = launch.trip || newDeviceTrip();
@@ -630,7 +634,12 @@ async function launchWallet() {
   }
 }
 window.addEventListener('hashchange', safe(async () => { const params = new URLSearchParams(location.hash.slice(1)); if (!['trip','tab','new','texas'].some(key => params.has(key))) return; if (await changeGuard()) await launchWallet(); else switchTab(tab); }));
-try { await launchWallet(); connection(); if ('serviceWorker' in navigator) void navigator.serviceWorker.register('/sw.js').catch(() => {}); }
+try {
+  const account=window.DLAccountBackend;
+  walletOwner=offlineWalletOwner(setupStore(),navigator.onLine);
+  if(account?.configured&&navigator.onLine!==false){let timer;try{const result=await Promise.race([account.client.auth.getUser(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Sign-in check timed out')),10000);})]);walletOwner=result.error?null:result.data.user?.id||null;if(!result.error)rememberWalletOwner(setupStore(),walletOwner);}catch{walletOwner=null;}finally{clearTimeout(timer);}}
+  await launchWallet(); connection(); if ('serviceWorker' in navigator) void navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
 catch (e) { status(`Device storage unavailable: ${e.message}. Enable browser storage before using the permit wallet.`, true); document.querySelectorAll('button,input,select,textarea').forEach(el => el.disabled = true); }
 
 if (trip) setupAccount = mountSetupAccount({
@@ -643,5 +652,25 @@ if (trip) setupAccount = mountSetupAccount({
   apply: values => {
     if (dirty || trip.permits.length || Object.values(trip.profile).some(Boolean)) return false;
     applySavedPermitSetup(trip, values); renderLoad(); edit(); return true;
+  }
+});
+
+if(trip)walletAccount=mountWalletAccount({element:$('#wallet-account'),current:()=>trip,run:safe,confirm:confirmAction,
+  beforeSave:async()=>{captureDrafts();await persist();return structuredClone(trip);},
+  afterSave:async(id,link)=>{if(trip.id!==id||walletOwner!==link.owner)throw Error('Trip or account changed. Refresh account trips before retrying.');trip.accountSync=link;await persist();},
+  open:async value=>{if(!await changeGuard())throw Error('Account trip was not opened. Current device edits are unchanged.');await openTrip(value);switchTab(value.permits.length?'review':'load');},
+  ownerChanged:owner=>{
+    const sequence=++walletOwnerSequence,panels=[...document.querySelectorAll('.layout,.trip-toolbar,.heading')];
+    panels.forEach(p=>p.style.visibility='hidden');
+    walletOwnerChange=walletOwnerChange.catch(()=>{}).then(async()=>{
+      if(sequence!==walletOwnerSequence)return;
+      pdfAbort?.abort();photoAbort?.abort();stopGuidance();stopCamera();speech.stop();
+      document.querySelectorAll('dialog[open]').forEach(dialog=>dialog.close());
+      if(dirty){captureDrafts();await saveTrip(trip);savedTrip=structuredClone(trip);dirty=false;}
+      walletOwner=owner;
+      if(trip.accountSync&&trip.accountSync.owner!==owner){const available=await visibleTrips();if(sequence!==walletOwnerSequence)return;await openTrip(available[0]||newDeviceTrip());}
+      else await renderPicker();
+      if(sequence===walletOwnerSequence)panels.forEach(p=>p.style.visibility='');
+    });return walletOwnerChange;
   }
 });

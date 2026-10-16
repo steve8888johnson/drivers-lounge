@@ -16,13 +16,24 @@ async function transaction(stores, mode, action) {
   const db = await database();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(stores, mode); let result;
-    tx.oncomplete = () => resolve(result?.result); tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error || Error('Wallet transaction cancelled.'));
+    tx.oncomplete = () => resolve(result?.result); tx.onerror = () => reject(tx.error || Error('Wallet transaction cancelled. Device storage could not save the complete trip.')); tx.onabort = () => reject(tx.error || Error('Wallet transaction cancelled.'));
     try { result = action(tx); } catch (e) { tx.abort(); reject(e); }
   });
 }
-export const listTrips = () => transaction(['trips'], 'readonly', tx => tx.objectStore('trips').getAll());
+export const listTrips = async (owner = null) => (await transaction(['trips'], 'readonly', tx => tx.objectStore('trips').getAll())).filter(trip => !trip.accountSync || trip.accountSync.owner === owner);
 export const saveTrip = trip => transaction(['trips'], 'readwrite', tx => tx.objectStore('trips').put(trip));
 export const getDocument = key => transaction(['documents'], 'readonly', tx => tx.objectStore('documents').get(key));
+// Commit the complete verified download atomically. A quota failure leaves every
+// existing local trip untouched. New local IDs avoid collisions with other copies.
+export async function importAccountTrip({snapshot,files,accountSync}) {
+  const trip=structuredClone(snapshot);trip.id=crypto.randomUUID();trip.accountSync=structuredClone(accountSync);
+  const documents=[],mapping=new Map();
+  for(const file of files){const id=crypto.randomUUID();mapping.set(file.id,id);documents.push({id,tripId:trip.id,name:file.name,type:file.type,size:file.size,blob:file.blob});}
+  for(const permit of trip.permits){permit.review=null;permit.geometryReview=null;for(const doc of permit.documents){if(!mapping.has(doc.id))throw Error('An original is missing from the account download.');doc.id=mapping.get(doc.id);}}
+  trip.acknowledged=false;delete trip.shared;
+  await transaction(['trips','documents'],'readwrite',tx=>{documents.forEach(doc=>tx.objectStore('documents').put(doc));tx.objectStore('trips').put(trip);});
+  return trip;
+}
 export async function addDocument(trip, permit, file) {
   if (!['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(file.type)) throw Error('Choose a JPG, PNG, WebP or PDF original.');
   if (file.size > 15 * 1024 * 1024) throw Error('Each original must be 15 MB or smaller.');

@@ -31,9 +31,10 @@ window.DLBackend=backend(configured?sharedClient:null);
 const accountClient=sharedClient&&cfg.readOnlyBeta?{
  auth:sharedClient.auth,
  from(table){
-  if(!['dl_truck_setups','account_deletion_requests'].includes(table))throw new Error('This feature is not open in the account beta.');
+  if(!['dl_truck_setups','dl_permit_wallets','account_deletion_requests'].includes(table))throw new Error('This feature is not open in the account beta.');
   return sharedClient.from(table);
- }
+ },
+ storage:{from(bucket){if(bucket!=='permit-wallet')throw new Error('This storage feature is not open in the account beta.');return sharedClient.storage.from(bucket);}}
 }:sharedClient;
 window.DLAccountBackend=backend(accountClient,!!cfg.readOnlyBeta);
 })();

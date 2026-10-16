@@ -10,7 +10,7 @@ const source=readFileSync('src/assets/backend.js','utf8');
 function setup(config={}){
  const calls=[];let notify;
  const auth={onAuthStateChange(fn){notify=fn},async getSession(){return {data:{session:{user:{id:'owner'}}}}},async getUser(){return {data:{user:{id:'owner'}}}},async signInWithPassword(){calls.push('signin');return {data:{}}},async resetPasswordForEmail(){calls.push('reset');return {data:{}}}};
- const raw={auth,from(table){calls.push(table);return {}}};
+ const raw={auth,from(table){calls.push(table);return {}},storage:{from(bucket){calls.push(bucket);return {}}}};
  const window={DRIVERS_LOUNGE_CONFIG:{readOnlyBeta:true,accountsEnabled:true,supabaseUrl:'https://test.supabase.co',supabaseAnonKey:'sb_publishable_test',...config},supabase:{createClient(){calls.push('create');return raw}},dispatchEvent(event){calls.push(event.detail)}};
  vm.runInNewContext(source,{window,URLSearchParams,location:{origin:'https://driverslounge.app',hash:'',search:''},CustomEvent:class{constructor(type,{detail}){this.type=type;this.detail=detail}}});
  return {window,calls,notify};
@@ -24,12 +24,12 @@ test('account beta supports sign-in and recovery without opening the legacy serv
  await w.DLAccountBackend.signIn('driver@example.com','synthetic');await w.DLAccountBackend.reset('driver@example.com');
  assert.deepEqual(calls,['create','signin','reset']);
 });
-test('account client exposes only setup and deletion tables, with database RLS still required',()=>{
+test('account client exposes only setup, wallet and deletion tables plus private wallet storage',()=>{
  const {window:w,calls}=setup();const c=w.DLAccountBackend.client;
- c.from('dl_truck_setups');c.from('account_deletion_requests');
+ c.from('dl_truck_setups');c.from('account_deletion_requests');c.from('dl_permit_wallets');c.storage.from('permit-wallet');
  for(const table of ['profiles','communication_preferences','road_reports','permit_trips','payments'])assert.throws(()=>c.from(table),/not open/);
- assert.equal(c.rpc,undefined);assert.equal(c.storage,undefined);
- assert.deepEqual(calls,['create','dl_truck_setups','account_deletion_requests']);
+ assert.equal(c.rpc,undefined);assert.throws(()=>c.storage.from('driver-documents'),/not open/);
+ assert.deepEqual(calls,['create','dl_truck_setups','account_deletion_requests','dl_permit_wallets','permit-wallet']);
 });
 test('account beta relays verified auth lifecycle events for setup clearing',()=>{
  const {window:w,calls,notify}=setup();notify('SIGNED_OUT',null);notify('SIGNED_IN',{user:{id:'other'}});
