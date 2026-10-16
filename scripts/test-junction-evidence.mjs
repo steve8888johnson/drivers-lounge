@@ -1,10 +1,29 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateContextRequest,readRoadContext,compareRoadShape,sanitizeRoadContext,roadContextRequest } from '../src/assets/permits/junction-evidence.mjs';
+import { validateContextRequest,readRoadContext,compareRoadShape,sanitizeRoadContext,roadContextRequest,junctionRequest,roadEndpointContacts } from '../src/assets/permits/junction-evidence.mjs';
+import {issuerRampPair,issuerRehearsal} from '../src/assets/permits/issuer-rehearsal.mjs';
+import {issuerRowText} from '../src/assets/permits/issuer-map.mjs';
 import { loadRoadContext } from '../server/texas-road-context.mjs';
 import handler from '../api/permit-road-context.mjs';
 const q={bounds:[-100.01,31.99,-99.99,32.01],prefix:'SH',number:31};
 const fixture=()=>({spatialReference:{wkid:4326},features:[{attributes:{OBJECTID:123,RTE_NM:'SH0031-CN',RTE_PRFX:'SH',RTE_NBR:'31',RDBD_TYPE:'Connector',EXT_DATE:'10-01-2026'},geometry:{paths:[[[-100,32],[-100,32.001],[-100,32.002]]]}}]});
+const paired=()=>{
+ const rows=[{sequence:1,road:'SH171 se',instruction:'Take SH31 Ramp sw',miles:.1,cumulativeMiles:.1},{sequence:2,road:'SH31 Ramp sw',instruction:'Merge onto SH31 sw',miles:.1,cumulativeMiles:.2}];
+ const p={state:'TX',number:'TEST',routeText:rows.map(issuerRowText).join('\n'),entry:{label:'A'},exit:{label:'B'}};
+ p.issuerMap={format:'txpros-issuer-map/v2',sourceUrl:'https://txpros.txdmv.gov/PermitDetails02.aspx?PermitID=10000001&QRUSER=1',permitNumber:p.number,routeText:p.routeText,entryLabel:'A',exitLabel:'B',retrievedAt:'2026-10-15T12:00:00Z',paths:[[[32,-100],[32.001,-100],[32.002,-100]]],rows};return p;
+};
+test('literal adjacent entry/merge pair shares a bounded query, never coordinates or approval',()=>{
+ const p=paired(),before=JSON.stringify(p);assert.deepEqual(issuerRampPair(issuerRehearsal(p,0)),{entry:0,merge:1});assert.deepEqual(junctionRequest(p,0),junctionRequest(p,1));assert.equal(JSON.stringify(p),before);
+ for(const change of [v=>v.rows[1].instruction='Merge onto SH31 ne',v=>v.rows[1].road='SH31 FR sw',v=>v.rows[1].instruction='Merge onto SH32 sw',v=>v.rows[0].instruction='Take SH31 Ramp sw if open',v=>v.rows[1].cumulativeMiles=3,v=>v.rows[1].cumulativeMiles=0,v=>v.rows[1].cumulativeMiles=NaN]){const v=issuerRehearsal(p);change(v);assert.equal(issuerRampPair(v),null);}
+ assert.equal(issuerRampPair({available:false}),null);p.routeText='stale';assert.throws(()=>junctionRequest(p,0));
+ p.issuerMap.rows[1].cumulativeMiles=20;assert.throws(()=>junctionRequest(p,1));
+});
+test('endpoint inspection uses original endpoints and exposes all planar contacts without inventing a connection',()=>{
+ const data=fixture();for(const [id,lon] of [[124,-100],[125,-100.000005],[126,-100.00002]])data.features.push({attributes:{...data.features[0].attributes,OBJECTID:id,RDBD_TYPE:'Left Roadbed'},geometry:{paths:[[[lon,31.999],[lon,32.003]]]}});
+ const context=readRoadContext(data,q),f=context.features.find(f=>f.id===123),before=JSON.stringify(context),ends=roadEndpointContacts(f,context);
+ assert.deepEqual(ends.map(e=>e.point),[f.paths[0][0],f.paths[0].at(-1)]);assert.deepEqual(ends[0].contacts.map(c=>c.id),[124,125]);assert.equal(ends[1].contacts.length,2);assert(!('approved' in ends[0]));assert(!('turnPoint' in ends[0]));assert.equal(JSON.stringify(context),before);
+ assert.deepEqual(roadEndpointContacts(structuredClone(f),context),[]);f.paths.push([[32,-100.002],[32.001,-100.002]]);assert.deepEqual(roadEndpointContacts(f,context),[]);
+});
 test('bounded numbered-road lookup rejects arbitrary URLs, malformed areas and broad searches',()=>{
   for(const raw of [{...q,url:'https://evil.test'},{...q,prefix:"SH' OR 1=1"},{...q,number:'31'},{...q,bounds:[-100,32,-99,33]},{...q,bounds:[-99,32,-100,33]},{...q,bounds:[NaN,32,-100,33]}])assert.throws(()=>validateContextRequest(raw));
   const view={available:true,estimated:true,sparseArea:[],area:[[[32,-100],[32.001,-100]]],row:{instruction:'Take SH31 Ramp sw'}};assert.equal(roadContextRequest(view).number,31);assert.throws(()=>roadContextRequest({...view,estimated:false}));assert.throws(()=>roadContextRequest({...view,sparseArea:[view.area[0]]}));

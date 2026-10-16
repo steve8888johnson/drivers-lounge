@@ -170,3 +170,18 @@ test('road inspection follows the selected permit row and discards late response
     const hidden=env.el('#issuer-junction-load').onclick();document.hidden=true;env.events.visibilitychange();resolve(response(query));await hidden;assert(env.el('#issuer-junction-details').hidden);assert.equal(JSON.stringify(p),before);assert.equal(p.steps.length,0);
   }finally{globalThis.fetch=oldFetch;env.cleanup();}
 });
+
+test('explicit ramp/merge switch retains only completed pair-bound context, stops voice and never auto-reads',async()=>{
+  const env=environment(),oldFetch=globalThis.fetch;try{
+    const rows=[{sequence:1,road:'SH171 se',instruction:'Take SH31 Ramp sw',miles:.1,cumulativeMiles:.1},{sequence:2,road:'SH31 Ramp sw',instruction:'Merge onto SH31 sw',miles:.1,cumulativeMiles:.2},{sequence:3,road:'SH31 sw',instruction:'Arrive at destination',miles:.1,cumulativeMiles:.3}];
+    const p={...blankPermit(),state:'TX',number:'TEST',routeText:rows.map(issuerRowText).join('\n'),entry:{label:'A'},exit:{label:'B'}};
+    p.issuerMap={format:'txpros-issuer-map/v2',sourceUrl:'https://txpros.txdmv.gov/PermitDetails02.aspx?PermitID=10000001&QRUSER=1',permitNumber:p.number,routeText:p.routeText,entryLabel:'A',exitLabel:'B',retrievedAt:'2026-10-15T12:00:00Z',paths:[[[32,-100],[32.001,-100],[32.002,-100],[32.004,-100]]],rows};
+    const before=JSON.stringify(p),review=createMapReview();await review.open(p,0,()=>{},{showMap:true});assert(!env.el('#issuer-ramp-pair').hidden);
+    let calls=0;const response=q=>Response.json({context:readRoadContext({spatialReference:{wkid:4326},features:[{attributes:{OBJECTID:123,RTE_NM:'SH0031-CN',RTE_PRFX:'SH',RTE_NBR:'31',RDBD_TYPE:'Connector',EXT_DATE:'10-01-2026'},geometry:{paths:[[[-100,32],[-100,32.001]]]}}]},q)});
+    globalThis.fetch=async(url,init)=>{calls++;return response(JSON.parse(init.body));};await env.el('#issuer-junction-load').onclick();env.el('#issuer-junction-select').value='0';env.el('#issuer-junction-select').onchange();env.el('#issuer-endpoint-1').onclick();const bounds=structuredClone(env.state.bounds);
+    env.el('#issuer-row-read').onclick();const cancelled=env.state.cancelled;env.el('#issuer-pair-merge').onclick();assert(env.state.cancelled>cancelled);assert.equal(calls,1);assert.equal(env.state.spoken.length,1);assert(!env.el('#issuer-junction-details').hidden);assert.equal(env.el('#issuer-junction-select').value,'0');assert.deepEqual(env.state.bounds,bounds);assert.equal(env.el('#issuer-pair-merge')['aria-pressed'],'true');assert.match(env.el('#issuer-row-instruction').textContent,/Merge onto SH31 sw/);
+    env.el('#issuer-row-read').onclick();assert.match(env.state.spoken.at(-1).text,/Merge onto State Highway 31 southwest/);env.el('#issuer-pair-entry').onclick();assert.equal(env.state.spoken.length,2);assert(!env.el('#issuer-junction-details').hidden);
+    env.el('#issuer-row-next').onclick();assert(env.el('#issuer-junction-details').hidden);env.el('#issuer-row-next').onclick();assert(env.el('#issuer-ramp-pair').hidden);assert.equal(env.el('#issuer-endpoint-1')['aria-pressed'],'false');
+    env.el('#issuer-row-previous').onclick();let resolve,query,signal;globalThis.fetch=(url,init)=>{query=JSON.parse(init.body);signal=init.signal;return new Promise(r=>resolve=r);};const pending=env.el('#issuer-junction-load').onclick();env.el('#issuer-pair-entry').onclick();assert(signal.aborted);resolve(response(query));await pending;assert(env.el('#issuer-junction-details').hidden);assert.equal(JSON.stringify(p),before);assert.equal(p.steps.length,0);
+  }finally{globalThis.fetch=oldFetch;env.cleanup();}
+});

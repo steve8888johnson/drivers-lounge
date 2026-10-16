@@ -1,7 +1,7 @@
 import { mapReview, routeOverview, coordinateText, STREET_TILES, STREET_OPTIONS } from './map-review.mjs';
-import { issuerRehearsal, issuerRowSpeech } from './issuer-rehearsal.mjs';
+import { issuerRehearsal, issuerRowSpeech, issuerRampPair } from './issuer-rehearsal.mjs';
 import { createSpeech, speechPreferences } from './speech.mjs';
-import { roadContextRequest, sanitizeRoadContext, compareRoadShape } from './junction-evidence.mjs';
+import { junctionRequest, junctionView, roadEndpointContacts, sanitizeRoadContext, compareRoadShape } from './junction-evidence.mjs';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 let leafletPromise;
@@ -21,8 +21,8 @@ export function createMapReview() {
   const $ = selector => document.querySelector(selector), dialog = $('#permit-map-dialog');
   let permit, index = 0, map, layers, token = 0, streetRequested = false, onSelection = () => {}, tileTimer, overview = false, whole;
   let rowIndex=0, rehearsal, focus='all';
-  let junction=null,junctionIndex=-1,junctionWide=true,junctionMessage='',junctionGeneration=0,junctionController;
-  function clearJunction(){junctionGeneration++;junctionController?.abort();junctionController=null;junction=null;junctionMessage='';junctionIndex=-1;junctionWide=true;$('#issuer-junction-details').hidden=true;$('#issuer-junction-summary').hidden=true;$('#issuer-junction-load').disabled=false;}
+  let junction=null,junctionIndex=-1,junctionWide=true,junctionMessage='',junctionGeneration=0,junctionController,endpointIndex=-1;
+  function clearJunction(){junctionGeneration++;junctionController?.abort();junctionController=null;junction=null;junctionMessage='';junctionIndex=-1;endpointIndex=-1;junctionWide=true;$('#issuer-junction-details').hidden=true;$('#issuer-junction-summary').hidden=true;$('#issuer-junction-load').disabled=false;}
   const speech=createSpeech({synthesis:window.speechSynthesis,Utterance:window.SpeechSynthesisUtterance,visible:()=>!document.hidden&&dialog.open,onState:s=>{$('#issuer-voice-status').textContent=s.message;}});
   const status = message => { $('#permit-map-status').textContent = message; if (/failed|timed out|unavailable|cleared|stopped|not finished/i.test(message)) $('#permit-map-source').open=true; };
   function dispose() { clearJunction(); speech.stop(); token++; clearTimeout(tileTimer); map?.remove(); map = null; layers = null; streetRequested = false; $('#permit-street-map').hidden = true; $('#permit-map-show').disabled = false; $('#permit-map-show').hidden = false; }
@@ -54,7 +54,9 @@ export function createMapReview() {
       L.circleMarker(edge.point, { radius: 5, color: '#56657a', weight: 2, fillColor: '#d8e0ec', fillOpacity: 1 }).bindTooltip(label).addTo(layers);
     }
     const focused=whole.issuerOverview && focus==='row' && rehearsal?.estimated ? [...rehearsal.area,...rehearsal.sparseArea] : whole.issuerOverview && focus==='sparse' && sparse.length ? sparse : all;
-    const jb=junction?.query.bounds,jf=junction?.features[junctionIndex], bounds = L.latLngBounds(focus==='junction'&&jb?(!junctionWide&&jf?jf.paths.flat():[[jb[1],jb[0]],[jb[3],jb[2]]]):[...focused.flat(), ...context]);
+    const jb=junction?.query.bounds,jf=junction?.features[junctionIndex],endpoint=focus==='junction'?roadEndpointContacts(jf,junction)[endpointIndex]:null;
+    if(endpoint)L.circleMarker(endpoint.point,{radius:8,color:'#7139a8',weight:3,fillColor:'#fff',fillOpacity:1}).bindTooltip(`Displayed endpoint ${endpointIndex+1} · not a confirmed turn`,{permanent:true,direction:'top'}).addTo(layers);
+    const bounds = L.latLngBounds(endpoint?[[endpoint.point[0]-.0015,endpoint.point[1]-.0018],[endpoint.point[0]+.0015,endpoint.point[1]+.0018]]:focus==='junction'&&jb?(!junctionWide&&jf?jf.paths.flat():[[jb[1],jb[0]],[jb[3],jb[2]]]):[...focused.flat(), ...context]);
     map.invalidateSize(); map.fitBounds(bounds, { padding: [35, 35], maxZoom: 16, animate: false });
   }
   function renderRehearsal() {
@@ -62,15 +64,22 @@ export function createMapReview() {
     $('#issuer-rehearsal').hidden=!rehearsal?.available;
     $('#issuer-rehearsal-heading').hidden=!rehearsal?.available;
     $('#issuer-rehearsal-voice').hidden=!rehearsal?.available;
+    const pair=issuerRampPair(rehearsal);$('#issuer-ramp-pair').hidden=!pair||focus==='sparse';
+    $('#issuer-pair-entry').setAttribute('aria-pressed',String(pair?.entry===rowIndex));$('#issuer-pair-merge').setAttribute('aria-pressed',String(pair?.merge===rowIndex));
+    $('#issuer-pair-note').textContent=pair?`Rows ${pair.entry+1}–${pair.merge+1} share the same printed ramp and direction. Use these two buttons to keep the same road comparison. Exact positions remain unverified.`:'';
     $('#issuer-row-legend').hidden=focus==='sparse'||focus==='junction';
     $('#issuer-junction-summary').hidden=focus!=='junction';$('#issuer-junction-summary').textContent=junctionMessage;
     $('#issuer-junction-details').hidden=focus!=='junction'||!junction;
     $('#issuer-junction-load').disabled=!!junctionController||!rehearsal?.estimated;
     $('#issuer-junction-select').innerHTML='<option value="-1">Choose a road shape to inspect</option>'+(junction?.features||[]).map((f,i)=>`<option value="${i}">${esc(junction.query.prefix+junction.query.number)} · ${esc(f.kind)} · record ${f.id}</option>`).join('');$('#issuer-junction-select').value=String(junctionIndex);
     const jf=junction?.features[junctionIndex];let jm='';
-    if(jf){try{const c=compareRoadShape(jf,rehearsal.area);jm=`<strong>${c.closeShape?'Close shape · turn unverified':'Shapes differ · turn unresolved'}</strong><p>Largest sampled distance from this road record to the issuer line: ${Math.ceil(c.maxOffset)} m. Only the portion in this viewing area is compared. Distances run from this road record to the issuer line. They do not identify a permitted turn or travel direction.</p>`;}catch{jm='<strong>Turn unresolved · shape comparison exceeds the inspection limit.</strong>';}
+    if(jf){try{const c=compareRoadShape(jf,junctionView(permit,rowIndex).area);jm=`<strong>${c.closeShape?'Close shape · turn unverified':'Shapes differ · turn unresolved'}</strong><p>Largest sampled distance from this road record to the issuer line: ${Math.ceil(c.maxOffset)} m. Only the portion in this viewing area is compared. Distances run from this road record to the issuer line. They do not identify a permitted turn or travel direction.</p>`;}catch{jm='<strong>Turn unresolved · shape comparison exceeds the inspection limit.</strong>';}
       jm+=`<p>Record ${jf.id} · ${esc(jf.road)} · ${esc(jf.kind)}<br>Inventory: ${esc(jf.date)} · retrieved ${esc(new Date(junction.retrievedAt).toLocaleString())}. <a href="${esc(junction.source)}" target="_blank" rel="noopener noreferrer">TxDOT roadway source</a></p>`;}
     $('#issuer-junction-detail').innerHTML=jm;
+    const ends=roadEndpointContacts(jf,junction);$('#issuer-endpoints').hidden=!ends.length;
+    $('#issuer-endpoint-note').textContent=ends.length?'These are ends of the displayed inventory shape, not confirmed ramp-entry or merge positions. Long records may continue outside this viewing area. Point order does not establish travel direction; touching lines may be at different levels.':'';
+    $('#issuer-endpoint-contacts').innerHTML=ends.map(e=>`<p><strong>Endpoint ${e.index+1}:</strong> ${e.contacts.length?e.contacts.map(c=>`${esc(c.kind)} · record ${c.id} (${c.distance.toFixed(2)} m from its line)`).join('; '):'No other returned road line meets this endpoint within 1 m. The query may not include the approach road.'}</p>`).join('');
+    for(const i of [0,1])$('#issuer-endpoint-'+i).setAttribute('aria-pressed',String(endpointIndex===i));
     $('#permit-map-sparse').hidden=!whole.sparsePaths?.length;
     $('#issuer-span-details').hidden=focus!=='sparse'||!whole.issuerOverview;
     $('#issuer-span-summary').hidden=focus!=='sparse'||!whole.issuerOverview;
@@ -116,16 +125,23 @@ export function createMapReview() {
   $('#permit-map-all').onclick = () => { clearJunction();speech.stop(); focus='all'; overview = true; render(); };
   $('#permit-map-sparse').onclick=async()=>{clearJunction();speech.stop();focus='sparse';render();if(!map)await showMap();$('#issuer-rehearsal-heading').scrollIntoView?.({block:'start'});};
   function selectRow(value){ if(!rehearsal?.available||!Number.isInteger(value)||value<0||value>=rehearsal.total)return; clearJunction();speech.stop('Row changed. Tap Read turn aloud for the selected row.');rowIndex=value;focus='row';render(); }
+  function selectPair(which){
+    const pair=issuerRampPair(rehearsal);if(!pair)return;const value=pair[which];
+    let retain=false;try{retain=focus==='junction'&&!!junction&&!junctionController&&JSON.stringify(junction.query)===JSON.stringify(junctionRequest(permit,value));}catch{}
+    if(!retain)clearJunction();speech.stop('Row changed. Tap Read turn aloud for the selected row.');rowIndex=value;focus=retain?'junction':'row';render();$('#issuer-rehearsal-heading').scrollIntoView?.({block:'start'});
+  }
+  $('#issuer-pair-entry').onclick=()=>selectPair('entry');$('#issuer-pair-merge').onclick=()=>selectPair('merge');
   $('#issuer-row-select').onchange=()=>selectRow(Number($('#issuer-row-select').value));
   $('#issuer-row-previous').onclick=()=>selectRow(rowIndex-1);
   $('#issuer-row-next').onclick=()=>selectRow(rowIndex+1);
   $('#issuer-row-area').onclick=async()=>{if(!rehearsal?.estimated)return;clearJunction();focus='row';render();if(!map)await showMap();$('#issuer-rehearsal-heading').scrollIntoView?.({block:'start'});};
   $('#issuer-row-read').onclick=()=>{const text=issuerRowSpeech(rehearsal);if(!text)return;if(focus!=='junction')focus='row';render();let prefs;try{prefs=speechPreferences(localStorage);}catch{prefs=speechPreferences(null);}speech.play(text,{...prefs,key:'issuer-row',repeat:true});};
-  $('#issuer-junction-select').onchange=()=>{const value=Number($('#issuer-junction-select').value);if(!Number.isInteger(value)||(value!==-1&&!junction?.features[value]))return;junctionIndex=value;junctionWide=value===-1;render();$('#issuer-rehearsal-heading').scrollIntoView?.({block:'start'});};
-  $('#issuer-junction-fit').onclick=()=>{junctionWide=true;render();$('#issuer-rehearsal-heading').scrollIntoView?.({block:'start'});};
+  $('#issuer-junction-select').onchange=()=>{const value=Number($('#issuer-junction-select').value);if(!Number.isInteger(value)||(value!==-1&&!junction?.features[value]))return;junctionIndex=value;endpointIndex=-1;junctionWide=value===-1;render();$('#issuer-rehearsal-heading').scrollIntoView?.({block:'start'});};
+  $('#issuer-junction-fit').onclick=()=>{junctionWide=true;endpointIndex=-1;render();$('#issuer-rehearsal-heading').scrollIntoView?.({block:'start'});};
+  for(const i of [0,1])$('#issuer-endpoint-'+i).onclick=()=>{if(!roadEndpointContacts(junction?.features[junctionIndex],junction)[i])return;endpointIndex=i;focus='junction';render();$('#issuer-rehearsal-heading').scrollIntoView?.({block:'start'});};
   $('#issuer-junction-load').onclick=async()=>{
     clearJunction();speech.stop();focus='junction';const generation=junctionGeneration;let timer;
-    try{const query=roadContextRequest(rehearsal),controller=new AbortController();junctionController=controller;timer=setTimeout(()=>controller.abort(),10000);junctionMessage='Loading nearby official road shapes…';render();
+    try{const query=junctionRequest(permit,rowIndex),controller=new AbortController();junctionController=controller;timer=setTimeout(()=>controller.abort(),10000);junctionMessage='Loading nearby official road shapes…';render();
       const response=await fetch('/api/permit-road-context',{method:'POST',credentials:'omit',headers:{'Content-Type':'application/json'},body:JSON.stringify(query),signal:junctionController.signal});
       if(!response.ok)throw Error('Official road comparison unavailable. Saved permit text and map are unchanged.');
       const body=await response.json();if(generation!==junctionGeneration||!dialog.open||document.hidden)return;

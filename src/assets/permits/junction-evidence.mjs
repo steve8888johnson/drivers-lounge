@@ -1,5 +1,24 @@
 import { meters } from './core.mjs';
 import { nearestSpanPoint, TXDOT_ROADWAYS } from './issuer-span-check.mjs';
+import { issuerRehearsal, issuerRampPair } from './issuer-rehearsal.mjs';
+
+export function junctionView(permit,index) {
+  const view=issuerRehearsal(permit,index),pair=issuerRampPair(view);
+  if(!pair)return view;
+  const a=issuerRehearsal(permit,pair.entry),b=issuerRehearsal(permit,pair.merge);
+  // Identical query for either row; only retain a comparison within this exact pair.
+  return {...a,estimated:a.estimated&&b.estimated,area:[...a.area,...b.area],sparseArea:[...a.sparseArea,...b.sparseArea]};
+}
+export const junctionRequest=(permit,index)=>roadContextRequest(junctionView(permit,index));
+
+export function roadEndpointContacts(feature,context) {
+  if(!feature?.paths?.length||feature.paths.length!==1||!context?.features?.includes(feature))return [];
+  const path=feature.paths[0];
+  return [path[0],path.at(-1)].map((point,index)=>({point:point.slice(),index,contacts:context.features.filter(f=>f!==feature).flatMap(f=>{
+    const distance=Math.min(...f.paths.map(p=>nearestSpanPoint(point,p).distance));
+    return distance<=1?[{id:f.id,road:f.road,kind:f.kind,distance}]:[];
+  })}));
+}
 
 export function roadContextRequest(view) {
   if(!view?.available||!view.estimated||view.sparseArea.length)throw Error('This row has no sufficiently detailed approximate map area.');

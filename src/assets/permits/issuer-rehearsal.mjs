@@ -31,3 +31,18 @@ export function issuerRowSpeech(view) {
   const row=view.row;
   return `Parked Texas permit review. Row ${view.index+1} of ${view.total}. ${row.road?`Road column: ${pronouncePrintedRoad(row.road)}. `:''}Issued instruction: ${pronouncePrintedRoad(row.instruction)}. ${view.estimated?'The highlighted map area is approximate.':'No turn position has been established.'} This is not live guidance.`;
 }
+
+// Pair only adjacent, literal entry/merge wording for the same road and direction.
+// Text sequence is not evidence that either row has a known maneuver coordinate.
+export function issuerRampPair(view) {
+  if(!view?.available||!Array.isArray(view.rows))return null;
+  for(const first of [view.index-1,view.index]) {
+    const entry=view.rows[first],merge=view.rows[first+1];
+    if(!entry||!merge)continue;
+    const m=entry.instruction.match(/^Take ((?:US|SH|IH|FM|SS|SL)-?\d{1,4}) Ramp (n|ne|e|se|s|sw|w|nw)$/);
+    if(!m||merge.road!==`${m[1]} Ramp ${m[2]}`||merge.instruction!==`Merge onto ${m[1]} ${m[2]}`)continue;
+    if(!Number.isFinite(entry.cumulativeMiles)||!Number.isFinite(merge.cumulativeMiles)||merge.cumulativeMiles<entry.cumulativeMiles||merge.cumulativeMiles-entry.cumulativeMiles>2)continue;
+    return {entry:first,merge:first+1};
+  }
+  return null;
+}
