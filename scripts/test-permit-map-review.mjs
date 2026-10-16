@@ -6,6 +6,7 @@ import { blankPermit, geometryErrors } from '../src/assets/permits/core.mjs';
 import { createMapReview } from '../src/assets/permits/map-review-ui.mjs';
 import { issuerRowText } from '../src/assets/permits/issuer-map.mjs';
 import { TXDOT_ROADWAYS } from '../src/assets/permits/issuer-span-check.mjs';
+import { readRoadContext } from '../src/assets/permits/junction-evidence.mjs';
 const permit = () => ({ ...blankPermit(), state:'UT', number:'SYNTHETIC', routeText:'Use I-15 north\nTake the issued exit', steps:[
   {text:'Use I-15 north',road:'I-15',routeLine:1,points:[[40,-111],[40.001,-111]]},
   {text:'Take the issued exit',road:'Issued ramp',routeLine:2,points:[[40.001,-111],[40.002,-111]]}
@@ -130,7 +131,7 @@ test('parked row changes align speech with selected text, cancel old audio and k
     const p={...blankPermit(),state:'TX',number:'TEST',routeText:rows.map(issuerRowText).join('\n'),entry:{label:'A'},exit:{label:'B'}};
     p.issuerMap={format:'txpros-issuer-map/v2',sourceUrl:'https://txpros.txdmv.gov/PermitDetails02.aspx?PermitID=10000001&QRUSER=1',permitNumber:p.number,routeText:p.routeText,entryLabel:'A',exitLabel:'B',retrievedAt:'2026-10-15T12:00:00Z',paths:[[[32,-100],[32.001,-100],[32.06,-100]]],rows};
     const before=JSON.stringify(p),review=createMapReview();await review.open(p,0,()=>{},{showMap:true});
-    assert(!env.el('#issuer-rehearsal').hidden);assert(env.state.lines.some(l=>l.options.dashArray));assert.equal(env.state.spoken.length,0);
+    assert(!env.el('#issuer-rehearsal').hidden);assert(!env.el('#issuer-rehearsal-voice').hidden);assert(env.state.lines.some(l=>l.options.dashArray));assert.equal(env.state.spoken.length,0);
     env.el('#issuer-row-read').onclick();assert.match(env.state.spoken.at(-1).text,/Take State Spur 192 Ramp east/);assert(env.state.lines.some(l=>l.options.color==='#215bcc'));
     const old=env.state.spoken.at(-1),cancelled=env.state.cancelled;env.el('#issuer-row-next').onclick();assert(env.state.cancelled>cancelled);old.onstart();assert.match(env.el('#issuer-voice-status').textContent,/Row changed/);
     assert.equal(env.el('#issuer-row-instruction').textContent,rows[1].instruction);assert.equal(env.state.spoken.length,1);env.el('#issuer-row-read').onclick();assert.match(env.state.spoken.at(-1).text,/Row 2 of 2/);assert.match(env.state.spoken.at(-1).text,/Continue straight on State Spur 192 east/);
@@ -152,4 +153,20 @@ test('inventory comparison is inspection-only and cannot linger across speech, r
     env.el('#issuer-row-read').onclick();assert(env.el('#issuer-span-details').hidden);assert(!env.el('#issuer-row-legend').hidden);assert(!env.state.lines.some(l=>l.options.color==='#7139a8'));assert.match(env.state.spoken.at(-1).text,/Continue straight on U\.S\. Highway 62 south/);assert.equal(JSON.stringify(p),before);
     const missing=structuredClone(p);missing.issuerMap.spanEvidence=[];missing.issuerMap.spanCheckNote='Inventory unavailable';await review.open(missing,0,()=>{},{showMap:true});await env.el('#permit-map-sparse').onclick();assert(!env.state.lines.some(l=>l.options.color==='#7139a8'));assert.match(env.el('#issuer-span-summary').textContent,/No detailed/);assert.match(env.el('#issuer-span-details').innerHTML,/Inventory unavailable/);assert(!env.el('#issuer-span-details').innerHTML.includes('12 inventory points'));assert.equal(missing.steps.length,0);
   }finally{env.cleanup();}
+});
+
+test('road inspection follows the selected permit row and discards late responses after row change or hide',async()=>{
+  const env=environment(),oldFetch=globalThis.fetch;try{
+    const rows=[{sequence:1,road:'SH171 se',instruction:'Take SH31 Ramp sw',miles:.1,cumulativeMiles:.1},{sequence:2,road:'SH31 Ramp sw',instruction:'Merge onto SH31 sw',miles:.1,cumulativeMiles:.2}];
+    const p={...blankPermit(),state:'TX',number:'TEST',routeText:rows.map(issuerRowText).join('\n'),entry:{label:'A'},exit:{label:'B'}};
+    p.issuerMap={format:'txpros-issuer-map/v2',sourceUrl:'https://txpros.txdmv.gov/PermitDetails02.aspx?PermitID=10000001&QRUSER=1',permitNumber:p.number,routeText:p.routeText,entryLabel:'A',exitLabel:'B',retrievedAt:'2026-10-15T12:00:00Z',paths:[[[32,-100],[32.001,-100],[32.002,-100]]],rows};
+    const before=JSON.stringify(p),review=createMapReview();await review.open(p,0,()=>{},{showMap:true});
+    const response=q=>Response.json({context:readRoadContext({spatialReference:{wkid:4326},features:[{attributes:{OBJECTID:123,RTE_NM:'SH0031-CN',RTE_PRFX:'SH',RTE_NBR:'31',RDBD_TYPE:'Connector',EXT_DATE:'10-01-2026'},geometry:{paths:[[[-100,32],[-100,32.001]]]}}]},q)});
+    globalThis.fetch=async(url,init)=>{assert.equal(url,'/api/permit-road-context');assert.equal(init.credentials,'omit');return response(JSON.parse(init.body));};
+    await env.el('#issuer-junction-load').onclick();assert(!env.el('#issuer-junction-details').hidden);assert(!env.state.lines.some(l=>l.options.color==='#7139a8'));env.el('#issuer-junction-select').value='0';env.el('#issuer-junction-select').onchange();assert.match(env.el('#issuer-junction-detail').innerHTML,/turn unverified/);assert(env.state.lines.some(l=>l.options.color==='#7139a8'));
+    env.el('#issuer-row-read').onclick();assert.match(env.state.spoken.at(-1).text,/Take State Highway 31 Ramp southwest/);assert(!env.el('#issuer-junction-details').hidden);
+    env.el('#issuer-row-next').onclick();assert(env.el('#issuer-junction-details').hidden);assert(!env.state.lines.some(l=>l.options.color==='#7139a8'));
+    let resolve,query,signal;globalThis.fetch=(url,init)=>{query=JSON.parse(init.body);signal=init.signal;return new Promise(r=>resolve=r);};const pending=env.el('#issuer-junction-load').onclick();env.el('#issuer-row-previous').onclick();assert(signal.aborted);resolve(response(query));await pending;assert(env.el('#issuer-junction-details').hidden);
+    const hidden=env.el('#issuer-junction-load').onclick();document.hidden=true;env.events.visibilitychange();resolve(response(query));await hidden;assert(env.el('#issuer-junction-details').hidden);assert.equal(JSON.stringify(p),before);assert.equal(p.steps.length,0);
+  }finally{globalThis.fetch=oldFetch;env.cleanup();}
 });
