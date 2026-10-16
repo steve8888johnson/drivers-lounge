@@ -42,4 +42,8 @@ Draft positioning: Tools for commercial drivers to organize permit documents and
 3. Development config intentionally has empty backend credentials and keeps accounts, payments and operational guidance unavailable. Website account sync is not evidence of native callback/session behavior.
 4. Complete the dependency privacy-manifest review, final app icon and actual-build privacy labels; assess account deletion, external navigation, file import/export, location denial, Safari/WebView differences, speech interruptions and offline/storage recovery on the native build.
 
-Unsigned simulator compilation, when verified, is a useful milestone rather than release clearance. A signed IPA, TestFlight installation and physical iPhone QA are still required.
+## Verified simulator build
+
+GitHub Actions run [38900489218](https://github.com/steve8888johnson/drivers-lounge/actions/runs/38900489218) completed successfully October 16, 2026, at 12:27:35 UTC against source `16a66cf1cd9997dfec2bf969187fe011bc4d003c`. Every job step succeeded, including locked dependencies, bundled-page preparation/checks, Capacitor iOS sync, plist lint and the unsigned Xcode simulator compile. The job ran for 75 seconds. The isolated local bundle check also passed 57 pages and 833 references; the existing 57 tracked dist edits were untouched.
+
+Unsigned simulator compilation is a useful milestone rather than release clearance. This run did not execute app UI tests, generate a signed IPA, install on an iPhone, upload to TestFlight or create an App Store app record. Apple activation and native API/auth integration remain open. No signing credentials, paid runner, artifact upload, production deployment or account/guidance activation were used.
