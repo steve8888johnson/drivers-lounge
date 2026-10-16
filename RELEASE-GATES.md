@@ -442,3 +442,7 @@ No purchases, paid service activation, credentials/email-DNS changes, account-ga
 
 Evidence: outputs/texas-qr-import-tests-20261015.txt; texas-qr-final-focused-tests.txt; texas-qr-timezone-tests.txt; texas-qr-map-data-check-20261015.json; texas-qr-import-browser-20261015.json; texas-qr-import-live-browser-20261015.json; texas-qr-import-live-assets-20261015.json; texas-qr-import-live-phone-20261015.png. Private phone steps: outputs/TEXAS-QR-IPHONE-TEST-20261015.md. Implementation report: PERMIT-TEXAS-QR-IMPORT-20261015.md.
 
+
+## Texas QR parked speech rehearsal — October 15, 2026
+
+See PERMIT-TEXAS-REHEARSAL-20261015.md. Manual text speech and approximate mileage-based map areas are prepared; no precise turn matching or GPS authorization. Sparse issuer span is dashed, with original points retained.387 tests plus syntax/static checks and isolated build pass. Physical iPhone test pending. Live receipt follows verification.

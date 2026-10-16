@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { mapReview, routeOverview, coordinateText, STREET_TILES, STREET_OPTIONS } from '../src/assets/permits/map-review.mjs';
 import { blankPermit, geometryErrors } from '../src/assets/permits/core.mjs';
 import { createMapReview } from '../src/assets/permits/map-review-ui.mjs';
+import { issuerRowText } from '../src/assets/permits/issuer-map.mjs';
 const permit = () => ({ ...blankPermit(), state:'UT', number:'SYNTHETIC', routeText:'Use I-15 north\nTake the issued exit', steps:[
   {text:'Use I-15 north',road:'I-15',routeLine:1,points:[[40,-111],[40.001,-111]]},
   {text:'Take the issued exit',road:'Issued ramp',routeLine:2,points:[[40.001,-111],[40.002,-111]]}
@@ -54,10 +55,11 @@ test('tile requests have explicit attribution and origin-only referrer without p
 function environment() {
   const elements=new Map(), events={}, tileEvents={}, state={removed:0,created:0,fail:false};
   const el=id=>{if(!elements.has(id))elements.set(id,{textContent:'',innerHTML:'',value:'',hidden:true,disabled:false,open:false,setAttribute(n,v){this[n]=v;},addEventListener(n,f){this[n]=f;},showModal(){this.open=true;}});return elements.get(id);};
-  const L={map(){if(state.fail)throw Error('Test map unavailable');state.created++;return {remove(){state.removed++;},invalidateSize(){},fitBounds(){}};},layerGroup(){return {addTo(){return this;},clearLayers(){}};},polyline(){return {addTo(){}};},circleMarker(){return {bindTooltip(){return this;},addTo(){}};},latLngBounds(x){return x;},tileLayer(){return {on(n,f){tileEvents[n]=f;return this;},addTo(){return this;}};}};
+  state.lines=[];state.spoken=[];state.cancelled=0;
+  const L={map(){if(state.fail)throw Error('Test map unavailable');state.created++;return {remove(){state.removed++;},invalidateSize(){},fitBounds(x){state.bounds=x;}};},layerGroup(){return {addTo(){return this;},clearLayers(){state.lines=[];}};},polyline(points,options){state.lines.push({points,options});return {addTo(){}};},circleMarker(){return {bindTooltip(){return this;},addTo(){}};},latLngBounds(x){return x;},tileLayer(){return {on(n,f){tileEvents[n]=f;return this;},addTo(){return this;}};}};
   const oldDoc=globalThis.document,oldWin=globalThis.window;
   globalThis.document={hidden:false,querySelector:el,addEventListener(n,f){events[n]=f;}};
-  globalThis.window={L,addEventListener(n,f){events[n]=f;}};
+  globalThis.window={L,SpeechSynthesisUtterance:class{constructor(text){this.text=text;}},speechSynthesis:{getVoices(){return[{localService:true,lang:'en-US',voiceURI:'test'}];},cancel(){state.cancelled++;},speak(u){state.spoken.push(u);u.onstart();u.onend();}},addEventListener(n,f){events[n]=f;}};
   return {el,state,tileEvents,events,cleanup(){events.pagehide?.();globalThis.document=oldDoc;globalThis.window=oldWin;}};
 }
 test('failed tiles retain comparison text; moving to invalid geometry clears map and rejects late load status',async()=>{
@@ -118,5 +120,22 @@ test('issuer overview draws and reopens without manufacturing selected turns; al
     const review=createMapReview(),before=JSON.stringify(p);await review.open(p,0,()=>{},{showMap:true});
     assert.equal(env.state.created,1);assert(env.el('#permit-map-one').disabled);assert(env.el('#permit-map-next').disabled);assert.match(env.el('#permit-map-overview').textContent,/Texas issuer map · 2/);assert.match(env.el('#permit-map-comparison').innerHTML,/Open Texas issuer map/);assert.equal(JSON.stringify(p),before);
     p.routeText='changed';review.open(p);assert.equal(env.state.removed,1);assert(env.el('#permit-map-show').disabled);assert.match(env.el('#permit-map-comparison').innerHTML,/does not match/);
+  }finally{env.cleanup();}
+});
+
+test('parked row changes align speech with selected text, cancel old audio and keep original dashed spans',async()=>{
+  const env=environment();try{
+    const rows=[{sequence:1,road:'SH15 e',instruction:'Take SS192 Ramp e',miles:2,cumulativeMiles:2},{sequence:2,road:'SS192 Ramp e',instruction:'Continue straight on SS192 e',miles:2.14,cumulativeMiles:4.14}];
+    const p={...blankPermit(),state:'TX',number:'TEST',routeText:rows.map(issuerRowText).join('\n'),entry:{label:'A'},exit:{label:'B'}};
+    p.issuerMap={format:'txpros-issuer-map/v2',sourceUrl:'https://txpros.txdmv.gov/PermitDetails02.aspx?PermitID=10000001&QRUSER=1',permitNumber:p.number,routeText:p.routeText,entryLabel:'A',exitLabel:'B',retrievedAt:'2026-10-15T12:00:00Z',paths:[[[32,-100],[32.001,-100],[32.06,-100]]],rows};
+    const before=JSON.stringify(p),review=createMapReview();await review.open(p,0,()=>{},{showMap:true});
+    assert(!env.el('#issuer-rehearsal').hidden);assert(env.state.lines.some(l=>l.options.dashArray));assert.equal(env.state.spoken.length,0);
+    env.el('#issuer-row-read').onclick();assert.match(env.state.spoken.at(-1).text,/Take State Spur 192 Ramp east/);assert(env.state.lines.some(l=>l.options.color==='#215bcc'));
+    const old=env.state.spoken.at(-1),cancelled=env.state.cancelled;env.el('#issuer-row-next').onclick();assert(env.state.cancelled>cancelled);old.onstart();assert.match(env.el('#issuer-voice-status').textContent,/Row changed/);
+    assert.equal(env.el('#issuer-row-instruction').textContent,rows[1].instruction);assert.equal(env.state.spoken.length,1);env.el('#issuer-row-read').onclick();assert.match(env.state.spoken.at(-1).text,/Row 2 of 2/);assert.match(env.state.spoken.at(-1).text,/Continue straight on State Spur 192 east/);
+    await env.el('#permit-map-sparse').onclick();assert.match(env.el('#issuer-row-instruction').textContent,/Sparse span/);assert.match(env.el('#issuer-row-position').textContent,/NOT A TURN/);assert(!env.state.lines.some(l=>l.options.color==='#215bcc'));
+    env.el('#issuer-row-read').onclick();assert.equal(env.el('#issuer-row-instruction').textContent,rows[1].instruction);assert(env.state.lines.some(l=>l.options.color==='#215bcc'));
+    document.hidden=true;env.events.visibilitychange();assert(env.el('#permit-street-map').hidden);assert.match(env.el('#issuer-voice-status').textContent,/stopped/);
+    document.hidden=false;env.el('#permit-map-dialog').open=false;env.el('#permit-map-dialog').close();assert.equal(JSON.stringify(p),before);assert.equal(p.steps.length,0);
   }finally{env.cleanup();}
 });

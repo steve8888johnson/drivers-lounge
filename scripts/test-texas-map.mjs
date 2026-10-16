@@ -5,8 +5,9 @@ import { parseTexasMap, resolveTexasPermitMap } from '../server/texas-permit-map
 import { blankPermit, blankTrip, sanitizePermit, buildMaster, geometryErrors } from '../src/assets/permits/core.mjs';
 import { mergePermitIntake } from '../src/assets/permits/intake.mjs';
 import { routeOverview } from '../src/assets/permits/map-review.mjs';
+import { issuerRehearsal, issuerRowSpeech } from '../src/assets/permits/issuer-rehearsal.mjs';
 const url='http://txpros.txdmv.gov/PermitDetails02.aspx?PermitID=10000001&QRUSER=1',ref=texasPermitReference(url);
-const fixture=()=>({details:{d:{PermitID:10000001,PermitNo:200000000001,Status:'Issued',IsDeleted:false,DirectionsModified:false,LastUpdateDate:'2026-10-15T12:00:00Z',ContactEmail:'DO-NOT-RETURN',Trips:[{Stops:[{LegType:1,Lat:32,Lon:-100},{LegType:2,Lat:32.002,Lon:-100}],DrivingDirs:[{SequenceNo:0,To:'[Loaded Route Origin: TEST START ]'},{SequenceNo:1,Route:'TEST ROAD s',To:'Continue to TEST END',Miles:.2},{SequenceNo:2,To:'[Loaded Route Destination: TEST END ]'}]}]}},geometry:{d:{LatLons:[{Lat:32,Lon:-100},{Lat:32.001,Lon:-100},{Lat:32.002,Lon:-100}],ptsIndices:[3],legTypes:[1,2]}}});
+const fixture=()=>({details:{d:{PermitID:10000001,PermitNo:200000000001,Status:'Issued',IsDeleted:false,DirectionsModified:false,LastUpdateDate:'2026-10-15T12:00:00Z',ContactEmail:'DO-NOT-RETURN',Trips:[{Stops:[{LegType:1,Lat:32,Lon:-100},{LegType:2,Lat:32.002,Lon:-100}],DrivingDirs:[{SequenceNo:0,To:'[Loaded Route Origin: TEST START ]'},{SequenceNo:1,Route:'TEST ROAD s',To:'Continue to TEST END',Miles:.2,Distance:.2},{SequenceNo:2,To:'[Loaded Route Destination: TEST END ]'}]}]}},geometry:{d:{LatLons:[{Lat:32,Lon:-100},{Lat:32.001,Lon:-100},{Lat:32.002,Lon:-100}],ptsIndices:[3],legTypes:[1,2]}}});
 const parsed=()=>{const f=fixture();return parseTexasMap(f.details,f.geometry,ref);};
 test('Texas URL accepts only exact public QR references; keeps HTTP QR but uses explicit HTTPS import',()=>{
   assert.equal(ref.url,url.replace('http:','https:'));
@@ -55,4 +56,31 @@ test('adapter uses bounded anonymous HTTPS reads; never forwards private browser
 test('redirect, missing anonymous session, access denial and changing revisions fail closed',async()=>{
   for(const options of [{redirect:true},{noSession:true},{fail:true},{changed:true},{oversized:true},{badUtf8:true}]){const f=fakeFetch(options);await assert.rejects(()=>resolveTexasPermitMap(url,f.fetch));}
   let calls=0;await assert.rejects(()=>resolveTexasPermitMap(url.replace('txpros.txdmv.gov','evil.example'),()=>{calls++;}));assert.equal(calls,0);
+});
+
+test('rehearsal highlights only original edges and reads the same selected source; never generates a turn pin',()=>{
+  const p=parsed(),before=JSON.stringify(p),v=issuerRehearsal(p);
+  assert(v.estimated);assert.equal(v.source,p.routeText);assert.deepEqual(v.area,[[[32,-100],[32.001,-100]],[[32.001,-100],[32.002,-100]]]);
+  assert.match(issuerRowSpeech(v),/Continue to TEST END/);assert.match(issuerRowSpeech(v),/approximate/);assert.match(issuerRowSpeech(v),/not live guidance/);
+  assert(!('point' in v));assert(!('steps' in v));assert.equal(JSON.stringify(p),before);
+  for(const i of [-1,1,NaN,.5]) assert.equal(issuerRehearsal(p,i).available,false);
+});
+
+test('mileage mismatch holds the area without stretching geometry; legacy saved maps retain literal text speech',()=>{
+  const p=parsed();p.issuerMap.rows[0].miles=20;p.issuerMap.rows[0].cumulativeMiles=20;p.routeText=p.issuerMap.routeText='TEST ROAD s · 20 mi — Continue to TEST END';
+  let v=issuerRehearsal(p);assert(v.available);assert(!v.estimated);assert.equal(v.area.length,0);assert.match(v.reason,/do not agree/);assert.match(issuerRowSpeech(v),/No turn position/);
+  p.issuerMap.format='txpros-issuer-map/v1';delete p.issuerMap.rows;v=issuerRehearsal(p);assert(v.available);assert(!v.estimated);assert.match(v.reason,/again/);
+});
+
+test('stale or reordered instruction and mileage metadata cannot inherit an existing area or voice',()=>{
+  for(const change of [p=>p.issuerMap.rows[0].instruction='Take a different ramp',p=>p.issuerMap.rows[0].sequence=2,p=>p.issuerMap.rows[0].cumulativeMiles=-1,p=>p.issuerMap.rows[0].cumulativeMiles=Infinity,p=>p.issuerMap.rows[0].cumulativeMiles=5,p=>p.routeText+='changed']) {
+    const p=parsed();change(p);assert.throws(()=>sanitizePermit(p));assert(!issuerRehearsal(p).available);assert.equal(issuerRowSpeech(issuerRehearsal(p)),null);
+  }
+});
+
+test('sparse issuer span is separately dashed without inventing coordinates or weakening GPS holds',()=>{
+  const p=parsed();p.issuerMap.paths[0]=[[32,-100],[32.001,-100],[32.06,-100],[32.061,-100]];
+  const v=routeOverview(p);assert.equal(v.paths.length,2);assert.deepEqual(v.sparsePaths,[[[32.001,-100],[32.06,-100]]]);assert.match(v.issues[0],/road shape.*unknown/);
+  assert.equal([...v.paths,...v.sparsePaths].reduce((n,path)=>n+path.length-1,0),p.issuerMap.paths[0].length-1);
+  assert.match(geometryErrors(p)[0],/no verified turn positions/);const t=blankTrip();t.permits=[p];assert.equal(buildMaster(t,{geometry:true}).segments.length,0);
 });

@@ -1,4 +1,6 @@
 import { mapReview, routeOverview, coordinateText, STREET_TILES, STREET_OPTIONS } from './map-review.mjs';
+import { issuerRehearsal, issuerRowSpeech } from './issuer-rehearsal.mjs';
+import { createSpeech, speechPreferences } from './speech.mjs';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 let leafletPromise;
@@ -17,17 +19,24 @@ function leaflet() {
 export function createMapReview() {
   const $ = selector => document.querySelector(selector), dialog = $('#permit-map-dialog');
   let permit, index = 0, map, layers, token = 0, streetRequested = false, onSelection = () => {}, tileTimer, overview = false, whole;
-  const status = message => { $('#permit-map-status').textContent = message; };
-  function dispose() { token++; clearTimeout(tileTimer); map?.remove(); map = null; layers = null; streetRequested = false; $('#permit-street-map').hidden = true; $('#permit-map-show').disabled = false; $('#permit-map-show').hidden = false; }
+  let rowIndex=0, rehearsal, focus='all';
+  const speech=createSpeech({synthesis:window.speechSynthesis,Utterance:window.SpeechSynthesisUtterance,visible:()=>!document.hidden&&dialog.open,onState:s=>{$('#issuer-voice-status').textContent=s.message;}});
+  const status = message => { $('#permit-map-status').textContent = message; if (/failed|timed out|unavailable|cleared|stopped|not finished/i.test(message)) $('#permit-map-source').open=true; };
+  function dispose() { speech.stop(); token++; clearTimeout(tileTimer); map?.remove(); map = null; layers = null; streetRequested = false; $('#permit-street-map').hidden = true; $('#permit-map-show').disabled = false; $('#permit-map-show').hidden = false; }
   function draw(view) {
     if (!map) return;
     layers.clearLayers();
-    const paths = overview ? whole.paths : view.segments;
-    if (!paths.length) { dispose(); $('#permit-map-show').disabled = true; status('No usable geometry. The street map has been cleared.'); return; }
+    const paths = overview ? whole.paths : view.segments, sparse=overview?whole.sparsePaths||[]:[], all=[...paths,...sparse];
+    if (!all.length) { dispose(); $('#permit-map-show').disabled = true; status('No usable geometry. The street map has been cleared.'); return; }
     const L = window.L;
     // Keep each supplied segment separate. Do not draw a connector over missing data.
     L.polyline(paths, { color: '#a94c00', weight: 7, opacity: .9, smoothFactor: 0 }).addTo(layers);
-    const start = overview ? paths[0][0] : view.start, end = overview ? paths.at(-1).at(-1) : view.end;
+    if(sparse.length) L.polyline(sparse,{color:'#b82935',weight:6,dashArray:'9 10',opacity:1,smoothFactor:0}).addTo(layers);
+    if(whole.issuerOverview && focus==='row' && rehearsal?.estimated) {
+      if(rehearsal.area.length) L.polyline(rehearsal.area,{color:'#215bcc',weight:10,opacity:1,smoothFactor:0}).addTo(layers);
+      if(rehearsal.sparseArea.length) L.polyline(rehearsal.sparseArea,{color:'#215bcc',weight:10,dashArray:'9 10',opacity:1,smoothFactor:0}).addTo(layers);
+    }
+    const start = overview ? permit.issuerMap?.paths[0][0] || all[0][0] : view.start, end = overview ? permit.issuerMap?.paths[0].at(-1) || all.at(-1).at(-1) : view.end;
     for (const [point, label] of [[start, 'A · supplied geometry start'], [end, 'B · supplied geometry end; not arrival']]) {
       if (!point) continue;
       L.circleMarker(point, { radius: 8, color: '#102443', weight: 3, fillColor: '#fff', fillOpacity: 1 }).bindTooltip(label.startsWith('A') ? 'A' : 'B', { permanent: true, direction: 'top' }).addTo(layers);
@@ -38,20 +47,40 @@ export function createMapReview() {
       context.push(edge.point);
       L.circleMarker(edge.point, { radius: 5, color: '#56657a', weight: 2, fillColor: '#d8e0ec', fillOpacity: 1 }).bindTooltip(label).addTo(layers);
     }
-    const bounds = L.latLngBounds([...paths.flat(), ...context]);
+    const focused=whole.issuerOverview && focus==='row' && rehearsal?.estimated ? [...rehearsal.area,...rehearsal.sparseArea] : whole.issuerOverview && focus==='sparse' && sparse.length ? sparse : all;
+    const bounds = L.latLngBounds([...focused.flat(), ...context]);
     map.invalidateSize(); map.fitBounds(bounds, { padding: [35, 35], maxZoom: 16, animate: false });
+  }
+  function renderRehearsal() {
+    rehearsal=whole.issuerOverview?issuerRehearsal(permit,rowIndex):null;
+    $('#issuer-rehearsal').hidden=!rehearsal?.available;
+    $('#issuer-rehearsal-heading').hidden=!rehearsal?.available;
+    $('#permit-map-sparse').hidden=!whole.sparsePaths?.length;
+    if(!rehearsal?.available)return;
+    $('#issuer-row-select').innerHTML=rehearsal.rows.map((row,i)=>`<option value="${i}">${i+1}. ${esc(row.instruction)}</option>`).join('');
+    $('#issuer-row-select').value=String(rowIndex);
+    $('#issuer-row-position').textContent=focus==='sparse'?'ISSUER MAP INSPECTION · NOT A TURN':`PARKED REHEARSAL · ROW ${rowIndex+1} OF ${rehearsal.total}`;
+    $('#issuer-row-instruction').textContent=focus==='sparse'?'Sparse span supplied by Texas':rehearsal.row.instruction;
+    $('#issuer-row-source').textContent=rehearsal.source;
+    $('#issuer-row-location').textContent=focus==='sparse'?whole.issues.join(' '):rehearsal.reason;
+    $('#issuer-row-distance').textContent=Number.isFinite(rehearsal.row.cumulativeMiles)?`Issued cumulative mileage: ${rehearsal.row.cumulativeMiles} mi. Not distance from your position.`:'';
+    $('#issuer-row-previous').disabled=rowIndex===0;$('#issuer-row-next').disabled=rowIndex===rehearsal.total-1;
+    $('#issuer-row-area').disabled=!rehearsal.estimated;
+    $('#issuer-row-area').setAttribute('aria-pressed',String(focus==='row'));
+    $('#issuer-row-read').disabled=false;
   }
   function render() {
     const view = mapReview(permit, index);
+    renderRehearsal();
     $('#permit-map-show').disabled = !(overview ? whole.available : view.segments?.length) || streetRequested;
     $('#permit-map-all').disabled = !whole.available;
-    $('#permit-map-all').setAttribute('aria-pressed', String(overview));
+    $('#permit-map-all').setAttribute('aria-pressed', String(overview && (!whole.issuerOverview || focus==='all')));
     $('#permit-map-one').setAttribute('aria-pressed', String(!overview));
     $('#permit-map-one').disabled = !view.available;
     $('#permit-map-one').hidden = whole.issuerOverview === true;
     $('#permit-map-maneuvers').hidden = whole.issuerOverview === true;
     $('#permit-map-overview').hidden = !overview;
-    $('#permit-map-overview').textContent = overview ? `${whole.issuerOverview ? `Texas issuer map · ${whole.pointCount} supplied coordinates. Turn positions are not supplied.` : `${whole.drawn} of ${whole.total} instructions plotted.`} ${whole.issues.length ? `${whole.issues.length} geometry check${whole.issues.length === 1 ? ' remains' : 's remain'}; gaps stay open. ` : ''}Parked preview only; this does not activate guidance.` : '';
+    $('#permit-map-overview').textContent = overview ? `${whole.issuerOverview ? `Texas issuer map · ${whole.pointCount} supplied coordinates. Amber: issuer line. Dashed red: sparse issuer span, road shape unknown. Exact turn positions are not supplied.` : `${whole.drawn} of ${whole.total} instructions plotted. ${whole.issues.length ? 'Geometry checks remain; gaps stay open. ' : ''}`} Parked preview only; this does not activate guidance.` : '';
     $('#permit-map-previous').disabled = !view.available || index === 0;
     $('#permit-map-next').disabled = !view.available || index === view.total - 1;
     $('#permit-map-step').disabled = !view.available;
@@ -64,7 +93,15 @@ export function createMapReview() {
     $('#permit-map-comparison').innerHTML = `<p class="eyebrow">${esc(view.state)} · ${esc(view.number)} · MANEUVER ${index + 1} OF ${view.total}</p><h3>${esc(view.text || 'Instruction missing')}</h3><p><strong>Saved permit line ${esc(view.line)}</strong></p><blockquote>${esc(view.source || 'No source line saved')}</blockquote><p><strong>Road:</strong> ${esc(view.road || 'Not supplied')}<br><strong>Lane:</strong> ${esc(view.lane || 'Not supplied')}</p><details class="map-inspection-details"><summary>Endpoints &amp; geometry checks</summary><dl><dt>A · Instruction start</dt><dd>${coordinateText(view.start)}</dd><dt>B · Instruction end (not arrival)</dt><dd>${coordinateText(view.end)}</dd></dl><p>${view.pointCount} supplied points. ${view.previous ? `Previous connection: ${Math.round(view.previous.gap)} m. ` : 'First maneuver in this state. '}${view.next ? `Next connection: ${Math.round(view.next.gap)} m.` : 'Last maneuver in this state; check the border or site entrance.'}</p>${view.issues.length ? `<ul class="issue-list">${view.issues.map(issue => `<li>${esc(issue)}</li>`).join('')}</ul>` : '<p>Point spacing and adjacent endpoints pass the basic checks. Road, ramp, direction, level and access are still unverified.</p>'}</details>${view.issues.length ? `<p class="walkthrough-warning">${esc(view.issues[0])}</p>` : ''}`;
     if (map) draw(view);
   }
-  $('#permit-map-all').onclick = () => { overview = true; render(); };
+  $('#permit-map-all').onclick = () => { speech.stop(); focus='all'; overview = true; render(); };
+  $('#permit-map-sparse').onclick=async()=>{speech.stop();focus='sparse';render();if(!map)await showMap();$('#issuer-rehearsal-heading').scrollIntoView?.({block:'start'});};
+  function selectRow(value){ if(!rehearsal?.available||!Number.isInteger(value)||value<0||value>=rehearsal.total)return; speech.stop('Row changed. Tap Read turn aloud for the selected row.');rowIndex=value;focus='row';render(); }
+  $('#issuer-row-select').onchange=()=>selectRow(Number($('#issuer-row-select').value));
+  $('#issuer-row-previous').onclick=()=>selectRow(rowIndex-1);
+  $('#issuer-row-next').onclick=()=>selectRow(rowIndex+1);
+  $('#issuer-row-area').onclick=async()=>{if(!rehearsal?.estimated)return;focus='row';render();if(!map)await showMap();$('#issuer-rehearsal-heading').scrollIntoView?.({block:'start'});};
+  $('#issuer-row-read').onclick=()=>{const text=issuerRowSpeech(rehearsal);if(!text)return;focus='row';render();let prefs;try{prefs=speechPreferences(localStorage);}catch{prefs=speechPreferences(null);}speech.play(text,{...prefs,key:'issuer-row',repeat:true});};
+  $('#issuer-row-stop').onclick=()=>speech.stop();
   $('#permit-map-one').onclick = () => { overview = false; render(); };
   $('#permit-map-step').onchange = () => { overview = false; index = Number($('#permit-map-step').value); onSelection(index); render(); };
   $('#permit-map-previous').onclick = () => { overview = false; index--; onSelection(index); render(); };
@@ -92,5 +129,5 @@ export function createMapReview() {
   dialog.addEventListener('close', dispose);
   document.addEventListener('visibilitychange', () => { if (document.hidden && dialog.open) { dispose(); status('Map stopped while page was hidden. Tap Show street map to reload while parked.'); } });
   window.addEventListener('pagehide', dispose);
-  return { open(value, selected = 0, selectionChanged = () => {}, options = {}) { dispose(); onSelection = selectionChanged; permit = structuredClone(value); index = selected; whole = routeOverview(permit); overview = options.overview === true || whole.issuerOverview === true; render(); status('Compare the original permit with the saved instruction. The map is off until requested.'); dialog.showModal(); if (options.showMap && whole.available) return showMap(); } };
+  return { open(value, selected = 0, selectionChanged = () => {}, options = {}) { dispose(); rowIndex=0;focus='all'; onSelection = selectionChanged; permit = structuredClone(value); index = selected; whole = routeOverview(permit); overview = options.overview === true || whole.issuerOverview === true; render(); status('Compare the original permit with the saved instruction. The map is off until requested.'); dialog.showModal(); if (options.showMap && whole.available) return showMap(); } };
 }

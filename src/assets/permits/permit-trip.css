@@ -26,3 +26,9 @@ dialog{max-width:min(520px,calc(100vw - 32px));border:1px solid var(--line);bord
 #printed-road-map .leaflet-tooltip{width:max-content;max-width:180px;white-space:normal;overflow-wrap:anywhere}
 
 #permit-scanner{scroll-margin-top:16px}#permit-scanner>summary{font-size:18px}#permit-scanner .scan-actions>*{font-size:16px;min-height:52px}.qr-result h3{font-size:18px;margin:0 0 10px}.qr-result details{margin:12px 0}.qr-result>button{font-size:16px;min-height:48px;width:100%}.qr-issuer-link{display:block;padding:13px 0;overflow-wrap:anywhere;min-height:48px}#qr-results{scroll-margin-top:18px}#permit-map-all[aria-pressed=true],#permit-map-one[aria-pressed=true]{background:var(--navy);color:white}@media(max-width:600px){#permit-scanner{padding:12px}.heading .actions{width:100%;margin:0}.scan-actions{display:grid;grid-template-columns:1fr}#permit-map-dialog{padding:16px}#permit-street-map{height:300px}}
+
+#issuer-rehearsal-heading h3{font-size:22px;line-height:1.4;margin:12px 0;overflow-wrap:anywhere}#issuer-rehearsal select{min-width:0;max-width:100%;text-overflow:ellipsis}.issuer-row-controls{display:grid;grid-template-columns:1fr 1fr;gap:8px}.issuer-row-controls>*{min-width:0}#issuer-rehearsal blockquote{margin:8px 0;overflow-wrap:anywhere}#issuer-row-area[aria-pressed=true]{border-color:#215bcc;background:#edf3ff}#permit-map-sparse{margin-bottom:12px}#issuer-row-location{font-size:14px}
+
+#issuer-rehearsal-heading .eyebrow{margin:10px 0 4px}#issuer-rehearsal-heading h3{margin:6px 0}.issuer-map-legend{font-size:13px;margin:8px 0 12px}#issuer-rehearsal label{margin:12px 0 6px}
+
+#issuer-rehearsal-heading{scroll-margin-top:90px}

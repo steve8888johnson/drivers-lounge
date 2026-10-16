@@ -1,5 +1,5 @@
 import { blankPermit, sourceText, meters } from '../src/assets/permits/core.mjs';
-import { texasPermitReference, sanitizeIssuerMap } from '../src/assets/permits/issuer-map.mjs';
+import { texasPermitReference, sanitizeIssuerMap, issuerRowText } from '../src/assets/permits/issuer-map.mjs';
 
 const HOST = 'https://txpros.txdmv.gov';
 const unavailable = () => Error('Texas did not supply a supported public route map. Keep the QR and open the issuer link; no route was imported.');
@@ -20,12 +20,13 @@ export function parseTexasMap(details, geometry, ref, retrievedAt = new Date().t
   if (!origin || !destination || !Array.isArray(g?.LatLons) || g.LatLons.length < 2 || g.LatLons.length > 20000 || JSON.stringify(g.ptsIndices) !== JSON.stringify([g.LatLons.length]) || JSON.stringify(g.legTypes) !== '[1,2]') throw unavailable();
   const result = blankPermit(); result.state = 'TX'; result.number = String(p.PermitNo);
   result.entry.label = origin[1]; result.exit.label = destination[1];
-  result.routeText = sourceText(rows.slice(1,-1).map(row => {
+  const issuedRows = rows.slice(1,-1).map(row => {
     const road = sourceText(row.Route,200,'Issued road'), instruction = sourceText(row.To,1000,'Issued instruction');
     if (!road.trim() || !instruction.trim() || !Number.isFinite(row.Miles) || row.Miles < 0 || /\[Loaded Route|\[Start empty|\[End empty/.test(instruction)) throw unavailable();
-    return `${road} · ${row.Miles > 0 ? row.Miles : '< 0.1'} mi — ${instruction}`;
-  }).join('\n'));
-  result.issuerMap = sanitizeIssuerMap({ format:'txpros-issuer-map/v1', sourceUrl:ref.url, permitNumber:result.number, routeText:result.routeText, entryLabel:result.entry.label, exitLabel:result.exit.label, retrievedAt, paths:[g.LatLons.map(pt => [pt.Lat,pt.Lon])] },result);
+    return {sequence:row.SequenceNo,road,instruction,miles:row.Miles,cumulativeMiles:row.Distance};
+  });
+  result.routeText = sourceText(issuedRows.map(issuerRowText).join('\n'));
+  result.issuerMap = sanitizeIssuerMap({ format:'txpros-issuer-map/v2', sourceUrl:ref.url, permitNumber:result.number, routeText:result.routeText, entryLabel:result.entry.label, exitLabel:result.exit.label, retrievedAt, paths:[g.LatLons.map(pt => [pt.Lat,pt.Lon])],rows:issuedRows },result);
   for (const [stop,point] of [[stops[0],result.issuerMap.paths[0][0]],[stops[1],result.issuerMap.paths[0].at(-1)]]) {
     if (![stop.Lat,stop.Lon].every(Number.isFinite) || meters([stop.Lat,stop.Lon],point) > 100) throw unavailable();
   }
