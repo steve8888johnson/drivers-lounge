@@ -32,6 +32,7 @@ export function createMapReview() {
     // Keep each supplied segment separate. Do not draw a connector over missing data.
     L.polyline(paths, { color: '#a94c00', weight: 7, opacity: .9, smoothFactor: 0 }).addTo(layers);
     if(sparse.length) L.polyline(sparse,{color:'#b82935',weight:6,dashArray:'9 10',opacity:1,smoothFactor:0}).addTo(layers);
+    if(whole.issuerOverview && focus==='sparse' && whole.spanEvidence?.length) L.polyline(whole.spanEvidence.map(e=>e.detail),{color:'#7139a8',weight:3,opacity:1,smoothFactor:0}).addTo(layers);
     if(whole.issuerOverview && focus==='row' && rehearsal?.estimated) {
       if(rehearsal.area.length) L.polyline(rehearsal.area,{color:'#215bcc',weight:10,opacity:1,smoothFactor:0}).addTo(layers);
       if(rehearsal.sparseArea.length) L.polyline(rehearsal.sparseArea,{color:'#215bcc',weight:10,dashArray:'9 10',opacity:1,smoothFactor:0}).addTo(layers);
@@ -55,7 +56,12 @@ export function createMapReview() {
     rehearsal=whole.issuerOverview?issuerRehearsal(permit,rowIndex):null;
     $('#issuer-rehearsal').hidden=!rehearsal?.available;
     $('#issuer-rehearsal-heading').hidden=!rehearsal?.available;
+    $('#issuer-row-legend').hidden=focus==='sparse';
     $('#permit-map-sparse').hidden=!whole.sparsePaths?.length;
+    $('#issuer-span-details').hidden=focus!=='sparse'||!whole.issuerOverview;
+    $('#issuer-span-summary').hidden=focus!=='sparse'||!whole.issuerOverview;
+    $('#issuer-span-summary').textContent=whole.spanEvidence?.length?'Purple: detailed TxDOT road shape. Dashed red: original issuer span. Drawing agreement does not confirm clearance.':'No detailed road-shape comparison is available for this saved span.';
+    $('#issuer-span-details').innerHTML=whole.issuerOverview?`<p>${esc(whole.spanCheckNote)}</p>${(whole.spanEvidence||[]).map(e=>`<p><strong>${esc(e.road)}</strong> · ${e.detail.length} inventory points<br>Largest sampled offset: ${Math.ceil(e.comparison.maxOffset)} m. Source endpoints: ${e.comparison.endpointOffsets.map(n=>Math.ceil(n)+' m').join(' / ')}.<br>Inventory date: ${esc(e.dataDate)} · retrieved ${esc(new Date(e.retrievedAt).toLocaleString())}. <a href="${esc(e.source)}" target="_blank" rel="noopener noreferrer">TxDOT record ${e.featureId}</a></p>`).join('')}<p>No road, detour, turn position or approval was added. This inventory comparison is not a current closure, lane-direction or bridge-clearance check.</p>`:'';
     if(!rehearsal?.available)return;
     $('#issuer-row-select').innerHTML=rehearsal.rows.map((row,i)=>`<option value="${i}">${i+1}. ${esc(row.instruction)}</option>`).join('');
     $('#issuer-row-select').value=String(rowIndex);
@@ -80,7 +86,7 @@ export function createMapReview() {
     $('#permit-map-one').hidden = whole.issuerOverview === true;
     $('#permit-map-maneuvers').hidden = whole.issuerOverview === true;
     $('#permit-map-overview').hidden = !overview;
-    $('#permit-map-overview').textContent = overview ? `${whole.issuerOverview ? `Texas issuer map · ${whole.pointCount} supplied coordinates. Amber: issuer line. Dashed red: sparse issuer span, road shape unknown. Exact turn positions are not supplied.` : `${whole.drawn} of ${whole.total} instructions plotted. ${whole.issues.length ? 'Geometry checks remain; gaps stay open. ' : ''}`} Parked preview only; this does not activate guidance.` : '';
+    $('#permit-map-overview').textContent = overview ? `${whole.issuerOverview ? `Texas issuer map · ${whole.pointCount} supplied coordinates. Amber: issuer line. Dashed red: sparse issuer span. Inspect it for available road-shape evidence. Exact turn positions are not supplied.` : `${whole.drawn} of ${whole.total} instructions plotted. ${whole.issues.length ? 'Geometry checks remain; gaps stay open. ' : ''}`} Parked preview only; this does not activate guidance.` : '';
     $('#permit-map-previous').disabled = !view.available || index === 0;
     $('#permit-map-next').disabled = !view.available || index === view.total - 1;
     $('#permit-map-step').disabled = !view.available;

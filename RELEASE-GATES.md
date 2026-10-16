@@ -461,3 +461,7 @@ Friend's map remains separate from the owner's Draper–Brunswick load. Private 
 
 Evidence: outputs/texas-rehearsal-actual-data-20261015.json;texas-rehearsal-all-tests-20261015.txt;texas-rehearsal-ui-tests-20261015.txt;texas-rehearsal-live-assets-20261015.json;texas-rehearsal-live-browser-20261015.json;texas-rehearsal-live-phone-20261015.png. Private steps: outputs/TEXAS-QR-IPHONE-TEST-20261015.md. Implementation: PERMIT-TEXAS-REHEARSAL-20261015.md.
 
+
+## Texas sparse-span comparison — October 15, 2026
+
+See PERMIT-TEXAS-SPAN-EVIDENCE-20261015.md. Optional bounded official TxDOT comparison finds an 18-point US-83 shape within 5.448 m sampled distance of the original 5,906.537 m issuer span. Original dashed geometry is retained; purple detail is inspection-only. No exact turn positions, road approvals or guidance are created. Several ramp candidates closely agree with issuer geometry; SH31 remains unresolved. 394 tests, 180 JS plus four inline syntax checks, 57 pages / 833 links, existing static contracts and isolated build pass. Actual local import, saved reopening, mobile width and row speech/cancellation pass; physical iPhone audio remains unverified. Owner real load, account gates, email DNS and 57 historical dist changes preserved. Production receipt follows verification.

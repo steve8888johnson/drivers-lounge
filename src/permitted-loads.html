@@ -54,9 +54,9 @@
 <dialog id="permit-map-dialog" aria-labelledby="permit-map-title">
 <form method="dialog" class="map-review-heading"><h2 id="permit-map-title">Scanned route preview</h2><button>Close map</button></form>
 <p class="muted">Parked preview · unverified geometry · guidance off</p>
-<div id="issuer-rehearsal-heading" hidden><p id="issuer-row-position" class="eyebrow"></p><h3 id="issuer-row-instruction" aria-live="polite"></h3><p class="muted issuer-map-legend">Blue: approximate area, not a turn location. Dashed: sparse issuer line.</p></div>
-<button id="permit-map-show" type="button">Show street map</button><div id="permit-street-map" hidden role="region" aria-label="Street context and supplied permit geometry"></div>
-<section id="issuer-rehearsal" hidden aria-label="Parked Texas route rehearsal">
+<div id="issuer-rehearsal-heading" hidden><p id="issuer-row-position" class="eyebrow"></p><h3 id="issuer-row-instruction" aria-live="polite"></h3><p id="issuer-row-legend" class="muted issuer-map-legend">Blue: approximate area, not a turn location. Dashed: sparse issuer line.</p></div>
+<p id="issuer-span-summary" class="muted" hidden></p><button id="permit-map-show" type="button">Show street map</button><div id="permit-street-map" hidden role="region" aria-label="Street context and supplied permit geometry"></div>
+<div id="issuer-span-details" class="info" hidden></div><section id="issuer-rehearsal" hidden aria-label="Parked Texas route rehearsal">
 <label for="issuer-row-select">Issued route row</label><select id="issuer-row-select"></select>
 <div class="actions issuer-row-controls"><button id="issuer-row-previous" type="button">Previous row</button><button id="issuer-row-next" type="button">Next row</button><button id="issuer-row-read" type="button" class="primary">Read turn aloud</button><button id="issuer-row-stop" type="button">Stop voice</button></div>
 <p id="issuer-voice-status" role="status">Voice has not been tested on this device.</p><button id="issuer-row-area" type="button" aria-pressed="false">Show approximate area</button><p id="issuer-row-location" class="muted"></p>

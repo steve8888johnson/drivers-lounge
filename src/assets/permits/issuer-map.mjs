@@ -1,3 +1,4 @@
+import { readSpanEvidence } from './issuer-span-check.mjs';
 // This is an issuer's overview, deliberately separate from navigable maneuvers.
 // No route calculation, snapping, credentials or instruction-to-point inference.
 export function texasPermitReference(raw) {
@@ -20,7 +21,7 @@ export function texasPracticeReference(hash) {
 export const issuerRowText = row => `${row.road} · ${row.miles > 0 ? row.miles : '< 0.1'} mi — ${row.instruction}`;
 export function sanitizeIssuerMap(value, permit) {
   const ref = texasPermitReference(value?.sourceUrl);
-  if (!ref || value.sourceUrl !== ref.url || !['txpros-issuer-map/v1','txpros-issuer-map/v2'].includes(value.format) || !issuerMapMatches(value, permit)) throw Error('The issuer map does not match the saved permit and route. Reload its QR map.');
+  if (!ref || value.sourceUrl !== ref.url || !['txpros-issuer-map/v1','txpros-issuer-map/v2','txpros-issuer-map/v3'].includes(value.format) || !issuerMapMatches(value, permit)) throw Error('The issuer map does not match the saved permit and route. Reload its QR map.');
   if (typeof value.retrievedAt !== 'string' || !/^\d{4}-\d{2}-\d{2}T.*Z$/.test(value.retrievedAt) || !Number.isFinite(Date.parse(value.retrievedAt))) throw Error('Issuer map retrieval time is missing.');
   if (!Array.isArray(value.paths) || value.paths.length !== 1 || !Array.isArray(value.paths[0]) || value.paths[0].length < 2 || value.paths[0].length > 20000) throw Error('Unsupported issuer map extent.');
   const paths = value.paths.map(path => path.map(p => {
@@ -28,7 +29,7 @@ export function sanitizeIssuerMap(value, permit) {
     return [...p];
   }));
   let rows;
-  if (value.format === 'txpros-issuer-map/v2') {
+  if (value.format !== 'txpros-issuer-map/v1') {
     if (!Array.isArray(value.rows) || !value.rows.length || value.rows.length > 1000) throw Error('The issuer route rows are missing. Reload its QR map.');
     let previous = 0;
     rows = value.rows.map((row,i) => {
@@ -39,5 +40,6 @@ export function sanitizeIssuerMap(value, permit) {
     });
     if (rows.map(issuerRowText).join('\n') !== permit.routeText) throw Error('The issuer rows do not match the saved route text. Reload its QR map.');
   }
-  return { format: value.format, sourceUrl: ref.url, permitNumber: permit.number, routeText: permit.routeText, entryLabel: permit.entry.label, exitLabel: permit.exit.label, retrievedAt: value.retrievedAt, paths, ...(rows ? {rows} : {}) };
+  let extra={};if(value.format==='txpros-issuer-map/v3') {if(typeof value.spanCheckNote!=='string'||value.spanCheckNote.length>300)throw Error('Missing span comparison status.');extra={spanEvidence:readSpanEvidence(value.spanEvidence,paths[0]),spanCheckNote:value.spanCheckNote};}
+  return { format: value.format, sourceUrl: ref.url, permitNumber: permit.number, routeText: permit.routeText, entryLabel: permit.entry.label, exitLabel: permit.exit.label, retrievedAt: value.retrievedAt, paths, ...(rows ? {rows} : {}),...extra };
 }

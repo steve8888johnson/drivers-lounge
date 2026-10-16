@@ -1,5 +1,6 @@
 import { pointOK, meters } from './core.mjs';
 import { sanitizeIssuerMap } from './issuer-map.mjs';
+import { spanAgreement } from './issuer-span-check.mjs';
 
 // Inspect supplied points only. No routing, snapping, geocoding or approval.
 export function mapReview(permit, index = 0, { choices = true } = {}) {
@@ -48,16 +49,16 @@ export function routeOverview(permit) {
   const empty = reason => ({ available: false, paths: [], issues: [reason], total: 0, drawn: 0, pointCount: 0 });
   if (permit?.issuerMap) {
     let supplied; try { supplied = sanitizeIssuerMap(permit.issuerMap, permit); } catch (error) { return empty(error.message); }
-    const paths = [], sparsePaths = [], issues = []; let path;
+    const paths = [], sparsePaths = [], issues = [], spanEvidence=(supplied.spanEvidence||[]).map(e=>({...e,comparison:spanAgreement(e.original,e.detail)})); let path;
     for (const points of supplied.paths) {
       path = null;
       for (let i = 1; i < points.length; i++) {
         const a=points[i-1],b=points[i],distance=meters(a,b);
-        if (distance > 5000) { sparsePaths.push([a,b]); issues.push(`${(distance/1609.344).toFixed(1)} mi between adjacent issuer points. The original span is dashed; the road shape between them is unknown.`); path=null; }
+        if (distance > 5000) { const e=spanEvidence.find(e=>e.edgeIndex===i-1);sparsePaths.push([a,b]); issues.push(e?`${(distance/1609.344).toFixed(1)} mi sparse issuer span: detailed TxDOT ${e.road} geometry agrees within ${Math.ceil(e.comparison.maxOffset)} m at sampled points. This is a shape comparison, not road clearance.`:`${(distance/1609.344).toFixed(1)} mi between adjacent issuer points. The original span is dashed; the road shape between them is unknown.`); path=null; }
         else { if (path) path.push(b); else {path=[a,b];paths.push(path);} }
       }
     }
-    return {available:paths.length+sparsePaths.length>0,paths,sparsePaths,issues,total:0,drawn:0,pointCount:supplied.paths[0].length,issuerOverview:true,sourceUrl:supplied.sourceUrl,retrievedAt:supplied.retrievedAt};
+    return {available:paths.length+sparsePaths.length>0,paths,sparsePaths,spanEvidence,spanCheckNote:supplied.spanCheckNote||'Reload the Texas QR map to check eligible sparse spans against TxDOT inventory.',issues,total:0,drawn:0,pointCount:supplied.paths[0].length,issuerOverview:true,sourceUrl:supplied.sourceUrl,retrievedAt:supplied.retrievedAt};
   }
   if (!Array.isArray(steps) || !steps.length || steps.length > 1000) return empty('This QR has no supported route coordinates to plot.');
   const count = steps.reduce((n, step) => n + (Array.isArray(step?.points) ? step.points.length : 0), 0);

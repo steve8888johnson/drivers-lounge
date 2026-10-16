@@ -5,6 +5,7 @@ import { mapReview, routeOverview, coordinateText, STREET_TILES, STREET_OPTIONS 
 import { blankPermit, geometryErrors } from '../src/assets/permits/core.mjs';
 import { createMapReview } from '../src/assets/permits/map-review-ui.mjs';
 import { issuerRowText } from '../src/assets/permits/issuer-map.mjs';
+import { TXDOT_ROADWAYS } from '../src/assets/permits/issuer-span-check.mjs';
 const permit = () => ({ ...blankPermit(), state:'UT', number:'SYNTHETIC', routeText:'Use I-15 north\nTake the issued exit', steps:[
   {text:'Use I-15 north',road:'I-15',routeLine:1,points:[[40,-111],[40.001,-111]]},
   {text:'Take the issued exit',road:'Issued ramp',routeLine:2,points:[[40.001,-111],[40.002,-111]]}
@@ -137,5 +138,18 @@ test('parked row changes align speech with selected text, cancel old audio and k
     env.el('#issuer-row-read').onclick();assert.equal(env.el('#issuer-row-instruction').textContent,rows[1].instruction);assert(env.state.lines.some(l=>l.options.color==='#215bcc'));
     document.hidden=true;env.events.visibilitychange();assert(env.el('#permit-street-map').hidden);assert.match(env.el('#issuer-voice-status').textContent,/stopped/);
     document.hidden=false;env.el('#permit-map-dialog').open=false;env.el('#permit-map-dialog').close();assert.equal(JSON.stringify(p),before);assert.equal(p.steps.length,0);
+  }finally{env.cleanup();}
+});
+
+test('inventory comparison is inspection-only and cannot linger across speech, rows or a map with missing evidence',async()=>{
+  const env=environment();try{
+    const rows=[{sequence:1,road:'US83 s',instruction:'Continue straight on US62 s',miles:20,cumulativeMiles:20}],original=[[35,-100],[35.055,-100]];
+    const p={...blankPermit(),state:'TX',number:'TEST',routeText:rows.map(issuerRowText).join('\n'),entry:{label:'A'},exit:{label:'B'}};
+    p.issuerMap={format:'txpros-issuer-map/v3',sourceUrl:'https://txpros.txdmv.gov/PermitDetails02.aspx?PermitID=10000001&QRUSER=1',permitNumber:p.number,routeText:p.routeText,entryLabel:'A',exitLabel:'B',retrievedAt:'2026-10-15T12:00:00Z',paths:[original],rows,spanCheckNote:'Drawing agreement only',spanEvidence:[{edgeIndex:0,original,source:TXDOT_ROADWAYS,featureId:123,road:'US0083-KG',dataDate:'10-01-2026',retrievedAt:'2026-10-15T12:00:00Z',detail:Array.from({length:12},(_,i)=>[35+i*.005,-100])}]};
+    const before=JSON.stringify(p),review=createMapReview();await review.open(p,0,()=>{},{showMap:true});
+    assert(env.el('#issuer-span-details').hidden);assert(!env.state.lines.some(l=>l.options.color==='#7139a8'));
+    await env.el('#permit-map-sparse').onclick();assert(!env.el('#issuer-span-details').hidden);assert(env.el('#issuer-row-legend').hidden);assert.match(env.el('#issuer-span-details').innerHTML,/12 inventory points/);assert(env.state.lines.some(l=>l.options.color==='#7139a8'));assert(env.state.lines.some(l=>l.options.dashArray));assert.equal(env.state.spoken.length,0);
+    env.el('#issuer-row-read').onclick();assert(env.el('#issuer-span-details').hidden);assert(!env.el('#issuer-row-legend').hidden);assert(!env.state.lines.some(l=>l.options.color==='#7139a8'));assert.match(env.state.spoken.at(-1).text,/Continue straight on U\.S\. Highway 62 south/);assert.equal(JSON.stringify(p),before);
+    const missing=structuredClone(p);missing.issuerMap.spanEvidence=[];missing.issuerMap.spanCheckNote='Inventory unavailable';await review.open(missing,0,()=>{},{showMap:true});await env.el('#permit-map-sparse').onclick();assert(!env.state.lines.some(l=>l.options.color==='#7139a8'));assert.match(env.el('#issuer-span-summary').textContent,/No detailed/);assert.match(env.el('#issuer-span-details').innerHTML,/Inventory unavailable/);assert(!env.el('#issuer-span-details').innerHTML.includes('12 inventory points'));assert.equal(missing.steps.length,0);
   }finally{env.cleanup();}
 });

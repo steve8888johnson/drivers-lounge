@@ -1,5 +1,6 @@
 import { blankPermit, sourceText, meters } from '../src/assets/permits/core.mjs';
 import { texasPermitReference, sanitizeIssuerMap, issuerRowText } from '../src/assets/permits/issuer-map.mjs';
+import { addTexasSpanEvidence } from './texas-span-evidence.mjs';
 
 const HOST = 'https://txpros.txdmv.gov';
 const unavailable = () => Error('Texas did not supply a supported public route map. Keep the QR and open the issuer link; no route was imported.');
@@ -54,5 +55,5 @@ export async function resolveTexasPermitMap(raw, fetcher = fetch) {
   const geometry = await post('/Services/RouteService.asmx/GetLatLonForPermit',{PermitID:ref.id,UseHistoryDB:false,AuditPermitID:-1});
   const after = await post(detailPath,body);
   if (revision(before?.d) !== revision(after?.d)) throw Error('Texas changed this permit while its map was loading. Nothing was imported; retry and compare the current original.');
-  return parseTexasMap(after,geometry,ref);
+  return addTexasSpanEvidence(parseTexasMap(after,geometry,ref),fetcher);
 }
