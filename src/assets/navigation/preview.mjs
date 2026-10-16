@@ -48,6 +48,7 @@ function tick(now) {
   frame = null;
   if (!dialog.open || document.visibilityState !== 'visible') { pause('Preview paused while the page is hidden.'); return; }
   const delta = lastTime === null ? 0 : (now - lastTime) / 1000;
+  if (!Number.isFinite(delta) || delta < 0 || delta > 1) { pause('Preview paused after an interruption. Tap Play to continue.'); return; }
   lastTime = now; const v = session.advance(delta); draw(); announce();
   if (v.running) frame = requestAnimationFrame(tick);
   else { lastTime = null; $('preview-status').textContent = v.arrived ? 'Preview complete. Replay it or return to your trip.' : 'Preview paused after an interruption. Tap Play to continue.'; }
