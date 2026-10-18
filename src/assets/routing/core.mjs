@@ -69,7 +69,8 @@ export function toHereVehicleParams(profileInput={}){
   'vehicle[grossWeight]':String(poundsToKilograms(profile.grossWeightLb)),
   'vehicle[currentWeight]':String(poundsToKilograms(profile.currentWeightLb)),
   'vehicle[axleCount]':String(profile.axleCount),
-  'vehicle[trailerCount]':String(profile.trailerCount)
+  'vehicle[trailerCount]':String(profile.trailerCount),
+  'vehicle[commercial]':'true'
  };
  if(profile.trailerAxleCount)params['vehicle[trailerAxleCount]']=String(profile.trailerAxleCount);
  if(profile.trailerLengthFt)params['vehicle[trailerLength]']=String(feetToCentimeters(profile.trailerLengthFt));
@@ -77,7 +78,7 @@ export function toHereVehicleParams(profileInput={}){
  if(profile.singleAxleGroupLb)axleGroups.push(`single:${poundsToKilograms(profile.singleAxleGroupLb)}`);
  if(profile.tandemAxleGroupLb)axleGroups.push(`tandem:${poundsToKilograms(profile.tandemAxleGroupLb)}`);
  if(profile.tripleAxleGroupLb)axleGroups.push(`triple:${poundsToKilograms(profile.tripleAxleGroupLb)}`);
- if(axleGroups.length)params['vehicle[weightPerAxleGroup]']=axleGroups.join(';');
+ if(axleGroups.length)params['vehicle[weightPerAxleGroup]']=axleGroups.join(',');
  if(profile.hazmatCategories.length)params['vehicle[shippedHazardousGoods]']=profile.hazmatCategories.join(',');
  if(profile.tunnelCategory)params['vehicle[tunnelCategory]']=profile.tunnelCategory;
  return params;
@@ -116,7 +117,7 @@ const safeNotice=notice=>({code:String(notice?.code||'providerNotice'),title:Str
 
 export function normalizeHereRoute(payload,profileInput={}){
  const route=payload?.routes?.[0];if(!route)throw new Error('The commercial routing provider returned no route.');
- const geometry=[],steps=[],notices=[...(payload.notices||[]).map(safeNotice)];let distanceMeters=0,durationSeconds=0,baseDurationSeconds=0,globalOffset=0;
+ const geometry=[],steps=[],notices=[...(payload.notices||[]).map(safeNotice)];let distanceMeters=0,durationSeconds=0,baseDurationSeconds=0;
  for(const section of route.sections||[]){
   const decoded=decodeFlexiblePolyline(section.polyline),sectionPoints=decoded.points.map(point=>[point[0],point[1]]);
   if(geometry.length&&sectionPoints.length&&geometry.at(-1)[0]===sectionPoints[0][0]&&geometry.at(-1)[1]===sectionPoints[0][1])sectionPoints.shift();
@@ -133,7 +134,6 @@ export function normalizeHereRoute(payload,profileInput={}){
     coordinate,geometryIndex:sectionStart+offset
    });
   }
-  globalOffset+=sectionPoints.length;
  }
  if(geometry.length<2)throw new Error('The provider route has no usable geometry.');
  const critical=notices.filter(item=>item.severity==='critical');
