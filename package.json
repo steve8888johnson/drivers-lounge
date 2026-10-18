@@ -1,23 +1,12 @@
 {
-  "name": "drivers-lounge",
-  "version": "2.0.0-rc.2",
+  "name": "drivers-lounge-routing-audit-debug",
+  "version": "0.0.0",
   "private": true,
-  "engines": {
-    "node": "22.x"
-  },
+  "engines": {"node":"22.x"},
   "scripts": {
-    "check:store": "node scripts/check-store-readiness.mjs",
-    "check:store-submission": "node scripts/check-store-submission.mjs",
-    "check:links": "node scripts/check-internal-links.mjs",
-    "check:syntax": "node scripts/check-js-syntax.mjs",
-    "check:stripe": "node scripts/check-stripe-webhook.mjs",
-    "check:supabase-contract": "node scripts/check-supabase-contract.mjs",
-    "check:supabase": "node scripts/check-supabase-preflight.mjs",
-    "build": "npm test && npm run check:syntax && npm run check:stripe && npm run check:supabase-contract && npm run check:store && npm run check:store-submission && npm run check:links && node build.mjs",
-    "import:fmcsa": "node scripts/import-fmcsa-carriers.mjs",
-    "test": "node --test scripts/test-auth.mjs scripts/test-payments.mjs scripts/test-mission-control.mjs scripts/test-permits.mjs scripts/test-permit-db.mjs scripts/test-permit-storage.mjs scripts/test-hazmat.mjs scripts/test-permit-review.mjs scripts/test-compliance.mjs scripts/test-driver-experience.mjs scripts/test-truck-routing.mjs scripts/test-routing-audit.mjs"
+    "test": "node --test scripts/test-routing-audit.mjs",
+    "build": "npm test"
   },
-  "description": "Drivers Lounge commercial-driver platform — RC2 store-ready candidate",
   "devDependencies": {
     "@electric-sql/pglite": "0.3.14",
     "fake-indexeddb": "6.2.4"
