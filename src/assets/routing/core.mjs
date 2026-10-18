@@ -53,8 +53,10 @@ export function validateTruckProfile(profileInput={}){
  if(profile.currentWeightLb>profile.grossWeightLb)errors.push('Current loaded weight cannot exceed the gross-weight value sent to the routing provider.');
  if(profile.trailerAxleCount>profile.axleCount)errors.push('Trailer axle count cannot exceed total axle count.');
  if(profile.trailerCount>4)errors.push('Trailer count above 4 is not supported by this routing candidate.');
+ const exceedsConservativeBaseline=profile.heightInches>162||profile.widthInches>102||profile.currentWeightLb>80000||profile.singleAxleGroupLb>20000||profile.tandemAxleGroupLb>34000;
  if(profile.permittedLoad)errors.push('Permitted or oversize/overweight loads must use the issued-permit workflow; automatic truck routing cannot replace the permit route.');
- if(profile.heightInches>162||profile.widthInches>102||profile.grossWeightLb>80000)warnings.push('This profile may require one or more permits. Confirm every jurisdiction before moving.');
+ else if(exceedsConservativeBaseline)errors.push('This movement exceeds the standard-route safety baseline for height, width, loaded weight or axle-group weight. Select permitted load and use the issued-permit workflow.');
+ if(profile.grossWeightLb>80000&&profile.currentWeightLb<=80000)warnings.push('The vehicle gross-weight capacity exceeds 80,000 lb even though the current loaded weight does not. The routing provider will evaluate both values.');
  if(!profile.singleAxleGroupLb&&!profile.tandemAxleGroupLb&&!profile.tripleAxleGroupLb)warnings.push('Axle-group weights are missing; bridge and axle-group restriction evaluation may be incomplete.');
  if(profile.hazmatCategories.length===0&&profile.tunnelCategory)warnings.push('A tunnel category was entered without a hazardous-goods category. Verify the cargo profile.');
  return{profile,errors,warnings,ready:errors.length===0};
@@ -113,7 +115,12 @@ export function decodeFlexiblePolyline(encoded){
 }
 
 const roadLabel=road=>road?.name?.[0]?.value||road?.number?.[0]?.value||road?.toward?.[0]?.value||'';
-const safeNotice=notice=>({code:String(notice?.code||'providerNotice'),title:String(notice?.title||notice?.code||'Provider notice'),severity:notice?.severity==='critical'?'critical':'info'});
+const noticeBlocksGuidance=(code,title,severity)=>severity==='critical'||/(?:violat(?:ed|ion)|vehicleRestriction|notAllowed|prohibited|closedRoad|roadClosed|restrictionExceeded)/i.test(`${code} ${title}`);
+const safeNotice=notice=>{
+ const code=String(notice?.code||'providerNotice'),title=String(notice?.title||notice?.code||'Provider notice'),providerSeverity=String(notice?.severity||'info');
+ const blocking=noticeBlocksGuidance(code,title,providerSeverity);
+ return{code,title,providerSeverity,severity:blocking?'critical':'info',blocking};
+};
 
 export function normalizeHereRoute(payload,profileInput={}){
  const route=payload?.routes?.[0];if(!route)throw new Error('The commercial routing provider returned no route.');

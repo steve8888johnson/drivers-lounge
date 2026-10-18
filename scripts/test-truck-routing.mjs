@@ -20,11 +20,27 @@ test('TomTom fallback profile converts dimensions, axle count and hazmat',()=>{c
 
 test('permitted loads are blocked from automatic truck routing',()=>{const validation=validateTruckProfile({...profile,permittedLoad:true});assert.equal(validation.ready,false);assert.match(validation.errors.join(' '),/issued-permit workflow/i)});
 
+test('standard routing fails closed above conservative legal-size and weight baselines',()=>{
+ for(const unsafe of[
+  {...profile,heightFt:14,heightIn:0},
+  {...profile,widthFt:9,widthIn:0},
+  {...profile,currentWeightLb:81000,grossWeightLb:90000},
+  {...profile,singleAxleGroupLb:21000},
+  {...profile,tandemAxleGroupLb:35000}
+ ]){
+  const validation=validateTruckProfile(unsafe);assert.equal(validation.ready,false);assert.match(validation.errors.join(' '),/issued-permit workflow/i);
+ }
+});
+
+test('higher rated capacity can use standard routing when actual load and axle groups stay within baseline',()=>{const validation=validateTruckProfile({...profile,grossWeightLb:105500,currentWeightLb:78000});assert.equal(validation.ready,true);assert.match(validation.warnings.join(' '),/gross-weight capacity exceeds 80,000/i)});
+
 test('flexible polyline round trips route points',()=>{const decoded=decodeFlexiblePolyline(polyline).points;assert.equal(decoded.length,points.length);for(let i=0;i<points.length;i++){assert.ok(Math.abs(decoded[i][0]-points[i][0])<0.00001);assert.ok(Math.abs(decoded[i][1]-points[i][1])<0.00001)}});
 
 test('HERE response normalizes into guidance route',()=>{const route=normalizeHereRoute(herePayload,profile);assert.equal(route.provider,'HERE Routing API v8');assert.equal(route.routeClass,'commercial-restriction-aware');assert.equal(route.guidanceEligible,true);assert.equal(route.geometry.length,3);assert.equal(route.steps[1].instruction,'Turn right onto I-30');assert.equal(route.distanceMeters,12345)});
 
 test('critical HERE provider notice blocks guidance',()=>{const payload=structuredClone(herePayload);payload.routes[0].sections[0].notices=[{code:'violatedVehicleRestriction',title:'Vehicle restriction violated',severity:'critical'}];const route=normalizeHereRoute(payload,profile);assert.equal(route.guidanceEligible,false);assert.equal(route.criticalNotices.length,1)});
+
+test('HERE legal-violation notice blocks guidance even when provider severity is informational',()=>{const payload=structuredClone(herePayload);payload.routes[0].sections[0].notices=[{code:'violatedAdminWideVehicleRestriction',title:'Violated admin-wide vehicle restriction.',severity:'info'}];const route=normalizeHereRoute(payload,profile);assert.equal(route.guidanceEligible,false);assert.equal(route.criticalNotices.length,1);assert.equal(route.criticalNotices[0].providerSeverity,'info');assert.equal(route.criticalNotices[0].blocking,true)});
 
 test('TomTom response normalizes into guidance, lanes and speed limits',()=>{const route=normalizeTomTomRoute(tomtomPayload,profile);assert.equal(route.provider,'TomTom Routing API v1');assert.equal(route.routeClass,'commercial-restriction-aware-fallback');assert.equal(route.guidanceEligible,true);assert.equal(route.geometry.length,3);assert.equal(route.steps[1].instruction,'Turn right onto I-30');assert.equal(route.distanceMeters,12345);assert.equal(route.speedLimits[0].maxSpeedLimitInKmh,105);assert.equal(route.laneGuidance.length,1)});
 
