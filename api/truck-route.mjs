@@ -1,19 +1,25 @@
 import{normalizeHereRoute,toHereVehicleParams,validateTruckProfile}from'../src/assets/routing/core.mjs';
+import{applyCommercialRouteAudit}from'../src/assets/routing/restrictions.mjs';
 import{normalizeTomTomRoute,toTomTomVehicleParams}from'../src/assets/routing/tomtom.mjs';
 
 const send=(res,status,body)=>{res.setHeader('Cache-Control','private, no-store');res.setHeader('Content-Type','application/json');res.statusCode=status;res.end(JSON.stringify(body));};
 const validCoordinate=value=>Number.isFinite(Number(value))&&Math.abs(Number(value))<=180;
 const envKey=name=>String(process.env[name]||'').trim();
-const environmentProvider=()=>{
- const here=envKey('TRUCK_ROUTING_HERE_API_KEY')||envKey('HERE_API_KEY');if(here)return{id:'here',key:here,label:'HERE Routing API v8'};
- const tomtom=envKey('TRUCK_ROUTING_TOMTOM_API_KEY')||envKey('TOMTOM_API_KEY');if(tomtom)return{id:'tomtom',key:tomtom,label:'TomTom Routing API v1'};
- return null;
-};
-const providerFromOptions=({provider,apiKey}={})=>{
- if(apiKey!==undefined){const key=String(apiKey||'').trim();if(!key)return null;return{id:provider==='tomtom'?'tomtom':'here',key,label:provider==='tomtom'?'TomTom Routing API v1':'HERE Routing API v8'};}
- if(provider){const id=provider==='tomtom'?'tomtom':'here',key=id==='tomtom'?(envKey('TRUCK_ROUTING_TOMTOM_API_KEY')||envKey('TOMTOM_API_KEY')):(envKey('TRUCK_ROUTING_HERE_API_KEY')||envKey('HERE_API_KEY'));return key?{id,key,label:id==='tomtom'?'TomTom Routing API v1':'HERE Routing API v8'}:null;}
- return environmentProvider();
-};
+const providerLabel=id=>id==='tomtom'?'TomTom Routing API v1':'HERE Routing API v8';
+const makeProvider=(id,key)=>key?{id:id==='tomtom'?'tomtom':'here',key:String(key).trim(),label:providerLabel(id)}:null;
+const retryableStatus=status=>[401,403,404,408,425,429].includes(Number(status))||Number(status)>=500;
+const clientStatusForProvider=status=>Number(status)===429?429:retryableStatus(status)?503:422;
+const providerError=(message,{statusCode=503,retryable=false,provider='',providerHttpStatus=0}={})=>Object.assign(Error(message),{statusCode,retryable,provider,providerHttpStatus});
+
+export function providerSequenceFromOptions({provider,apiKey,providers}={}){
+ if(Array.isArray(providers))return providers.map(item=>makeProvider(item?.id,item?.key)).filter(Boolean);
+ if(apiKey!==undefined){const selected=makeProvider(provider==='tomtom'?'tomtom':'here',apiKey);return selected?[selected]:[];}
+ if(provider){const id=provider==='tomtom'?'tomtom':'here',key=id==='tomtom'?(envKey('TRUCK_ROUTING_TOMTOM_API_KEY')||envKey('TOMTOM_API_KEY')):(envKey('TRUCK_ROUTING_HERE_API_KEY')||envKey('HERE_API_KEY'));const selected=makeProvider(id,key);return selected?[selected]:[];}
+ const sequence=[];
+ const here=makeProvider('here',envKey('TRUCK_ROUTING_HERE_API_KEY')||envKey('HERE_API_KEY'));if(here)sequence.push(here);
+ const tomtom=makeProvider('tomtom',envKey('TRUCK_ROUTING_TOMTOM_API_KEY')||envKey('TOMTOM_API_KEY'));if(tomtom)sequence.push(tomtom);
+ return sequence;
+}
 
 async function readJsonBody(req,limit=16384){
  let body=req.body;
@@ -24,13 +30,21 @@ async function readJsonBody(req,limit=16384){
  return JSON.parse(raw||'{}');
 }
 
+async function fetchProvider(url,provider,fetcher,timeoutMs,headers){
+ try{return await fetcher(url,{signal:AbortSignal.timeout(timeoutMs),headers});}
+ catch(error){
+  const timeout=error?.name==='TimeoutError'||error?.name==='AbortError';
+  throw providerError(timeout?`${provider.label} timed out.`:`${provider.label} could not be reached.`,{statusCode:503,retryable:true,provider:provider.label});
+ }
+}
+
 async function resolveHereStop(query,provider,fetcher){
  const url=new URL('https://geocode.search.hereapi.com/v1/geocode');
  url.searchParams.set('q',query);url.searchParams.set('limit','1');url.searchParams.set('lang','en-US');url.searchParams.set('in','countryCode:USA');url.searchParams.set('apiKey',provider.key);
- const response=await fetcher(url,{signal:AbortSignal.timeout(12000),headers:{Accept:'application/json','X-Request-ID':crypto.randomUUID()}});
- if(!response.ok)throw Error(response.status===429?'The commercial location service is busy. Wait and try again.':'The commercial location service could not resolve that stop.');
+ const response=await fetchProvider(url,provider,fetcher,12000,{Accept:'application/json','X-Request-ID':crypto.randomUUID()});
+ if(!response.ok)throw providerError(response.status===429?'The commercial location service is busy. Wait and try again.':'The primary commercial location service could not resolve that stop.',{statusCode:clientStatusForProvider(response.status),retryable:retryableStatus(response.status),provider:provider.label,providerHttpStatus:response.status});
  const payload=await response.json(),item=payload?.items?.[0],position=item?.access?.[0]||item?.position;
- if(!position||!validCoordinate(position.lat)||!validCoordinate(position.lng))throw Error(`Could not locate ${query}. Add a full address, city and state, or set the map pin.`);
+ if(!position||!validCoordinate(position.lat)||!validCoordinate(position.lng))throw providerError(`Could not locate ${query}. Add a full address, city and state, or set the map pin.`,{statusCode:422,retryable:false,provider:provider.label});
  const confidence=Number(item?.scoring?.queryScore??item?.scoring?.fieldScore?.city??1);
  return{lat:Number(position.lat),lng:Number(position.lng),label:String(item.title||item.address?.label||query).slice(0,220),resultType:String(item.resultType||'address'),confidence:Number.isFinite(confidence)?confidence:1,id:String(item.id||'')};
 }
@@ -38,10 +52,10 @@ async function resolveHereStop(query,provider,fetcher){
 async function resolveTomTomStop(query,provider,fetcher){
  const url=new URL(`https://api.tomtom.com/search/2/geocode/${encodeURIComponent(query)}.json`);
  url.searchParams.set('key',provider.key);url.searchParams.set('limit','1');url.searchParams.set('countrySet','US');url.searchParams.set('language','en-US');
- const response=await fetcher(url,{signal:AbortSignal.timeout(12000),headers:{Accept:'application/json','Tracking-ID':crypto.randomUUID()}});
- if(!response.ok)throw Error(response.status===429?'The commercial location service is busy. Wait and try again.':'The commercial location fallback could not resolve that stop.');
+ const response=await fetchProvider(url,provider,fetcher,12000,{Accept:'application/json','Tracking-ID':crypto.randomUUID()});
+ if(!response.ok)throw providerError(response.status===429?'The commercial location service is busy. Wait and try again.':'The commercial location fallback could not resolve that stop.',{statusCode:clientStatusForProvider(response.status),retryable:retryableStatus(response.status),provider:provider.label,providerHttpStatus:response.status});
  const payload=await response.json(),item=payload?.results?.[0],position=item?.entryPoints?.[0]?.position||item?.position;
- if(!position||!validCoordinate(position.lat)||!validCoordinate(position.lon))throw Error(`Could not locate ${query}. Add a full address, city and state, or set the map pin.`);
+ if(!position||!validCoordinate(position.lat)||!validCoordinate(position.lon))throw providerError(`Could not locate ${query}. Add a full address, city and state, or set the map pin.`,{statusCode:422,retryable:false,provider:provider.label});
  const confidence=Number(item?.matchConfidence?.score??1);
  return{lat:Number(position.lat),lng:Number(position.lon),label:String(item.address?.freeformAddress||query).slice(0,220),resultType:String(item.type||'address'),confidence:Number.isFinite(confidence)?confidence:1,id:String(item.id||'')};
 }
@@ -49,9 +63,9 @@ async function resolveTomTomStop(query,provider,fetcher){
 export async function resolveTruckStop(stop,providerOrKey,fetcher=fetch){
  if(stop&&validCoordinate(stop.lat)&&validCoordinate(stop.lng)&&Math.abs(Number(stop.lat))<=90)return{lat:Number(stop.lat),lng:Number(stop.lng),label:String(stop.label||`${stop.lat}, ${stop.lng}`).slice(0,180),resultType:'coordinate',confidence:1};
  const query=String(stop?.address||stop?.label||stop||'').trim();
- if(query.length<3||query.length>300)throw Error('Enter a more specific origin and destination.');
- const provider=typeof providerOrKey==='string'?{id:'here',key:providerOrKey,label:'HERE Routing API v8'}:providerOrKey;
- if(!provider?.key)throw Error('Commercial truck routing is not configured yet.');
+ if(query.length<3||query.length>300)throw providerError('Enter a more specific origin and destination.',{statusCode:422,retryable:false});
+ const provider=typeof providerOrKey==='string'?makeProvider('here',providerOrKey):providerOrKey;
+ if(!provider?.key)throw providerError('Commercial truck routing is not configured yet.',{statusCode:503,retryable:false});
  return provider.id==='tomtom'?resolveTomTomStop(query,provider,fetcher):resolveHereStop(query,provider,fetcher);
 }
 
@@ -100,28 +114,51 @@ export function buildTomTomRouteURL({origin,destination,profile,departureTime},a
 async function requestJson(url,provider,fetcher){
  const headers={Accept:'application/json'};
  if(provider.id==='here')headers['X-Request-ID']=crypto.randomUUID();else headers['Tracking-ID']=crypto.randomUUID();
- const response=await fetcher(url,{signal:AbortSignal.timeout(25000),headers});
- let payload={};try{payload=await response.json()}catch{throw Object.assign(Error('The commercial routing provider returned an unreadable response.'),{statusCode:502})}
+ const response=await fetchProvider(url,provider,fetcher,25000,headers);
+ let payload={};
+ try{payload=await response.json();}
+ catch{throw providerError(`${provider.label} returned an unreadable response.`,{statusCode:503,retryable:true,provider:provider.label,providerHttpStatus:response.status});}
  if(!response.ok){
   const detail=payload?.title||payload?.cause||payload?.error_description||payload?.detailedError?.message||payload?.error?.description||payload?.message;
-  throw Object.assign(Error(detail||'Commercial route calculation failed.'),{statusCode:response.status===429?429:502});
+  throw providerError(detail||'Commercial route calculation failed.',{statusCode:clientStatusForProvider(response.status),retryable:retryableStatus(response.status),provider:provider.label,providerHttpStatus:response.status});
  }
  return payload;
 }
 
-export async function calculateTruckRoute(input,{fetcher=fetch,apiKey,provider}={}){
- const selected=providerFromOptions({provider,apiKey});if(!selected)throw Object.assign(Error('Commercial truck routing is not configured yet.'),{statusCode:503});
- const validation=validateTruckProfile(input?.profile);if(!validation.ready)throw Object.assign(Error(validation.errors[0]),{statusCode:422});
+async function calculateWithProvider(input,validation,selected,fetcher){
  const[origin,destination]=await Promise.all([resolveTruckStop(input?.origin,selected,fetcher),resolveTruckStop(input?.destination,selected,fetcher)]);
- if(origin.confidence<0.7||destination.confidence<0.7)throw Object.assign(Error('One stop matched with low confidence. Add a full street address or confirm the map pin before routing.'),{statusCode:422});
+ if(origin.confidence<0.7||destination.confidence<0.7)throw providerError('One stop matched with low confidence. Add a full street address or confirm the map pin before routing.',{statusCode:422,retryable:false,provider:selected.label});
  if(selected.id==='tomtom'){
   const vehicle=toTomTomVehicleParams(validation.profile),url=buildTomTomRouteURL({origin,destination,profile:validation.profile,departureTime:input?.departureTime},selected.key);
-  const route=normalizeTomTomRoute(await requestJson(url,selected,fetcher),validation.profile);
+  const route=applyCommercialRouteAudit(normalizeTomTomRoute(await requestJson(url,selected,fetcher),validation.profile),validation.profile);
   return{route,origin,destination,profileWarnings:[...validation.warnings,...vehicle.warnings]};
  }
  const url=buildHereRouteURL({origin,destination,profile:validation.profile,departureTime:input?.departureTime},selected.key);
- const route=normalizeHereRoute(await requestJson(url,selected,fetcher),validation.profile);
+ const route=applyCommercialRouteAudit(normalizeHereRoute(await requestJson(url,selected,fetcher),validation.profile),validation.profile);
  return{route,origin,destination,profileWarnings:validation.warnings};
+}
+
+export async function calculateTruckRoute(input,{fetcher=fetch,apiKey,provider,providers}={}){
+ const validation=validateTruckProfile(input?.profile);if(!validation.ready)throw Object.assign(Error(validation.errors[0]),{statusCode:422,retryable:false});
+ const sequence=providerSequenceFromOptions({provider,apiKey,providers});if(!sequence.length)throw Object.assign(Error('Commercial truck routing is not configured yet.'),{statusCode:503,retryable:false});
+ const failures=[];
+ for(let index=0;index<sequence.length;index++){
+  const selected=sequence[index];
+  try{
+   const result=await calculateWithProvider(input,validation,selected,fetcher);
+   if(failures.length){
+    const primary=failures.map(item=>item.provider).filter(Boolean).join(', ')||'Primary provider';
+    result.profileWarnings.unshift(`${primary} was unavailable, so ${selected.label} produced this route candidate. Review all fallback limitations before guidance.`);
+    result.route.providerFallback={used:true,failedProviders:failures.map(item=>({provider:item.provider,status:item.providerHttpStatus||0,reason:item.message})),selected:selected.label};
+   }
+   return result;
+  }catch(error){
+   const hasFallback=index<sequence.length-1;
+   if(hasFallback&&error?.retryable===true){failures.push({provider:error.provider||selected.label,providerHttpStatus:error.providerHttpStatus||0,message:String(error.message||'Provider unavailable')});continue;}
+   throw error;
+  }
+ }
+ throw Object.assign(Error('All configured commercial routing providers are unavailable. No route was accepted.'),{statusCode:503,retryable:false});
 }
 
 export default async function handler(req,res){
