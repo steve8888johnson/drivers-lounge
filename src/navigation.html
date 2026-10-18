@@ -1,20 +1,116 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Drivers Lounge Navigation</title><link rel="icon" href="/assets/drivers-lounge-logo.png"><link rel="manifest" href="/manifest.webmanifest"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="/assets/styles.css"><link rel="stylesheet" href="/assets/navigation-v5.css"><link rel="stylesheet" href="/assets/navigation-rc2-garmin.css"><link rel="stylesheet" href="/assets/rc1-design-system.css"><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0"></script><script src="/config.js"></script><script src="/assets/backend.js"></script><link rel="stylesheet" href="/assets/launch-forms.css"></head><body class="nav5-body"><div class="nav5-app"><main class="nav5-stage"><aside class="nav5-trip" id="trip-panel"><button class="collapse left" id="collapse-trip">‹</button><div class="trip-block"><span class="eyebrow">PREMIUM NAVIGATION · PERMITS & HAZMAT</span><h2>One load. Every state.</h2><p>Scan state permits, review hazardous-material restrictions, and prepare the exact route for the driver and pilot cars.</p><a class="start-navigation" href="/permitted-loads">Create a permitted trip</a><p><a href="/compliance">Road rules &amp; glossary →</a></p></div><div class="trip-block"><span class="eyebrow">FREE ROUTE PLANNING</span><h1>Plan your next trip.</h1><p>Route preview only. Live turn-by-turn guidance and truck-restriction routing are not connected yet.</p><p id="route-status" role="status" aria-live="polite">Enter two places, such as Midland, TX and Dallas, TX.</p><label class="route-box"><i class="start"></i><input id="origin" placeholder="Origin"></label><button class="use-location" id="use-location">◎ Use current location</button><label class="route-box"><i class="end"></i><input id="destination" placeholder="Destination"></label><div class="trip-buttons"><button id="calculate-route">Plan route preview</button><button id="swap-route" aria-label="Swap origin and destination">⇅</button></div><button id="in-app-navigation" class="start-navigation in-app-navigation" type="button" hidden>Start in-app navigation</button><a id="start-navigation" class="start-navigation secondary-navigation" href="#" target="_blank" rel="noopener noreferrer" hidden>Open in Google Maps</a><p class="start-navigation-note">Opens ordinary driving directions. It does not apply truck dimensions, hazmat restrictions or permit routes.</p></div><div class="trip-block"><button class="profile-summary" id="profile-toggle"><span><small>TRUCK & LOAD PROFILE</small><b id="profile-summary-text">13 ft 6 in · 8 ft 6 in · 80,000 lb</b></span><strong>›</strong></button><div id="profile-editor" hidden>
-<p>Saved privately on this device. A commercial routing provider must evaluate these values against each road and jurisdiction.</p>
-<label class="profile-wide">Vehicle profile<select id="vehicle-preset"><option value="standard-semi">Standard 5-axle semitrailer</option><option value="straight-truck">Straight truck</option><option value="hotshot">Hotshot / pickup and trailer</option><option value="custom">Custom commercial vehicle</option></select></label>
-<div class="profile-grid dimensions">
-<label>Overall height — feet<input id="truck-height-ft" type="number" min="4" max="20" step="1" value="13" inputmode="numeric"></label>
-<label>Height — inches<input id="truck-height-in" type="number" min="0" max="11" step="1" value="6" inputmode="numeric"></label>
-<label>Overall width — feet<input id="truck-width-ft" type="number" min="4" max="20" step="1" value="8" inputmode="numeric"></label>
-<label>Width — inches<input id="truck-width-in" type="number" min="0" max="11" step="1" value="6" inputmode="numeric"></label>
-<label>Overall length (ft)<input id="truck-length" type="number" min="10" max="200" step="0.1" value="72" inputmode="decimal"></label>
-<label>Trailer length (ft)<input id="trailer-length" type="number" min="0" max="100" step="0.1" value="53" inputmode="decimal"></label>
-<label>Gross weight (lb)<input id="truck-weight" type="number" min="1000" max="1000000" step="100" value="80000" inputmode="numeric"></label>
-<label>Axles<input id="truck-axles" type="number" min="2" max="20" step="1" value="5" inputmode="numeric"></label>
-<label>Kingpin to rear axle (ft)<input id="kingpin-rear-axle" type="number" min="0" max="80" step="0.1" inputmode="decimal"></label>
-<label>Trailer<select id="trailer-type"><option value="semi-53">53-foot semitrailer</option><option value="reefer">Reefer</option><option value="flatbed">Flatbed / step deck</option><option value="hotshot">Hotshot</option><option value="tanker">Tanker</option><option value="auto">Auto transporter</option><option value="rv">RV / power only</option><option value="none">No trailer</option></select></label>
-</div>
-<div class="profile-section"><label><input type="checkbox" id="oversize"> Oversize or overweight load</label><div id="oversize-fields" class="profile-grid" hidden><label>Permit/load reference<input id="load-reference" maxlength="80" placeholder="Optional internal reference"></label><label>Commodity<input id="load-commodity" maxlength="80" placeholder="Machine, crane, transformer..."></label><label>Loaded height (ft)<input id="load-height" type="number" min="4" max="30" step="0.1" inputmode="decimal"></label><label>Loaded width (ft)<input id="load-width" type="number" min="4" max="30" step="0.1" inputmode="decimal"></label><label>Loaded length (ft)<input id="load-length" type="number" min="10" max="300" step="0.1" inputmode="decimal"></label><label>Loaded gross weight (lb)<input id="load-weight" type="number" min="1000" max="1000000" step="100" inputmode="numeric"></label><label class="profile-wide">Axle/group weights<textarea id="axle-weights" maxlength="500" placeholder="Steer 12,000; drives 34,000; trailer group 40,000"></textarea></label></div></div>
-<div class="profile-section"><label><input type="checkbox" id="hazmat"> Placarded hazardous materials</label><div id="hazmat-fields" class="profile-grid" hidden><label>Hazmat class<select id="hazmat-class"><option value="">Select class</option><option value="1">Class 1 — Explosives</option><option value="2">Class 2 — Gases</option><option value="3">Class 3 — Flammable liquids</option><option value="4">Class 4 — Flammable solids</option><option value="5">Class 5 — Oxidizers/peroxides</option><option value="6">Class 6 — Toxic/infectious</option><option value="7">Class 7 — Radioactive</option><option value="8">Class 8 — Corrosive</option><option value="9">Class 9 — Miscellaneous</option></select></label><label>UN/NA number<input id="hazmat-un" maxlength="8" placeholder="UN1170"></label></div></div>
-<div class="flags"><label><input type="checkbox" id="avoid-tolls"> Avoid tolls when legal</label><label><input type="checkbox" id="national-network" checked> Favor National Network</label></div>
-<p id="profile-status" role="status"></p>
-</div></div><div class="trip-block camera-journal-card"><span class="eyebrow">PRIVATE CAMERA JOURNAL</span><h2>Record this trip</h2><p>While this page stays open, compare your GPS path with ALPR camera locations mapped by DeFlock and OpenStreetMap.</p><label class="camera-consent"><input id="camera-journal-consent" type="checkbox"> Save my precise route and estimated camera crossings privately to my account.</label><div class="trip-buttons"><button id="start-camera-journal" type="button">Start trip journal</button><button id="stop-camera-journal" type="button" hidden>Stop and save</button></div><p id="camera-journal-status" role="status" aria-live="polite">Recording is off.</p><ul id="camera-crossing-list"><li>No estimated crossings saved.</li></ul><p><a href="/camera-journal">View private camera history</a></p><small>Estimated crossings do not prove a plate capture or show police searches. GPS recording may pause when this page is backgrounded or the screen locks.</small></div><div class="trip-block"><button id="theme-toggle" aria-label="Switch map theme">Switch map theme</button></div><div class="trip-block quick"><button data-quick="parking">🅿 Parking</button><button data-quick="fuel">⛽ Fuel</button><button data-quick="scales">⚖ Scales</button><button data-quick="weather">🌦 Weather</button></div></aside><section class="nav5-map"><div id="truck-map"></div><div class="nav-hud"><div class="nav-hud-card"><div class="nav-hud-arrow">↑</div><div class="nav-hud-copy"><small>FIRST ROAD IN PREVIEW</small><strong id="next-maneuver">Plan a route to begin</strong><b id="maneuver-distance">—</b></div></div></div><aside class="nav-ahead"><h3>Recent road reports</h3><div id="nav-ahead-list"><div class="nav-ahead-item"><span>🅿️</span><div><strong>Parking</strong><small>Driver reports appear here</small></div></div><div class="nav-ahead-item"><span>⚖️</span><div><strong>Scales</strong><small>Driver reports appear here</small></div></div><div class="nav-ahead-item"><span>🌦️</span><div><strong>Weather</strong><small>Connected data coming next</small></div></div></div></aside><div class="nav-bottom-hud"><div class="nav-speed-stack"><div class="nav-speed-box"><small>SPEED</small><strong id="speed-value">—</strong><small>MPH</small></div><div class="nav-limit-box"><small>LIMIT</small><strong id="speed-limit-value">—</strong></div></div><div class="nav-trip-stack"><div class="nav-trip-box"><small>DISTANCE</small><strong id="route-distance-bottom">—</strong></div><div class="nav-trip-box"><small>ARRIVAL</small><strong id="route-arrival-bottom">—</strong></div></div></div><div class="layer-bar"><button data-layer="parking" class="active">🅿 Parking</button><button data-layer="scales" class="active">⚖ Scales</button><button data-layer="weather" class="active">🌦 Weather</button><button data-layer="events" class="active">⚠ Reports</button></div><div class="map-actions"><button id="locate-map" aria-label="Show current location">◎</button><button id="fit-route" aria-label="Fit route to map">⌗</button></div><button class="truck-center" id="recenter-truck" aria-label="Center map on current location">🚛</button><div class="map-loader" id="map-loading" hidden><div class="spinner"></div><span>Building route preview…</span></div><div class="map-toast" id="map-toast" hidden></div></section><aside class="nav5-copilot" id="copilot-panel"><button class="collapse right" id="collapse-copilot">›</button><div class="copilot-title"><div><span class="eyebrow">DRIVER COPILOT</span><h2>Trip guidance</h2></div><b>BETA</b></div><div class="metrics"><div><small>DISTANCE</small><b id="route-distance">—</b></div><div><small>DRIVE TIME</small><b id="route-duration">—</b></div><div><small>ARRIVAL</small><b id="route-arrival">—</b></div></div><div class="recommend"><span class="eyebrow">SAFETY</span><p id="ai-recommendation">General road-route preview only. Verify truck restrictions, clearances, permits and posted signs.</p><div><button id="refresh-advice">Refresh</button><button id="speak-advice">Read aloud</button></div></div><a class="btn" href="/saved-offers">Saved offers</a><p><a class="btn" href="https://maps.deflock.org" target="_blank" rel="noopener noreferrer">DeFlock camera map</a></p><p>Mapped camera locations, not your vehicle’s sightings or passage times.</p><p><a href="https://deflock.org/legacy-map#map=4/39.828300/-98.579500" target="_blank" rel="noopener noreferrer">DeFlock legacy map</a> if the map cannot load.</p><a href="/safety-center#logs-and-cameras">Camera awareness and accurate logs</a></aside></main><footer>Public beta. General road geometry is not certified truck routing. Verify permits, bridge clearances, restrictions and posted signage.</footer></div><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="/assets/app.js"></script><script src="/assets/navigation-v5.js?v=20260920-guidance"></script><script src="/assets/camera-journal.js"></script><script src="/assets/rc1-design-system.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#071522">
+  <meta name="description" content="Drivers Lounge commercial truck routing workspace with vehicle profiles, permit routing and driver-first guidance.">
+  <title>Premium Truck Navigation | Drivers Lounge</title>
+  <link rel="icon" href="/assets/drivers-lounge-logo.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/assets/rc1-design-system.css">
+  <link rel="stylesheet" href="/assets/routing/routing.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0"></script>
+  <script src="/config.js"></script>
+  <script src="/assets/backend.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#route-planner">Skip to route planner</a>
+<header class="routing-topbar">
+  <a class="routing-brand" href="/"><img src="/assets/drivers-lounge-logo.png" alt="Drivers Lounge"><span><strong>Drivers Lounge</strong><small>Premium Truck Navigation</small></span></a>
+  <nav aria-label="Navigation tools"><a href="/permitted-loads">Permitted loads</a><a href="/compliance">Road rules</a><a href="/account">Account</a></nav>
+  <div class="engine-badges"><span id="network-badge" class="status-chip">Checking connection</span><span id="engine-badge" class="status-chip warning">Commercial engine required</span></div>
+</header>
+<main class="routing-layout">
+  <section class="planner" id="route-planner">
+    <div class="focus-banner"><span>ROUTING FIRST</span><strong>Plan the truck. Review the route. Then drive.</strong><p>No passenger-car route is used for live truck guidance.</p></div>
+
+    <div class="mode-switch" role="tablist" aria-label="Navigation mode">
+      <button type="button" class="active" aria-selected="true" data-mode="standard">Standard truck</button>
+      <a href="/permitted-loads">Permitted load</a>
+      <a href="/permitted-loads#crew">Pilot car</a>
+    </div>
+
+    <ol class="route-steps" aria-label="Route workflow"><li class="active"><b>1</b><span>Route</span></li><li><b>2</b><span>Profile</span></li><li><b>3</b><span>Review</span></li><li><b>4</b><span>Drive</span></li></ol>
+
+    <form id="route-form" novalidate>
+      <section class="planner-card route-card">
+        <div class="card-heading"><div><p class="eyebrow">WHERE ARE YOU GOING?</p><h1>Build a commercial truck route</h1></div><button type="button" id="swap-stops" class="icon-button" aria-label="Swap origin and destination">⇅</button></div>
+        <label>Origin<div class="input-row"><input id="origin" name="origin" autocomplete="street-address" placeholder="Address, city and state" required><button type="button" id="use-location">Use GPS</button></div></label>
+        <label>Destination<input id="destination" name="destination" autocomplete="street-address" placeholder="Address, city and state" required></label>
+        <div class="two-column"><label>Departure<input id="departure-time" type="datetime-local"></label><label>Route preference<select id="route-preference"><option value="fast">Practical / fastest</option><option value="short">Shortest sensible route</option></select></label></div>
+        <label class="check-row"><input id="avoid-tolls" type="checkbox"> Avoid toll roads when the provider can find a reasonable truck route</label>
+      </section>
+
+      <section class="planner-card profile-card">
+        <button type="button" id="profile-toggle" class="profile-toggle" aria-expanded="false"><span><small>TRUCK & LOAD PROFILE</small><strong id="profile-summary">13 ft 6 in · 8 ft 6 in · 72 ft · 80,000 lb</strong></span><b>Review ›</b></button>
+        <div id="profile-editor" hidden>
+          <div class="profile-warning"><strong>Every value matters.</strong><span>Missing dimensions or axle weights can change bridge, road and turn restrictions.</span></div>
+          <label>Vehicle preset<select id="vehicle-preset"><option value="standard-semi">Standard 5-axle semitrailer</option><option value="straight-truck">Straight truck</option><option value="hotshot">Hotshot / pickup and trailer</option><option value="custom">Custom commercial vehicle</option></select></label>
+          <div class="profile-grid">
+            <label>Height — ft<input id="height-ft" type="number" min="4" max="20" step="1" value="13" inputmode="numeric"></label>
+            <label>Height — in<input id="height-in" type="number" min="0" max="11" step="1" value="6" inputmode="numeric"></label>
+            <label>Width — ft<input id="width-ft" type="number" min="4" max="20" step="1" value="8" inputmode="numeric"></label>
+            <label>Width — in<input id="width-in" type="number" min="0" max="11" step="1" value="6" inputmode="numeric"></label>
+            <label>Overall length (ft)<input id="overall-length" type="number" min="10" max="300" step="0.1" value="72" inputmode="decimal"></label>
+            <label>Trailer length (ft)<input id="trailer-length" type="number" min="0" max="100" step="0.1" value="53" inputmode="decimal"></label>
+            <label>Gross rated weight (lb)<input id="gross-weight" type="number" min="1000" max="1000000" step="100" value="80000" inputmode="numeric"></label>
+            <label>Current loaded weight (lb)<input id="current-weight" type="number" min="1000" max="1000000" step="100" value="80000" inputmode="numeric"></label>
+            <label>Total axles<input id="axle-count" type="number" min="2" max="20" step="1" value="5" inputmode="numeric"></label>
+            <label>Trailer axles<input id="trailer-axles" type="number" min="0" max="16" step="1" value="2" inputmode="numeric"></label>
+            <label>Trailer count<input id="trailer-count" type="number" min="0" max="4" step="1" value="1" inputmode="numeric"></label>
+            <label>Single axle/group (lb)<input id="single-axle" type="number" min="0" max="100000" step="100" value="12000" inputmode="numeric"></label>
+            <label>Tandem group (lb)<input id="tandem-axle" type="number" min="0" max="100000" step="100" value="34000" inputmode="numeric"></label>
+            <label>Tridem group (lb)<input id="triple-axle" type="number" min="0" max="150000" step="100" inputmode="numeric"></label>
+          </div>
+          <div class="hazmat-block"><label class="check-row"><input id="hazmat-enabled" type="checkbox"> Placarded hazardous materials</label><div id="hazmat-editor" hidden><label>Routing categories<select id="hazmat-categories" multiple size="6"><option value="explosive">Explosive</option><option value="gas">Gas</option><option value="flammable">Flammable</option><option value="combustible">Combustible</option><option value="poison">Poison</option><option value="poisonousInhalation">Poison inhalation hazard</option><option value="radioActive">Radioactive</option><option value="corrosive">Corrosive</option><option value="harmfulToWater">Harmful to water</option><option value="other">Other hazardous goods</option></select></label><label>Tunnel restriction category<select id="tunnel-category"><option value="">Not entered</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option></select></label></div></div>
+          <label class="check-row permit-check"><input id="permitted-load" type="checkbox"> This movement is oversize, overweight or controlled by issued permits</label>
+          <p id="profile-status" class="inline-status" role="status"></p>
+          <button type="button" id="save-profile">Save profile on this device</button>
+        </div>
+      </section>
+
+      <section class="planner-card readiness-card">
+        <div class="readiness-title"><div><p class="eyebrow">ROUTE READINESS</p><h2 id="readiness-heading">Complete the route and profile</h2></div><span id="readiness-chip" class="status-chip warning">Not ready</span></div>
+        <ul id="readiness-list"><li>Enter an origin and destination.</li><li>Confirm the truck profile.</li><li>A licensed commercial route must return without critical notices.</li></ul>
+        <p id="route-status" class="inline-status" role="status" aria-live="polite">No route has been calculated.</p>
+        <div class="button-row"><button id="calculate-route" type="submit" class="primary-action">Build truck route</button><button id="clear-route" type="button">Clear</button></div>
+      </section>
+    </form>
+
+    <section class="planner-card review-card" id="route-review" hidden>
+      <div class="card-heading"><div><p class="eyebrow">PARKED ROUTE REVIEW</p><h2>Review before movement</h2></div><span id="provider-name" class="status-chip good">Commercial route</span></div>
+      <div class="route-metrics"><div><small>DISTANCE</small><strong id="review-distance">—</strong></div><div><small>DRIVE TIME</small><strong id="review-duration">—</strong></div><div><small>ARRIVAL</small><strong id="review-arrival">—</strong></div></div>
+      <div id="resolved-stops" class="resolved-stops"></div>
+      <div id="route-notices"></div>
+      <details><summary>Turn-by-turn route</summary><ol id="maneuver-list" class="maneuver-list"></ol></details>
+      <label class="check-row review-check"><input id="route-confirmed" type="checkbox"> I reviewed the resolved stops, truck profile, provider notices and first/last access roads while parked.</label>
+      <button id="start-guidance" type="button" class="primary-action" disabled>Start truck guidance</button>
+      <p class="legal-note">Commercial routing considers supplied profile data but is not a guarantee. Posted signs, permits, law enforcement and official restrictions control.</p>
+    </section>
+
+    <aside class="sponsor-card" id="planning-sponsor" aria-label="Sponsored placement"><span>SPONSORED · PARKED PLANNING ONLY</span><strong>Driver services can appear here without interrupting navigation.</strong><p>Job boards, trucking attorneys, bookkeeping, permits and other partners belong on planning or directory pages—not over active guidance.</p><a href="/account">Remove promotional ads for $14.99/month</a></aside>
+  </section>
+
+  <section class="map-stage" aria-label="Route map">
+    <div id="truck-map"></div>
+    <div id="map-empty" class="map-empty"><img src="/assets/drivers-lounge-logo.png" alt=""><h2>Your truck route will appear here</h2><p>Enter the trip and confirm the complete vehicle profile.</p></div>
+    <div id="map-loading" class="map-loading" hidden><div class="spinner"></div><strong>Calculating commercial truck route…</strong><span>Checking dimensions, weights, axles, hazardous goods and road restrictions.</span></div>
+    <div id="map-message" class="map-message" hidden></div>
+
+    <section id="drive-hud" class="drive-hud" hidden>
+      <div class="maneuver-card"><div id="maneuver-icon" class="maneuver-icon">↑</div><div><small id="maneuver-road">TRUCK ROUTE</small><strong id="next-maneuver">Starting guidance</strong><b id="maneuver-distance">—</b></div></div>
+      <div class="drive-stats"><div><small>SPEED</small><strong id="current-speed">—</strong><span>MPH</span></div><div><small>REMAINING</small><strong id="remaining-distance">—</strong></div><div><small>ARRIVAL</small><strong id="arrival-time">—</strong></div></div>
+      <div id="drive-warning" class="drive-warning" hidden></div>
+      <div class="drive-actions"><button id="recenter" type="button">Center truck</button><button id="stop-guidance" type="button">Stop guidance</button></div>
+    </section>
+
+    <div class="map-controls"><button id="fit-route" type="button" disabled>Fit route</button><button id="show-profile" type="button">Truck profile</button></div>
+  </section>
+</main>
+<footer class="routing-footer"><strong>Development candidate.</strong><span>Do not use for a permitted move unless the complete issued route is reviewed in Permitted Loads. Safety warnings and legal notices are never removed by an ad-free subscription.</span></footer>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="module" src="/assets/routing/app.mjs"></script>
+</body>
+</html>
