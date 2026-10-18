@@ -27,7 +27,7 @@ self.addEventListener('fetch',event=>{
  // route calculations, private account data, crew data and map tiles are never cached here.
  if(event.request.mode==='navigate'){
   const page=['/navigation','/navigation.html'].includes(url.pathname)&&!url.search?'/navigation':
-   [' /compliance','/compliance.html'].includes(url.pathname)?'/compliance':
+   ['/compliance','/compliance.html'].includes(url.pathname)?'/compliance':
    ['/permitted-loads','/permitted-loads.html'].includes(url.pathname)&&!url.search?'/permitted-loads':
    ['/start','/start.html'].includes(url.pathname)&&!url.search?'/start':null;
   if(page){
