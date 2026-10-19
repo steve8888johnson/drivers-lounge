@@ -81,11 +81,14 @@ export function createRouteProgressTracker(route,{minimumCorridorMeters=120,back
   const competingSegments=Math.abs(globalMeters-localMeters)>Math.max(700,forward*.55)&&local.distance<=corridor;
   const ambiguousDistance=Math.abs(local.distance-global.distance)<=ambiguityMarginMeters;
 
-  if((outsideWindow||largeBackward||largeForward||competingSegments)&&local.distance<=corridor){
+  if(outsideWindow||largeBackward||largeForward||competingSegments){
+   // Never silently jump backward to a prior crossing or parallel road, even when it is the
+   // closest geometric point. The driver must remain on the reviewed direction of travel.
    if(largeBackward)return hold('backward-route-snap',global,local,data,window);
-   if(ambiguousDistance)return hold('parallel-or-crossing-road-ambiguity',global,local,data,window);
-   // A much closer forward candidate can be a legitimate rejoin after a long GPS gap. Require
-   // repeated, close samples before re-anchoring; never silently re-anchor backward.
+   if(local.distance<=corridor&&ambiguousDistance)return hold('parallel-or-crossing-road-ambiguity',global,local,data,window);
+
+   // A much closer forward candidate can be a legitimate rejoin after a GPS interruption.
+   // Require repeated precise fixes before re-anchoring; otherwise hold the last maneuver.
    const strongForward=globalMeters>lastMeters&&global.distance<=Math.min(45,corridor*.35)&&local.distance>Math.max(120,global.distance+ambiguityMarginMeters);
    const candidate=hold(strongForward?'forward-reanchor-pending':'implausible-route-jump',global,local,data,window);
    if(strongForward&&candidate.pendingCount>=reanchorSamples)return accept(global,data,'forward-reanchored');
