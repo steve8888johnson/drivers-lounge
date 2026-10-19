@@ -3,7 +3,9 @@ import assert from'node:assert/strict';
 import{createRouteProgressTracker}from'../src/assets/routing/route-progress.mjs';
 
 const fix=(latitude,longitude,{accuracy=8,speed=20,timestamp=Date.now()}={})=>({coords:{latitude,longitude,accuracy,speed},timestamp});
-const straight=Array.from({length:12},(_,index)=>[40,-105+index*.01]);
+// Approximately 255 metres between route vertices at this latitude: dense enough for normal
+// map-matching jitter while still allowing an implausible multi-kilometre jump test.
+const straight=Array.from({length:12},(_,index)=>[40,-105+index*.003]);
 
 test('normal forward travel advances route progress monotonically',()=>{
  const tracker=createRouteProgressTracker({geometry:straight});
