@@ -1,8 +1,14 @@
 const $=selector=>document.querySelector(selector);
-let enforcing=false;
+let enforcing=false,intervalId=null;
 
 export function hasCriticalNoticeInReview(root=document){
  return Boolean(root.querySelector('#route-notices .route-notice.critical,#route-notices [data-blocking="true"],#route-notices [data-severity="critical"]'));
+}
+
+function ensureBanner(review){
+ let banner=$('#route-interlock-banner');
+ if(!banner&&review){banner=document.createElement('div');banner.id='route-interlock-banner';banner.className='route-interlock-banner';banner.setAttribute('role','alert');banner.textContent='GUIDANCE LOCKED · Resolve every critical route notice and calculate a fresh route before movement.';const notices=$('#route-notices');notices?.insertAdjacentElement('afterend',banner);}
+ return banner;
 }
 
 export function enforceGuidanceInterlock(){
@@ -10,8 +16,9 @@ export function enforceGuidanceInterlock(){
  enforcing=true;
  try{
   const review=$('#route-review'),button=$('#start-guidance'),confirmed=$('#route-confirmed');if(!button)return false;
-  const blocked=hasCriticalNoticeInReview();
-  review?.classList.toggle('guidance-blocked',blocked);
+  const blocked=hasCriticalNoticeInReview(),banner=ensureBanner(review);
+  review?.classList.toggle('guidance-blocked',blocked);if(review)review.dataset.guidanceBlocked=blocked?'true':'false';
+  if(banner)banner.hidden=!blocked;
   button.dataset.safetyInterlock=blocked?'blocked':'clear';
   if(blocked){
    button.disabled=true;button.setAttribute('aria-disabled','true');button.title='Resolve every critical route notice and calculate a fresh route before guidance.';
@@ -32,17 +39,26 @@ function explainBlock(event){
  enforceGuidanceInterlock();
 }
 
+function blockConfirmation(event){
+ if(!hasCriticalNoticeInReview())return;
+ event.preventDefault();event.stopImmediatePropagation();
+ const confirmed=$('#route-confirmed');if(confirmed)confirmed.checked=false;
+ explainBlock(event);
+}
+
 function scheduleEnforcement(){
  enforceGuidanceInterlock();queueMicrotask(enforceGuidanceInterlock);requestAnimationFrame(enforceGuidanceInterlock);
 }
 
 function attach(){
- const notices=$('#route-notices'),confirmed=$('#route-confirmed'),button=$('#start-guidance');if(!notices||!button)return;
- new MutationObserver(scheduleEnforcement).observe(notices,{childList:true,subtree:true,attributes:true,attributeFilter:['class','data-blocking','data-severity']});
- new MutationObserver(()=>{if(hasCriticalNoticeInReview()&&!button.disabled)scheduleEnforcement();}).observe(button,{attributes:true,attributeFilter:['disabled','aria-disabled','data-safety-interlock']});
+ const review=$('#route-review'),notices=$('#route-notices'),confirmed=$('#route-confirmed'),button=$('#start-guidance');if(!review||!notices||!button)return;
+ new MutationObserver(scheduleEnforcement).observe(review,{childList:true,subtree:true,attributes:true,attributeFilter:['class','data-blocking','data-severity','disabled','hidden']});
+ button.addEventListener('click',explainBlock,true);
+ confirmed?.addEventListener('click',blockConfirmation,true);
  confirmed?.addEventListener('change',scheduleEnforcement);
- document.addEventListener('click',event=>{if(event.target===button)explainBlock(event);},true);
  document.addEventListener('routing-review-rendered',scheduleEnforcement);
+ document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')scheduleEnforcement();});
+ if(intervalId===null)intervalId=window.setInterval(()=>{if(!review.hidden||hasCriticalNoticeInReview())enforceGuidanceInterlock();},125);
  scheduleEnforcement();
 }
 
