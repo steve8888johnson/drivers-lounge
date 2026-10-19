@@ -1,6 +1,7 @@
 import'./guidance-guard.mjs';
 import'./departure-guard.mjs';
 import'./road-context-ui.mjs';
+import'./route-stop-adapter.mjs';
 
 const ENDPOINT='/api/truck-location-search';
 const MIN_QUERY=3;
@@ -18,7 +19,7 @@ function createController(input){
  function markActive(){[...panel.querySelectorAll('button')].forEach((button,index)=>{button.classList.toggle('active',index===active);button.setAttribute('aria-selected',String(index===active));});if(active>=0)panel.querySelectorAll('button')[active]?.scrollIntoView({block:'nearest'});}
  function choose(result){
   selecting=true;close();results=[];lastQuery=result.label;
-  input.value=result.label;input.dataset.selectedLat=String(result.lat);input.dataset.selectedLng=String(result.lng);input.dataset.selectedType=result.resultType;input.dataset.selectedPrecise=String(result.precise);
+  input.value=result.label;input.dataset.selectedLat=String(result.lat);input.dataset.selectedLng=String(result.lng);input.dataset.selectedLabel=String(result.label||'').trim();input.dataset.selectedType=result.resultType;input.dataset.selectedPrecise=String(result.precise);input.dataset.selectedConfidence=String(result.confidence??1);if(result.id)input.dataset.selectedId=String(result.id);
   input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));input.dispatchEvent(new CustomEvent('routing-stop-selected',{bubbles:true,detail:result}));
   selecting=false;close();
  }
@@ -44,7 +45,7 @@ function createController(input){
  }
  input.addEventListener('input',()=>{
   if(selecting)return;
-  delete input.dataset.selectedLat;delete input.dataset.selectedLng;delete input.dataset.selectedType;delete input.dataset.selectedPrecise;
+  delete input.dataset.selectedLat;delete input.dataset.selectedLng;delete input.dataset.selectedLabel;delete input.dataset.selectedType;delete input.dataset.selectedPrecise;delete input.dataset.selectedConfidence;delete input.dataset.selectedId;
   clearTimeout(timer);timer=setTimeout(search,DEBOUNCE_MS);
  });
  input.addEventListener('focus',()=>{if(selecting)return;if(results.length)render();else if(input.value.trim().length>=MIN_QUERY&&input.value.trim()!==lastQuery){clearTimeout(timer);timer=setTimeout(search,120);}});
