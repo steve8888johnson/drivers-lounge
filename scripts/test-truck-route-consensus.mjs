@@ -5,13 +5,13 @@ import{distanceMeters}from'../src/assets/routing/core.mjs';
 
 const providers=[{id:'here',label:'HERE Routing API v8',key:'here-secret'},{id:'tomtom',label:'TomTom Routing API v1',key:'tomtom-secret'}];
 const start=[41.14,-104.82],end=[39.78,-104.85];
-const geometry=Array.from({length:10},(_,index)=>{const ratio=index/9;return[start[0]+(end[0]-start[0])*ratio,start[1]+(end[1]-start[1])*ratio]});
+const geometry=Array.from({length:20},(_,index)=>{const ratio=index/19;return[start[0]+(end[0]-start[0])*ratio,start[1]+(end[1]-start[1])*ratio]});
 const routeDistance=Math.round(geometry.slice(1).reduce((sum,point,index)=>sum+distanceMeters(geometry[index],point),0));
 const makeResult=(provider,overrides={})=>({
  origin:{lat:start[0],lng:start[1],label:'Exact origin',resultType:'coordinate',confidence:1},
  destination:{lat:end[0],lng:end[1],label:'Exact destination',resultType:'coordinate',confidence:1},
  profileWarnings:[],
- route:{provider,calculatedAt:new Date().toISOString(),guidanceEligible:true,distanceMeters:routeDistance,durationSeconds:7200,geometry,steps:[{road:'I-25',instruction:'Depart',geometryIndex:0},{road:'I-25',instruction:'Continue',geometryIndex:5},{road:'I-25',instruction:'Arrive',geometryIndex:9}],notices:[],criticalNotices:[],...overrides}
+ route:{provider,calculatedAt:new Date().toISOString(),guidanceEligible:true,distanceMeters:routeDistance,durationSeconds:7200,geometry,steps:[{road:'I-25',instruction:'Depart',geometryIndex:0},{road:'I-25',instruction:'Continue',geometryIndex:10},{road:'I-25',instruction:'Arrive',geometryIndex:19}],notices:[],criticalNotices:[],...overrides}
 });
 
 test('single configured provider returns an explicit unverified cross-check state',async()=>{
