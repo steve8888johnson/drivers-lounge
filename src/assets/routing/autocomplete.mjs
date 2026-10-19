@@ -10,14 +10,15 @@ function createController(input){
  const label=input.closest('label')||input.parentElement,panel=document.createElement('div');
  panel.className='stop-suggestions';panel.hidden=true;panel.setAttribute('role','listbox');panel.id=`${input.id}-suggestions`;label.append(panel);
  input.setAttribute('role','combobox');input.setAttribute('aria-autocomplete','list');input.setAttribute('aria-controls',panel.id);input.setAttribute('aria-expanded','false');input.autocomplete='off';
- let timer=null,abort=null,results=[],active=-1,lastQuery='';
+ let timer=null,abort=null,results=[],active=-1,lastQuery='',selecting=false;
 
- function close(){panel.hidden=true;input.setAttribute('aria-expanded','false');active=-1;}
+ function close(){clearTimeout(timer);if(abort){abort.abort();abort=null;}panel.hidden=true;input.setAttribute('aria-expanded','false');active=-1;}
  function markActive(){[...panel.querySelectorAll('button')].forEach((button,index)=>{button.classList.toggle('active',index===active);button.setAttribute('aria-selected',String(index===active));});if(active>=0)panel.querySelectorAll('button')[active]?.scrollIntoView({block:'nearest'});}
  function choose(result){
+  selecting=true;close();results=[];lastQuery=result.label;
   input.value=result.label;input.dataset.selectedLat=String(result.lat);input.dataset.selectedLng=String(result.lng);input.dataset.selectedType=result.resultType;input.dataset.selectedPrecise=String(result.precise);
-  input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new CustomEvent('routing-stop-selected',{bubbles:true,detail:result}));
-  close();
+  input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));input.dispatchEvent(new CustomEvent('routing-stop-selected',{bubbles:true,detail:result}));
+  selecting=false;close();
  }
  function render(message=''){
   panel.replaceChildren();
@@ -40,10 +41,11 @@ function createController(input){
   }catch(error){if(error.name==='AbortError')return;results=[];render(error.message||'Location search is unavailable. You can still type a full address.');}
  }
  input.addEventListener('input',()=>{
+  if(selecting)return;
   delete input.dataset.selectedLat;delete input.dataset.selectedLng;delete input.dataset.selectedType;delete input.dataset.selectedPrecise;
   clearTimeout(timer);timer=setTimeout(search,DEBOUNCE_MS);
  });
- input.addEventListener('focus',()=>{if(results.length)render();else if(input.value.trim().length>=MIN_QUERY){clearTimeout(timer);timer=setTimeout(search,120);}});
+ input.addEventListener('focus',()=>{if(selecting)return;if(results.length)render();else if(input.value.trim().length>=MIN_QUERY&&input.value.trim()!==lastQuery){clearTimeout(timer);timer=setTimeout(search,120);}});
  input.addEventListener('blur',()=>setTimeout(close,120));
  input.addEventListener('keydown',event=>{
   if(panel.hidden||!results.length){if(event.key==='ArrowDown'&&input.value.trim().length>=MIN_QUERY){event.preventDefault();void search();}return;}
