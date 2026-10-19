@@ -35,10 +35,11 @@ test('a provider critical restriction always blocks consensus',()=>{
 });
 
 test('moderate provider disagreement requires parked review',()=>{
- const alternate=[[41.14,-104.82],[40.6,-104.89],[40.0,-104.5],[39.78,-104.85]];
+ const alternate=[[41.14,-104.82],[40.6,-104.88],[40.0,-104.90],[39.78,-104.85]];
  const comparison=compareCommercialRoutes(route('HERE',line),route('TomTom',alternate,{distanceMeters:114000,durationSeconds:6500,steps:[{road:'US-85'},{road:'I-76'}]}));
  assert.equal(comparison.status,'review');
  assert.equal(comparison.notice.blocking,true);
+ assert.ok(comparison.metrics.p95SeparationMeters<12000);
 });
 
 test('applying consensus preserves notices and fails closed',()=>{
