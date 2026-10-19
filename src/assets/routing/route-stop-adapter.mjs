@@ -58,19 +58,30 @@ export function consensusRequestTarget(input,url=routeRequestUrl(input)){
  return input;
 }
 
+export function dispatchRouteResponse(root,payload){
+ const view=root?.defaultView||globalThis,EventCtor=view?.CustomEvent||globalThis.CustomEvent;
+ if(!root?.dispatchEvent||typeof EventCtor!=='function'||!payload||typeof payload!=='object')return false;
+ root.dispatchEvent(new EventCtor('routing-route-response',{detail:payload}));return true;
+}
+
 export function installRouteStopRequestAdapter({root=globalThis.document,scope=globalThis}={}){
  if(!root||typeof scope.fetch!=='function'||scope.__dlRouteStopAdapterInstalled)return false;
  const nativeFetch=scope.fetch.bind(scope);scope.__dlRouteStopAdapterInstalled=true;
  scope.fetch=(input,init={})=>{
-  const url=routeRequestUrl(input),method=String(init?.method||input?.method||'GET').toUpperCase();let target=input;
+  const url=routeRequestUrl(input),method=String(init?.method||input?.method||'GET').toUpperCase();let target=input,isRouteRequest=false;
   if(url?.pathname==='/api/truck-route'&&method==='POST'&&typeof init?.body==='string'){
-   target=consensusRequestTarget(input,url);
+   isRouteRequest=true;target=consensusRequestTarget(input,url);
    try{
     const parsed=JSON.parse(init.body),originInput=root.getElementById('origin'),destinationInput=root.getElementById('destination');
     init={...init,body:JSON.stringify(transformTruckRouteRequest(parsed,{originInput,destinationInput}))};
    }catch{/* The route endpoint performs its own JSON validation. */}
   }
-  return nativeFetch(target,init);
+  const request=nativeFetch(target,init);
+  if(!isRouteRequest)return request;
+  return request.then(response=>{
+   if(response?.ok&&typeof response.clone==='function')response.clone().json().then(payload=>dispatchRouteResponse(root,payload)).catch(()=>{});
+   return response;
+  });
  };
  return true;
 }
