@@ -5,6 +5,11 @@ import{
   routeSummary,
   validateTruckProfile
 }from'./core.mjs';
+import{formatLocalDateTimeInput,permittedModePresentation}from'./ui-core.mjs';
+
+if(!document.querySelector('link[data-routing-polish]')){
+ const polish=document.createElement('link');polish.rel='stylesheet';polish.href='/assets/routing/routing-polish.css';polish.dataset.routingPolish='true';document.head.append(polish);
+}
 
 const $=(selector,root=document)=>root.querySelector(selector);
 const $$=(selector,root=document)=>[...root.querySelectorAll(selector)];
@@ -53,6 +58,12 @@ function readProfileForm(){
   routePreference:$('#route-preference').value,permittedLoad:$('#permitted-load').checked
  });
 }
+function syncPermittedMode({announce=false}={}){
+ const enabled=$('#permitted-load').checked,presentation=permittedModePresentation(enabled),button=$('#calculate-route');
+ button.textContent=presentation.buttonText;button.classList.toggle('permit-action',enabled);button.dataset.permitted=String(enabled);
+ if(announce&&enabled){setStatus(presentation.status,'warning');mapMessage('Issued permits control this movement. Open the permitted-load workflow and verify every state route before departure.','bad');}
+ else if(announce){setStatus('Standard-truck routing selected. Confirm the profile and build a fresh commercial route.');mapMessage('');}
+}
 function writeProfileForm(profileInput){
  const profile=normalizeTruckProfile(profileInput),feet=Math.floor(profile.heightInches/12),inches=Math.round(profile.heightInches-feet*12),widthFeet=Math.floor(profile.widthInches/12),widthInches=Math.round(profile.widthInches-widthFeet*12);
  $('#vehicle-preset').value=profile.preset||'custom';$('#height-ft').value=feet||13;$('#height-in').value=inches;$('#width-ft').value=widthFeet||8;$('#width-in').value=widthInches;
@@ -60,7 +71,7 @@ function writeProfileForm(profileInput){
  $('#axle-count').value=profile.axleCount||5;$('#trailer-axles').value=profile.trailerAxleCount||0;$('#trailer-count').value=profile.trailerCount||0;$('#single-axle').value=profile.singleAxleGroupLb||'';$('#tandem-axle').value=profile.tandemAxleGroupLb||'';$('#triple-axle').value=profile.tripleAxleGroupLb||'';
  $('#hazmat-enabled').checked=profile.hazmatCategories.length>0||Boolean(profile.tunnelCategory);$('#hazmat-editor').hidden=!$('#hazmat-enabled').checked;$$('#hazmat-categories option').forEach(option=>option.selected=profile.hazmatCategories.includes(option.value));$('#tunnel-category').value=profile.tunnelCategory||'';
  $('#avoid-tolls').checked=profile.avoidTolls;$('#route-preference').value=profile.routePreference||'fast';$('#permitted-load').checked=profile.permittedLoad;
- updateProfileStatus();
+ syncPermittedMode();updateProfileStatus();
 }
 function profileSummary(profile=readProfileForm()){
  const heightFeet=Math.floor(profile.heightInches/12),heightInches=Math.round(profile.heightInches-heightFeet*12),widthFeet=Math.floor(profile.widthInches/12),widthInches=Math.round(profile.widthInches-widthFeet*12);
@@ -75,6 +86,7 @@ function updateProfileStatus(){
 }
 function saveProfile(){
  const validation=validateTruckProfile(readProfileForm());
+ if(validation.profile.permittedLoad){localStorage.setItem(PROFILE_KEY,JSON.stringify({...validation.profile,savedAt:new Date().toISOString()}));setStatus('Permitted-load profile saved. Continue in Permitted Loads to import and verify the issued routes.','warning');syncPermittedMode();return true;}
  if(!validation.ready){$('#profile-editor').hidden=false;$('#profile-toggle').setAttribute('aria-expanded','true');setStatus(validation.errors[0],'bad');return false;}
  localStorage.setItem(PROFILE_KEY,JSON.stringify({...validation.profile,savedAt:new Date().toISOString()}));setStatus('Truck profile saved on this device.','good');updateProfileStatus();return true;
 }
@@ -96,7 +108,13 @@ function readinessItems(){
  return items;
 }
 function updateReadiness(){
- const items=readinessItems(),list=$('#readiness-list');list.replaceChildren(...items.map(item=>{const li=document.createElement('li');li.className=item.ok?'good':item.warning?'':'bad';li.textContent=item.text;return li}));
+ const profile=readProfileForm(),list=$('#readiness-list');
+ if(profile.permittedLoad){
+  const presentation=permittedModePresentation(true),items=[{ok:true,text:'Permitted-load mode selected.'},{ok:false,text:'Import and confirm every controlling state permit before guidance.'},{ok:false,text:'Resolve missing states, route gaps, border mismatches and expired restrictions.'}];
+  list.replaceChildren(...items.map(item=>{const li=document.createElement('li');li.className=item.ok?'good':'bad';li.textContent=item.text;return li}));
+  $('#readiness-chip').textContent=presentation.chip;$('#readiness-chip').className='status-chip warning';$('#readiness-heading').textContent=presentation.heading;$('#start-guidance').disabled=true;return false;
+ }
+ const items=readinessItems();list.replaceChildren(...items.map(item=>{const li=document.createElement('li');li.className=item.ok?'good':item.warning?'':'bad';li.textContent=item.text;return li}));
  const ready=items.every(item=>item.ok||item.warning)&&Boolean(state.route?.guidanceEligible)&&routeFresh();$('#readiness-chip').textContent=ready?'Ready for parked review':'Not ready';$('#readiness-chip').className=`status-chip ${ready?'good':'warning'}`;$('#readiness-heading').textContent=ready?'Route candidate ready for parked review':'Complete the route and profile';
  const confirmed=$('#route-confirmed').checked;$('#start-guidance').disabled=!(ready&&confirmed);return ready;
 }
@@ -134,6 +152,7 @@ function renderReview(result){
 }
 async function calculateRoute(event){
  event?.preventDefault();if(state.calculating)return;
+ if($('#permitted-load').checked){setStatus(permittedModePresentation(true).status,'warning');window.location.assign('/permitted-loads');return;}
  const validation=validateTruckProfile(readProfileForm());if(!validation.ready){$('#profile-editor').hidden=false;$('#profile-toggle').setAttribute('aria-expanded','true');setStatus(validation.errors[0],'bad');updateReadiness();return;}
  const originText=$('#origin').value.trim(),destinationText=$('#destination').value.trim();if(!originText||!destinationText){setStatus('Enter an origin and destination.','bad');return;}
  clearCalculatedRoute({keepInputs:true});state.calculating=true;setLoading(true);setStatus('Calculating a commercial restriction-aware route…');mapMessage('Checking the supplied truck profile and commercial road restrictions.');
@@ -191,10 +210,14 @@ function bind(){
  $('#use-location').addEventListener('click',useCurrentLocation);$('#origin').addEventListener('input',()=>{if($('#origin').value!=='Current GPS location')state.originCoordinate=null;clearCalculatedRoute({keepInputs:true});updateReadiness();});$('#destination').addEventListener('input',()=>{clearCalculatedRoute({keepInputs:true});updateReadiness();});
  $('#profile-toggle').addEventListener('click',()=>{const editor=$('#profile-editor'),open=editor.hidden;editor.hidden=!open;$('#profile-toggle').setAttribute('aria-expanded',String(open));});$('#show-profile').addEventListener('click',()=>{$('#profile-editor').hidden=false;$('#profile-toggle').setAttribute('aria-expanded','true');$('#profile-toggle').scrollIntoView({behavior:'smooth'});});
  $('#vehicle-preset').addEventListener('change',event=>applyPreset(event.target.value));$('#hazmat-enabled').addEventListener('change',()=>{$('#hazmat-editor').hidden=!$('#hazmat-enabled').checked;updateProfileStatus();});
- for(const element of $$('#profile-editor input,#profile-editor select,#avoid-tolls,#route-preference,#permitted-load'))element.addEventListener('change',()=>{clearCalculatedRoute({keepInputs:true});updateProfileStatus();});
+ for(const element of $$('#profile-editor input:not(#permitted-load),#profile-editor select,#avoid-tolls,#route-preference'))element.addEventListener('change',()=>{clearCalculatedRoute({keepInputs:true});updateProfileStatus();});
+ $('#permitted-load').addEventListener('change',()=>{clearCalculatedRoute({keepInputs:true});syncPermittedMode({announce:true});updateProfileStatus();});
  $('#save-profile').addEventListener('click',saveProfile);$('#clear-route').addEventListener('click',()=>clearCalculatedRoute({keepInputs:false}));$('#route-confirmed').addEventListener('change',updateReadiness);$('#start-guidance').addEventListener('click',startGuidance);$('#stop-guidance').addEventListener('click',()=>stopGuidance());$('#recenter').addEventListener('click',()=>{if(state.latestPosition&&state.map)state.map.setView([state.latestPosition.coords.latitude,state.latestPosition.coords.longitude],16);});$('#fit-route').addEventListener('click',()=>state.routeLine&&state.map?.fitBounds(state.routeLine.getBounds(),{padding:[35,35]}));
  window.addEventListener('online',updateNetwork);window.addEventListener('offline',updateNetwork);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&state.watchId!==null&&!state.wakeLock)void requestWakeLock();});window.addEventListener('beforeunload',()=>stopGuidance(''));
 }
 
-function boot(){loadProfile();initMap();bind();updateNetwork();void checkEngine();updateReadiness();const now=new Date(Date.now()+15*60*1000);now.setMinutes(Math.ceil(now.getMinutes()/15)*15,0,0);$('#departure-time').value=new Date(now.getTime()-now.getTimezoneOffset()*60000).toISOString().slice(0,16);}
+function boot(){
+ loadProfile();initMap();bind();updateNetwork();void checkEngine();syncPermittedMode();updateReadiness();
+ const now=new Date(Date.now()+15*60*1000);now.setMinutes(Math.ceil(now.getMinutes()/15)*15,0,0);$('#departure-time').value=formatLocalDateTimeInput(now);
+}
 boot();
