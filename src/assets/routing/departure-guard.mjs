@@ -38,4 +38,6 @@ async function preflight(event){
 }
 
 function attach(){const button=$('#start-guidance');if(button)button.addEventListener('click',preflight,true);}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',attach,{once:true});else attach();
+if(typeof document!=='undefined'){
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',attach,{once:true});else attach();
+}
