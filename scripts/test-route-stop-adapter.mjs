@@ -1,6 +1,6 @@
 import test from'node:test';
 import assert from'node:assert/strict';
-import{clearSelectedStop,selectedStopFromInput,transformTruckRouteRequest,writeSelectedStop}from'../src/assets/routing/route-stop-adapter.mjs';
+import{clearSelectedStop,consensusRequestTarget,selectedStopFromInput,transformTruckRouteRequest,writeSelectedStop}from'../src/assets/routing/route-stop-adapter.mjs';
 
 const input=(value,dataset={})=>({value,dataset:{...dataset}});
 
@@ -46,4 +46,13 @@ test('request transformation never mutates the caller body',()=>{
  assert.notEqual(transformed,body);
  assert.deepEqual(body,{origin:{address:'A'},destination:{address:'B'},profile:{heightInches:162}});
  assert.equal(transformed.origin.lat,1);
+});
+
+test('standard route requests are upgraded to the consensus endpoint only',()=>{
+ assert.equal(consensusRequestTarget('/api/truck-route'),'/api/truck-route-consensus');
+ assert.equal(consensusRequestTarget('/api/truck-route?test=1'),'/api/truck-route-consensus?test=1');
+ assert.equal(consensusRequestTarget('/api/truck-route-health'),'/api/truck-route-health');
+ assert.equal(consensusRequestTarget('/api/truck-location-search'),'/api/truck-location-search');
+ const absolute=consensusRequestTarget('https://example.com/api/truck-route?x=1');
+ assert.equal(absolute,'https://example.com/api/truck-route-consensus?x=1');
 });
