@@ -31,7 +31,7 @@ test('coherent route response passes integrity audit',()=>{
 });
 
 test('corrupt geometry gap and invalid coordinates block guidance',()=>{
- const corrupt=result({geometry:[[40,-105],[40,-104.99],[999,-104],[40,-70]],distanceMeters:geometricLength});
+ const corrupt=result({geometry:[[40,-105],[40,-104.99],[40,-70],[999,-104]],distanceMeters:geometricLength});
  const audit=auditRouteIntegrity(corrupt);
  assert.equal(audit.status,'blocked');
  assert.ok(audit.criticalNotices.some(item=>item.code==='routeIntegrityInvalidCoordinates'));
