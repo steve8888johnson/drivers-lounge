@@ -1,5 +1,6 @@
 import'./guidance-guard.mjs';
 import'./departure-guard.mjs';
+import'./guidance-progress-guard.mjs';
 import'./road-context-ui.mjs';
 import'./route-stop-adapter.mjs';
 
