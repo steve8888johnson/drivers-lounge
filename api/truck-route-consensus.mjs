@@ -1,5 +1,6 @@
 import{calculateTruckRoute,providerSequenceFromOptions}from'./truck-route.mjs';
 import{applyRouteConsensus}from'../src/assets/routing/route-consensus.mjs';
+import{applyRouteIntegrityAudit}from'../src/assets/routing/route-integrity.mjs';
 
 const send=(res,status,body)=>{res.setHeader('Cache-Control','private, no-store');res.setHeader('Content-Type','application/json');res.statusCode=status;res.end(JSON.stringify(body));};
 
@@ -14,7 +15,7 @@ const providerSummary=provider=>({id:provider.id,label:provider.label});
 
 export async function calculateConsensusTruckRoute(input,{calculator=calculateTruckRoute,providers=providerSequenceFromOptions()}={}){
  if(!Array.isArray(providers)||!providers.length)throw Object.assign(Error('Commercial truck routing is not configured yet.'),{statusCode:503});
- const primaryProvider=providers[0],primary=await calculator(input,{providers:[primaryProvider]});
+ const primaryProvider=providers[0],primary=applyRouteIntegrityAudit(await calculator(input,{providers:[primaryProvider]}));
  if(providers.length<2){
   const crossCheck={
    schema:'dl-route-consensus/v1',status:'single-provider',confidence:'unverified',checkedAt:new Date().toISOString(),
@@ -36,7 +37,7 @@ export async function calculateConsensusTruckRoute(input,{calculator=calculateTr
   destination:{lat:primary.destination.lat,lng:primary.destination.lng,label:primary.destination.label}
  };
  let secondary;
- try{secondary=await calculator(secondaryInput,{providers:[secondaryProvider]});}
+ try{secondary=applyRouteIntegrityAudit(await calculator(secondaryInput,{providers:[secondaryProvider]}));}
  catch(error){
   const notice={code:'secondaryProviderUnavailable',title:`${secondaryProvider.label} could not independently verify this route. Guidance is blocked until the cross-check succeeds or an authorized reviewer clears the route.`,severity:'critical',blocking:true};
   const notices=[...(primary.route?.notices||[]),notice],criticalNotices=[...(primary.route?.criticalNotices||[]),notice];
@@ -48,6 +49,8 @@ export async function calculateConsensusTruckRoute(input,{calculator=calculateTr
  }
  const result=applyRouteConsensus(primary,secondary,{primaryProvider:primaryProvider.label,secondaryProvider:secondaryProvider.label});
  result.crossCheck.configuredProviders=providers.map(providerSummary);
+ result.crossCheck.primaryIntegrity=primary.integrityAudit;
+ result.crossCheck.secondaryIntegrity=secondary.integrityAudit;
  return result;
 }
 
