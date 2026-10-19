@@ -1,6 +1,7 @@
 import{writeFile,mkdir}from'node:fs/promises';
 import{dirname,resolve}from'node:path';
 import{calculateTruckRoute}from'../api/truck-route.mjs';
+import{validateTruckProfile}from'../src/assets/routing/core.mjs';
 import{routingBenchmarkCases}from'./routing-benchmark-cases.mjs';
 
 const fold=value=>String(value||'').toLowerCase().replace(/[_-]/g,' ').replace(/\s+/g,' ').trim();
@@ -36,7 +37,7 @@ function inspectCase(testCase,result){
  if(!forbiddenMatches.length&&testCase.expectGuidance&&result.route?.guidanceEligible!==true)failures.push('Expected a reviewable guidance candidate but guidance was blocked.');
  if(forbiddenMatches.length&&!critical.length)failures.push('Forbidden road matched but no independent critical notice was produced.');
  return{
-  status:failures.length?'failed':'passed',failures,forbiddenMatches,criticalNotices:critical,
+  status:failures.length?'failed':'passed',failures,forbiddenMatches,criticalNotices:critical,providerRequestMade:true,
   provider:result.route?.provider||'',providerFallback:result.route?.providerFallback||null,
   guidanceEligible:Boolean(result.route?.guidanceEligible),distanceMeters:Number(result.route?.distanceMeters||0),durationSeconds:Number(result.route?.durationSeconds||0),
   geometryPoints:result.route?.geometry?.length||0,stepCount:result.route?.steps?.length||0,namedRoads:roads,
@@ -44,23 +45,39 @@ function inspectCase(testCase,result){
  };
 }
 
+function inspectProfileGate(testCase){
+ const validation=validateTruckProfile(testCase.profile),errors=validation.errors||[],combined=errors.join(' '),expected=String(testCase.expectedError||'').trim();
+ const failures=[];
+ if(validation.ready)failures.push('Profile unexpectedly passed the standard-route safety gate.');
+ if(expected&&!new RegExp(expected,'i').test(combined))failures.push(`Expected profile error matching ${expected}, received: ${combined||'none'}.`);
+ return{
+  status:failures.length?'failed':'passed',failures,providerRequestMade:false,
+  guidanceEligible:false,profileErrors:errors,profileWarnings:validation.warnings||[],
+  criticalNotices:[],forbiddenMatches:[],provider:'none — local safety gate',geometryPoints:0,stepCount:0,distanceMeters:0,durationSeconds:0
+ };
+}
+
 for(const[testIndex,testCase]of cases.entries()){
  const row={id:testCase.id,tier:testCase.tier,origin:testCase.origin,destination:testCase.destination,startedAt:new Date().toISOString()};
  process.stdout.write(`[${testIndex+1}/${cases.length}] ${testCase.id} ... `);
  try{
-  const result=await calculateTruckRoute({origin:{address:testCase.origin},destination:{address:testCase.destination},departureTime:departure.toISOString(),profile:testCase.profile});
-  Object.assign(row,inspectCase(testCase,result));
+  if(testCase.expectProfileBlocked)Object.assign(row,inspectProfileGate(testCase));
+  else{
+   const result=await calculateTruckRoute({origin:{address:testCase.origin},destination:{address:testCase.destination},departureTime:departure.toISOString(),profile:testCase.profile});
+   Object.assign(row,inspectCase(testCase,result));
+  }
   console.log(row.status.toUpperCase());
- }catch(error){row.status='failed';row.failures=[String(error?.message||error)];row.errorStatus=Number(error?.statusCode||0);console.log('FAILED');}
+ }catch(error){row.status='failed';row.failures=[String(error?.message||error)];row.errorStatus=Number(error?.statusCode||0);row.providerRequestMade=!testCase.expectProfileBlocked;console.log('FAILED');}
  row.finishedAt=new Date().toISOString();results.push(row);
- if(testIndex<cases.length-1)await wait(delay);
+ if(testIndex<cases.length-1&&!testCase.expectProfileBlocked)await wait(delay);
 }
 
 const summary={
  schema:'dl-routing-benchmark/v1',startedAt,finishedAt:new Date().toISOString(),providerKeysPresent:{here:Boolean(process.env.TRUCK_ROUTING_HERE_API_KEY||process.env.HERE_API_KEY),tomtom:Boolean(process.env.TRUCK_ROUTING_TOMTOM_API_KEY||process.env.TOMTOM_API_KEY)},
- caseCount:results.length,passed:results.filter(item=>item.status==='passed').length,failed:results.filter(item=>item.status==='failed').length,results
+ caseCount:results.length,providerRequestCases:results.filter(item=>item.providerRequestMade).length,profileGateCases:results.filter(item=>!item.providerRequestMade).length,
+ passed:results.filter(item=>item.status==='passed').length,failed:results.filter(item=>item.status==='failed').length,results
 };
 const output=resolve(String(args.get('output')||process.env.ROUTING_BENCHMARK_OUTPUT||`/tmp/drivers-lounge-routing-benchmark-${Date.now()}.json`));
 await mkdir(dirname(output),{recursive:true});await writeFile(output,JSON.stringify(summary,null,2));
-console.log(`Benchmark: ${summary.passed}/${summary.caseCount} passed; ${summary.failed} failed.`);console.log(`Results: ${output}`);
+console.log(`Benchmark: ${summary.passed}/${summary.caseCount} passed; ${summary.failed} failed.`);console.log(`Provider calls: ${summary.providerRequestCases}; local profile gates: ${summary.profileGateCases}.`);console.log(`Results: ${output}`);
 if(summary.failed)process.exitCode=1;
