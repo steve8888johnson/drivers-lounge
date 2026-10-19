@@ -44,6 +44,10 @@ export function createRouteProgressTracker(route,{minimumCorridorMeters=120,back
   const previousIndex=lastIndex;lastIndex=candidate.index;lastTimestamp=data.timestamp;pendingIndex=null;pendingCount=0;held=false;
   return{accept:true,status,index:candidate.index,distanceMeters:candidate.distance,previousIndex,cumulativeMeters:cumulative[candidate.index]||0};
  }
+ function keepProgress(candidate,data,status='minor-backward-jitter'){
+  const previousIndex=lastIndex;lastTimestamp=data.timestamp;pendingIndex=null;pendingCount=0;held=false;
+  return{accept:true,status,index:lastIndex,distanceMeters:candidate.distance,previousIndex,cumulativeMeters:cumulative[lastIndex]||0,observedIndex:candidate.index};
+ }
  function hold(reason,global,local,data,window){
   held=true;
   const samePending=pendingIndex!==null&&Math.abs(pendingIndex-global.index)<=Math.max(3,Math.round(geometry.length*.002));
@@ -89,9 +93,8 @@ export function createRouteProgressTracker(route,{minimumCorridorMeters=120,back
   }
 
   // Permit small GPS jitter backward, but retain monotonic state so later windows do not drift.
-  const accepted=accept(global,data,global.index<lastIndex?'minor-backward-jitter':'advanced');
-  if(global.index<lastIndex){accepted.index=lastIndex;accepted.cumulativeMeters=lastMeters;lastIndex=accepted.index;}
-  return accepted;
+  if(global.index<lastIndex)return keepProgress(global,data);
+  return accept(global,data,'advanced');
  }
  return{update,reset,snapshot,geometry,cumulative};
 }
