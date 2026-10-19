@@ -21,3 +21,10 @@ export function permittedModePresentation(enabled){
   status:''
  };
 }
+
+export function hasBlockingRouteNotice(route){
+ if(!route)return true;
+ if(route.guidanceEligible===false)return true;
+ if(Array.isArray(route.criticalNotices)&&route.criticalNotices.length)return true;
+ return Array.isArray(route.notices)&&route.notices.some(notice=>notice?.blocking===true||String(notice?.severity||'').toLowerCase()==='critical');
+}
