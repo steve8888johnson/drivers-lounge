@@ -1,6 +1,7 @@
 import{normalizeHereRoute,toHereVehicleParams,validateTruckProfile}from'../src/assets/routing/core.mjs';
 import{applyCommercialRouteAudit}from'../src/assets/routing/restrictions.mjs';
 import{normalizeTomTomRoute,toTomTomVehicleParams}from'../src/assets/routing/tomtom.mjs';
+import{applyResolvedStopAudit}from'../src/assets/routing/stop-quality.mjs';
 
 const send=(res,status,body)=>{res.setHeader('Cache-Control','private, no-store');res.setHeader('Content-Type','application/json');res.statusCode=status;res.end(JSON.stringify(body));};
 const validCoordinate=value=>Number.isFinite(Number(value))&&Math.abs(Number(value))<=180;
@@ -151,7 +152,7 @@ export async function calculateTruckRoute(input,{fetcher=fetch,apiKey,provider,p
     result.profileWarnings.unshift(`${primary} was unavailable, so ${selected.label} produced this route candidate. Review all fallback limitations before guidance.`);
     result.route.providerFallback={used:true,failedProviders:failures.map(item=>({provider:item.provider,status:item.providerHttpStatus||0,reason:item.message})),selected:selected.label};
    }
-   return result;
+   return applyResolvedStopAudit(result);
   }catch(error){
    const hasFallback=index<sequence.length-1;
    if(hasFallback&&error?.retryable===true){failures.push({provider:error.provider||selected.label,providerHttpStatus:error.providerHttpStatus||0,message:String(error.message||'Provider unavailable')});continue;}
