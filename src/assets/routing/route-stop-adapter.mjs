@@ -49,18 +49,28 @@ function routeRequestUrl(input){
  }catch{return null;}
 }
 
+export function consensusRequestTarget(input,url=routeRequestUrl(input)){
+ if(url?.pathname!=='/api/truck-route')return input;
+ const target=new URL(url);target.pathname='/api/truck-route-consensus';
+ if(typeof input==='string')return input.startsWith('/')?`${target.pathname}${target.search}`:target.toString();
+ if(typeof URL!=='undefined'&&input instanceof URL)return target;
+ if(typeof Request!=='undefined'&&input instanceof Request)return new Request(target.toString(),input);
+ return input;
+}
+
 export function installRouteStopRequestAdapter({root=globalThis.document,scope=globalThis}={}){
  if(!root||typeof scope.fetch!=='function'||scope.__dlRouteStopAdapterInstalled)return false;
  const nativeFetch=scope.fetch.bind(scope);scope.__dlRouteStopAdapterInstalled=true;
  scope.fetch=(input,init={})=>{
-  const url=routeRequestUrl(input),method=String(init?.method||input?.method||'GET').toUpperCase();
+  const url=routeRequestUrl(input),method=String(init?.method||input?.method||'GET').toUpperCase();let target=input;
   if(url?.pathname==='/api/truck-route'&&method==='POST'&&typeof init?.body==='string'){
+   target=consensusRequestTarget(input,url);
    try{
     const parsed=JSON.parse(init.body),originInput=root.getElementById('origin'),destinationInput=root.getElementById('destination');
     init={...init,body:JSON.stringify(transformTruckRouteRequest(parsed,{originInput,destinationInput}))};
    }catch{/* The route endpoint performs its own JSON validation. */}
   }
-  return nativeFetch(input,init);
+  return nativeFetch(target,init);
  };
  return true;
 }
