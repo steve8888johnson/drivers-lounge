@@ -1,4 +1,5 @@
 import'./guidance-guard.mjs';
+import'./departure-guard.mjs';
 import'./road-context-ui.mjs';
 
 const ENDPOINT='/api/truck-location-search';
