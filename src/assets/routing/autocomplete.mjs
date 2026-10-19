@@ -1,3 +1,5 @@
+import'./guidance-guard.mjs';
+
 const ENDPOINT='/api/truck-location-search';
 const MIN_QUERY=3;
 const DEBOUNCE_MS=320;
