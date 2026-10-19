@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="/assets/rc1-design-system.css">
   <link rel="stylesheet" href="/assets/routing/routing.css">
+  <link rel="stylesheet" href="/assets/routing/routing-polish.css" data-routing-polish>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0"></script>
   <script src="/config.js"></script>
   <script src="/assets/backend.js"></script>
@@ -37,8 +38,9 @@
     <form id="route-form" novalidate>
       <section class="planner-card route-card">
         <div class="card-heading"><div><p class="eyebrow">WHERE ARE YOU GOING?</p><h1>Build a commercial truck route</h1></div><button type="button" id="swap-stops" class="icon-button" aria-label="Swap origin and destination">⇅</button></div>
-        <label>Origin<div class="input-row"><input id="origin" name="origin" autocomplete="street-address" placeholder="Address, city and state" required><button type="button" id="use-location">Use GPS</button></div></label>
-        <label>Destination<input id="destination" name="destination" autocomplete="street-address" placeholder="Address, city and state" required></label>
+        <label>Origin<div class="input-row"><input id="origin" name="origin" autocomplete="street-address" placeholder="Full address or verified facility" required><button type="button" id="use-location">Use GPS</button></div></label>
+        <label>Destination<input id="destination" name="destination" autocomplete="street-address" placeholder="Full address or verified facility" required></label>
+        <p class="legal-note">Choose an exact address, facility or GPS point for live guidance. A city, state or road-only match may be shown for planning but cannot start guidance.</p>
         <div class="two-column"><label>Departure<input id="departure-time" type="datetime-local"></label><label>Route preference<select id="route-preference"><option value="fast">Practical / fastest</option><option value="short">Shortest sensible route</option></select></label></div>
         <label class="check-row"><input id="avoid-tolls" type="checkbox"> Avoid toll roads when the provider can find a reasonable truck route</label>
       </section>
@@ -111,6 +113,7 @@
 </main>
 <footer class="routing-footer"><strong>Development candidate.</strong><span>Do not use for a permitted move unless the complete issued route is reviewed in Permitted Loads. Safety warnings and legal notices are never removed by an ad-free subscription.</span></footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="module" src="/assets/routing/autocomplete.mjs"></script>
 <script type="module" src="/assets/routing/app.mjs"></script>
 </body>
 </html>
