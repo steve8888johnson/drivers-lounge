@@ -1,6 +1,88 @@
-import { blankPermit, sanitizePermit, clean } from './core.mjs';
+import { blankPermit, blankTrip, orderPermits, sanitizePermit, clean } from './core.mjs';
 import { publicProviderURL } from './provider.mjs';
 import { decodePhotoPixels } from './qr-scan.mjs';
+import { inferBorderEdge, permitTimeZoneConfidence, permitTimeZoneForState } from './state-meta.mjs';
+
+const DATE_TOKEN='(?:\\d{1,2}\\/\\d{1,2}\\/\\d{4}|\\d{4}-\\d{2}-\\d{2})';
+const isoDate=value=>{
+  const raw=String(value||'').trim();if(/^\d{4}-\d{2}-\d{2}$/.test(raw))return raw;
+  const match=raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);return match?`${match[3]}-${String(match[1]).padStart(2,'0')}-${String(match[2]).padStart(2,'0')}`:'';
+};
+const compact=value=>String(value||'').replace(/\r/g,'').replace(/[ \t]+/g,' ').replace(/\n[ \t]+/g,'\n').trim();
+const lineValue=(text,label)=>compact(text).match(new RegExp(`(?:^|\\n)\\s*${label}\\s*:?\\s*([^\\n]+)`,'i'))?.[1]?.trim()||'';
+
+function detectState(text){
+  if(/UTAH\s+DEPARTMENT\s+OF\s+TRANSPORTATION|\bUDOT\b/i.test(text))return'UT';
+  if(/COLORADO\s+DEPARTMENT\s+OF\s+TRANSPORTATION|\bCDOT\b/i.test(text))return'CO';
+  if(/STATE\s+OF\s+NEW\s+MEXICO|NEW\s+MEXICO\s+DEPARTMENT\s+OF\s+TRANSPORTATION/i.test(text))return'NM';
+  if(/TEXAS\s+OVERSIZE\/OVERWEIGHT|TEXAS\s+DEPARTMENT\s+OF\s+MOTOR\s+VEHICLES|\bTXDMV\b/i.test(text))return'TX';
+  if(/KANSAS\s+DEPARTMENT\s+OF\s+TRANSPORTATION|\bK-TRIPS\b/i.test(text))return'KS';
+  if(/ILLINOIS\s+DEPARTMENT\s+OF\s+TRANSPORTATION|ILLINOIS\s+OS\/OW/i.test(text))return'IL';
+  if(/DEPARTMENT\s+OF\s+TRANSPORTATION[\s\S]{0,80}STATE\s+OF\s+OHIO|\bOHIO\s+DEPARTMENT\s+OF\s+TRANSPORTATION/i.test(text))return'OH';
+  return'';
+}
+function permitNumber(text,state){
+  const patterns={
+    UT:[/COMBINED\s+TRANSPORTATION[\s\S]{0,80}?No\.\s*([A-Z0-9-]{6,})/i,/\bNo\.\s*([A-Z0-9-]{6,})/i],
+    CO:[/Single\s+Trip\s+Transport\s+Permit\s*#\s*([A-Z0-9-]+)/i,/PERMIT\s+NUMBER\s+([A-Z0-9-]+)/i],
+    NM:[/Permit\s+Number\s*:\s*([A-Z0-9-]+)/i],
+    TX:[/Permit\s+Number\s*:\s*([A-Z0-9-]+)/i],
+    KS:[/Permit\s*#\s*:?\s*([A-Z0-9-]+)/i],
+    IL:[/Permit\s*:\s*([A-Z0-9-]+)/i,/Permit\s*(?:Number|No\.?|#)?\s*:?\s*([A-Z]?\d{5,})/i],
+    OH:[/Permit\s*(?:Number|No\.?|#)?\s*:?\s*([A-Z]?\d{5,})/i]
+  };
+  for(const pattern of patterns[state]||[]){const match=text.match(pattern);if(match)return match[1];}
+  return text.match(/Permit\s*(?:Number|No\.?|#)?\s*:?\s*([A-Z0-9-]{6,})/i)?.[1]||'';
+}
+function effectiveDates(text,state){
+  const patterns=[
+    new RegExp(`Valid\\s+From\\s*:\\s*(${DATE_TOKEN})[\\s\\S]{0,80}?\\bTo\\s*:\\s*(${DATE_TOKEN})`,'i'),
+    new RegExp(`Date\\s+Effective\\s*:\\s*(${DATE_TOKEN})[\\s\\S]{0,100}?Date\\s+Expires\\s*:\\s*(${DATE_TOKEN})`,'i'),
+    new RegExp(`\\bEffective\\s*:\\s*(${DATE_TOKEN})[\\s\\S]{0,100}?\\bExpiration\\s*:\\s*(${DATE_TOKEN})`,'i'),
+    new RegExp(`\\bStarts\\s*:\\s*(${DATE_TOKEN})[\\s\\S]{0,100}?\\bExpires\\s*:\\s*(${DATE_TOKEN})`,'i'),
+    new RegExp(`Effective\\s+Date\\s*:?\\s*(${DATE_TOKEN})\\s*(?:through|to|–|-)\\s*(${DATE_TOKEN})`,'i')
+  ];
+  if(state==='KS')patterns.push(new RegExp(`Overdimension[\\s\\S]{0,160}?\\$\\d+(?:\\.\\d+)?\\s+(${DATE_TOKEN})\\s+(${DATE_TOKEN})`,'i'));
+  for(const pattern of patterns){const match=text.match(pattern);if(match)return[isoDate(match[1]),isoDate(match[2])];}
+  return['',''];
+}
+function routeStops(text,state){
+  const normalized=compact(text);let origin='',destination='';
+  if(state==='UT'){
+    const pair=normalized.match(/\bFrom\s*:\s*([\s\S]{1,260}?)\s+\bTo\s*:\s*([^\n]{2,260})/i);
+    if(pair){origin=pair[1].replace(/\n/g,' ').trim();destination=pair[2].trim();}
+  }
+  if(!origin)origin=lineValue(normalized,'(?:Route Description:\\s*)?Origin')||lineValue(normalized,'From');
+  if(!destination)destination=lineValue(normalized,'Destination')||lineValue(normalized,'To')||lineValue(normalized,'Final Destination');
+  origin=origin.replace(/^\[Loaded Route Origin:\s*/i,'').replace(/\]\s*$/,'').trim();
+  destination=destination.replace(/^\[Loaded Route Destination:\s*/i,'').replace(/\]\s*$/,'').trim();
+  return{entry:inferBorderEdge(origin,state),exit:inferBorderEdge(destination,state)};
+}
+function restrictionSection(text){
+  const normalized=compact(text),headings=[/\bSpecial Restrictions\b/i,/\bConditions and Restrictions\b/i,/\bRoute Conditions\s*:/i,/\bGeneral Conditions\s*:/i,/\bRestrictions\s*:/i];
+  let index=-1;for(const heading of headings){const found=normalized.search(heading);if(found>=0&&(index<0||found<index))index=found;}
+  return index>=0?clean(normalized.slice(index),20000):'';
+}
+const feetValue=(feet,inches='0')=>String(Math.round((Number(feet)+Number(inches||0)/12)*100)/100);
+function measurement(text,label){
+  const match=text.match(new RegExp(`${label}\\s*:?\\s*(\\d{1,3})\\s*['’]\\s*(?:(\\d{1,2})\\s*(?:\"|''|″))?`,'i'));
+  return match?feetValue(match[1],match[2]):'';
+}
+export function parseLoadProfile(text){
+  const source=compact(text),profile={heightFt:'',widthFt:'',lengthFt:'',weightLb:'',axles:'',axleWeights:'',hazmat:''};
+  profile.widthFt=measurement(source,'(?:Overall|Max\\.?|Maximum)?\\s*Width');
+  profile.heightFt=measurement(source,'(?:Overall|Max\\.?|Maximum)?\\s*Height');
+  profile.lengthFt=measurement(source,'(?:Overall|Max\\.?|Maximum)?\\s*Length');
+  if(!profile.widthFt||!profile.heightFt||!profile.lengthFt){
+    const table=source.match(/\bWidth\s+Length\s+Height\b[\s\S]{0,180}?(\d{1,2})\s*['’]\s*(\d{1,2})?\s*(?:\"|''|″)?\s+(\d{1,3})\s*['’]\s*(\d{1,2})?\s*(?:\"|''|″)?\s+(\d{1,2})\s*['’]\s*(\d{1,2})?\s*(?:\"|''|″)?/i);
+    if(table){profile.widthFt ||= feetValue(table[1],table[2]);profile.lengthFt ||= feetValue(table[3],table[4]);profile.heightFt ||= feetValue(table[5],table[6]);}
+  }
+  const weight=source.match(/(?:Gross\s+Weight|\bGVW|Total\s+Gross)\s*:?\s*([\d,]{4,})/i);if(weight)profile.weightLb=weight[1].replace(/,/g,'');
+  const axles=source.match(/Total\s+Axles\s*:?\s*(\d{1,2})/i);if(axles)profile.axles=axles[1];
+  const evidence=[...source.matchAll(/(?:^|\n)\s*(?:Weights?|Distances?|Spacing)\s*:?\s*([^\n]+)/gi)].map(match=>match[0].trim());profile.axleWeights=clean(evidence.join('\n'),500);
+  const description=source.match(/(?:Load Description|LOAD)\s*:?\s*([^\n]{2,160})/i)?.[1]?.trim()||'';
+  return{profile,description,confidence:Object.fromEntries(Object.entries(profile).map(([key,value])=>[key,{score:value?.length?.75:0,source:value?'Permit text extraction; confirm against original':'Not extracted'}]))};
+}
 
 export function classifyQR(raw) {
   raw = clean(raw, 50000).trim();
@@ -19,21 +101,32 @@ export function classifyQR(raw) {
 }
 
 export function parsePermitText(text) {
-  const p = blankPermit(); p.routeText = clean(text);
-  if (/illinois/i.test(text)) { p.state = 'IL'; p.timeZone = 'America/Chicago'; }
-  else if (/state of ohio|\bohio\b/i.test(text)) { p.state = 'OH'; p.timeZone = 'America/New_York'; }
-  p.number = text.match(/permit\s*(?:number|no\.?|#)?\s*:?\s*([A-Z]?\d{5,})/i)?.[1] || '';
-  const date = s => { const m = s?.match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[1]}-${m[2]}` : ''; };
-  const dates = text.match(/Effective\s*Date\s*:?\s*(\d{2}\/\d{2}\/\d{4})\s*(?:through|to|–|-)\s*(\d{2}\/\d{2}\/\d{4})/i);
-  if (dates) { p.validFrom = date(dates[1]); p.validTo = date(dates[2]); }
-  const entry = text.match(/Border Start:\s*([^\n]+)/i), exit = text.match(/Border End:\s*([^\n]+)/i);
-  if (entry) p.entry.label = entry[1].trim();
-  if (exit) p.exit.label = exit[1].trim();
-  if (/Indiana\s*-?\s*I-94/i.test(p.entry.label)) Object.assign(p.entry, { state: 'IN', road: 'I-94' });
-  if (/Iowa\s*-?\s*I-80/i.test(p.exit.label)) Object.assign(p.exit, { state: 'IA', road: 'I-80' });
-  if (/Origin:\s*I-80 PA Line/i.test(text)) p.entry = { label: 'I-80 PA Line', state: 'PA', road: 'I-80' };
-  p.confidence = Object.fromEntries(['state', 'number', 'validFrom', 'validTo', 'entry', 'exit', 'routeText'].map(field => [field, { score: field === 'routeText' ? .4 : p[field] && (typeof p[field] !== 'object' || p[field].label) ? .75 : 0, source: 'Text extraction; unconfirmed' }]));
+  const source=clean(text,50000),p=blankPermit();p.routeText=clean(source,20000);p.state=detectState(source);p.timeZone=permitTimeZoneForState(p.state);p.number=permitNumber(source,p.state);
+  [p.validFrom,p.validTo]=effectiveDates(source,p.state);Object.assign(p,routeStops(source,p.state));p.restrictions=restrictionSection(source);
+  p.kind=/annual/i.test(source)?'annual':/multiple\s+trips?|multi[- ]trip/i.test(source)?'multi-trip':'single-trip';
+  const load=parseLoadProfile(source);p.limits={};for(const key of['heightFt','widthFt','lengthFt','weightLb','axles'])if(Number(load.profile[key])>0)p.limits[key]=Number(load.profile[key]);
+  p.confidence={
+    state:{score:p.state?.9:0,source:'Issuing-agency text pattern; confirm against original'},
+    number:{score:p.number?.85:0,source:'Permit-number text pattern; confirm against original'},
+    validFrom:{score:p.validFrom?.85:0,source:'Effective-date text pattern; confirm against original'},
+    validTo:{score:p.validTo?.85:0,source:'Expiration-date text pattern; confirm against original'},
+    timeZone:permitTimeZoneConfidence(p.state),
+    entry:{score:p.entry.label?.7:0,source:'Origin text extraction; confirm border state and road'},
+    exit:{score:p.exit.label?.7:0,source:'Destination text extraction; confirm border state and road'},
+    routeText:{score:p.routeText?.4:0,source:'Copied permit text; identify and verify every authorized route instruction'},
+    restrictions:{score:p.restrictions?.4:0,source:'Restriction-section text extraction; verify every page and condition'}
+  };
   return p;
+}
+
+export function parsePermitPacketTexts(texts){
+  const sources=(Array.isArray(texts)?texts:[]).map(value=>clean(value,50000)).filter(value=>value.trim()),trip=blankTrip(),conflicts=[];
+  trip.permits=sources.map(parsePermitText);const ordered=orderPermits(trip.permits);trip.permits=ordered.permits;
+  const loads=sources.map(parseLoadProfile),fields=['heightFt','widthFt','lengthFt','weightLb','axles'];
+  for(const field of fields){const values=[...new Set(loads.map(item=>item.profile[field]).filter(Boolean))];if(values.length)trip.profile[field]=values[0];if(values.length>1)conflicts.push(`${field}: permit texts disagree (${values.join(' / ')}).`);}
+  trip.profile.axleWeights=loads.map(item=>item.profile.axleWeights).find(Boolean)||'';
+  trip.name=`${trip.permits.map(p=>p.state||'?').join(' → ')} permitted load`;trip.departure=trip.permits.map(p=>p.validFrom).filter(Boolean).sort().at(-1)||trip.departure;
+  return{trip,conflicts,issues:ordered.issues,loadDescriptions:[...new Set(loads.map(item=>item.description).filter(Boolean))]};
 }
 
 export async function importPublicQR(url, fetcher = fetch) {
