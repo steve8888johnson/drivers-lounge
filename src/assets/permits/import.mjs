@@ -60,7 +60,18 @@ function routeStops(text,state){
   return{entry:inferBorderEdge(origin,state),exit:inferBorderEdge(destination,state)};
 }
 function restrictionSection(text){
-  const normalized=compact(text),headings=[/\bSpecial Restrictions\b/i,/\bConditions and Restrictions\b/i,/\bRoute Conditions\s*:/i,/\bGeneral Conditions\s*:/i,/\bRestrictions\s*:/i];
+  const normalized=compact(text),headings=[
+    /^\s*Special Restrictions\s*:?\s*$/im,
+    /^\s*Conditions and Restrictions\s*:?\s*$/im,
+    /^\s*Route Conditions\s*:?\s*$/im,
+    /^\s*General Conditions(?:\s*\(Continued\))?\s*:?\s*$/im,
+    /^\s*Restrictions\s*:?\s*$/im,
+    /\bSpecial Restrictions\b/i,
+    /\bConditions and Restrictions\b/i,
+    /\bRoute Conditions\s*:/i,
+    /\bGeneral Conditions\s*:/i,
+    /\bRestrictions\s*:/i
+  ];
   let index=-1;for(const heading of headings){const found=normalized.search(heading);if(found>=0&&(index<0||found<index))index=found;}
   return index>=0?clean(normalized.slice(index),20000):'';
 }
