@@ -64,6 +64,53 @@ function restrictionSection(text){
   let index=-1;for(const heading of headings){const found=normalized.search(heading);if(found>=0&&(index<0||found<index))index=found;}
   return index>=0?clean(normalized.slice(index),20000):'';
 }
+
+const routePageNoise=line=>/^\[PERMIT PDF PAGE \d+\]$/i.test(line)||/^PAGE \d+ OF \d+$/i.test(line);
+const finalDestinationLine=line=>/^Final Destination\s*:/i.test(line)||/^Destination\s*:/i.test(line)||/^\[Loaded Route Destination:/i.test(line);
+function lastIndex(lines,predicate){for(let index=lines.length-1;index>=0;index--)if(predicate(lines[index],index))return index;return-1;}
+function trimRouteLines(lines){
+  const cleaned=lines.map(line=>line.trim()).filter(line=>line&&!routePageNoise(line));
+  while(cleaned.length&&/^(?:ROUTING AND SPECIAL INSTRUCTIONS|AUTHORIZED ROUTE|ROUTE)$/i.test(cleaned[0]))cleaned.shift();
+  return clean(cleaned.join('\n'),20000);
+}
+function sectionThroughFinal(lines,start,endFallback=lines.length){
+  if(start<0)return'';
+  let end=endFallback;
+  for(let index=start+1;index<Math.min(lines.length,endFallback);index++)if(finalDestinationLine(lines[index])){end=index+1;break;}
+  return trimRouteLines(lines.slice(start,end));
+}
+export function extractAuthorizedRouteText(text,state=''){
+  const source=compact(text),lines=source.split('\n'),upper=String(state||'').toUpperCase();let route='';
+  if(upper==='UT'){
+    const start=lines.findIndex(line=>/^ROUTING\s*:/i.test(line));
+    if(start>=0){
+      const first=lines[start].replace(/^ROUTING\s*:\s*/i,'').trim(),body=first?[first]:[];
+      for(let index=start+1;index<lines.length;index++){if(/^\*\*ATTENTION|^RESTRICTIONS\s*:/i.test(lines[index]))break;body.push(lines[index]);}
+      route=trimRouteLines(body);
+    }
+  }else if(upper==='CO'){
+    const start=lastIndex(lines,line=>/^ROUTING AND SPECIAL INSTRUCTIONS$/i.test(line));
+    if(start>=0){let end=lines.length;for(let index=start+1;index<lines.length;index++)if(/^NOTE\s*:|^THIS PERMIT IS NOT VALID/i.test(lines[index])){end=index;break;}route=sectionThroughFinal(lines,start+1,end);}
+  }else if(upper==='NM'){
+    const start=lastIndex(lines,line=>/^ROUTING AND SPECIAL INSTRUCTIONS$/i.test(line));
+    route=sectionThroughFinal(lines,start>=0?start+1:lastIndex(lines,line=>/^Route Summary\s*:/i.test(line)));
+  }else if(upper==='TX'){
+    const start=lastIndex(lines,line=>/^Origin\s*:/i.test(line));
+    route=sectionThroughFinal(lines,start);
+  }else if(upper==='KS'){
+    const heading=lastIndex(lines,line=>/^ROUTE$/i.test(line)),origin=lastIndex(lines,line=>/^Origin\s*:/i.test(line));
+    route=sectionThroughFinal(lines,Math.max(heading>=0?heading+1:-1,origin));
+  }else if(upper==='IL'){
+    const start=lastIndex(lines,line=>/^Authorized Route\s*:/i.test(line));
+    if(start>=0){const first=lines[start].replace(/^Authorized Route\s*:\s*/i,'').trim(),body=first?[first]:[];for(let index=start+1;index<lines.length;index++){if(/^Total (?:Distance|Miles)|^State Mileage/i.test(lines[index]))break;body.push(lines[index]);}route=trimRouteLines(body);}
+  }else if(upper==='OH'){
+    const heading=lastIndex(lines,line=>/^ROUTING AND SPECIAL INSTRUCTIONS$/i.test(line)),origin=lastIndex(lines,line=>/^Origin\s*:/i.test(line));
+    route=sectionThroughFinal(lines,Math.max(heading>=0?heading+1:-1,origin));
+  }
+  if(route)return{text:route,extracted:true};
+  return{text:clean(source,20000),extracted:false};
+}
+
 const feetValue=(feet,inches='0')=>String(Math.round((Number(feet)+Number(inches||0)/12)*100)/100);
 function measurement(text,label){
   const match=text.match(new RegExp(`${label}\\s*:?\\s*(\\d{1,3})\\s*['’]\\s*(?:(\\d{1,2})\\s*(?:\"|''|″))?`,'i'));
@@ -105,7 +152,8 @@ export function classifyQR(raw) {
 }
 
 export function parsePermitText(text) {
-  const source=clean(text,50000),p=blankPermit();p.routeText=clean(source,20000);p.state=detectState(source);p.timeZone=permitTimeZoneForState(p.state);p.number=permitNumber(source,p.state);
+  const source=clean(text,50000),p=blankPermit();p.state=detectState(source);p.timeZone=permitTimeZoneForState(p.state);p.number=permitNumber(source,p.state);
+  const route=extractAuthorizedRouteText(source,p.state);p.routeText=route.text;
   [p.validFrom,p.validTo]=effectiveDates(source,p.state);Object.assign(p,routeStops(source,p.state));p.restrictions=restrictionSection(source);
   p.kind=/annual/i.test(source)?'annual':/multiple\s+trips?|multi[- ]trip/i.test(source)?'multi-trip':'single-trip';
   const load=parseLoadProfile(source);p.limits={};for(const key of['heightFt','widthFt','lengthFt','weightLb','axles'])if(Number(load.profile[key])>0)p.limits[key]=Number(load.profile[key]);
@@ -117,7 +165,7 @@ export function parsePermitText(text) {
     timeZone:permitTimeZoneConfidence(p.state),
     entry:{score:p.entry.label ? .7 : 0,source:'Origin text extraction; confirm border state and road'},
     exit:{score:p.exit.label ? .7 : 0,source:'Destination text extraction; confirm border state and road'},
-    routeText:{score:p.routeText ? .4 : 0,source:'Copied permit text; identify and verify every authorized route instruction'},
+    routeText:{score:p.routeText ? (route.extracted?.78:.35) : 0,source:route.extracted?'Authorized-route section isolated from the permit text; compare every line with the original':'No state-specific route section was isolated; copied permit text retained for manual identification'},
     restrictions:{score:p.restrictions ? .4 : 0,source:'Restriction-section text extraction; verify every page and condition'}
   };
   return p;
