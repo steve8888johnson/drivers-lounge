@@ -1,7 +1,7 @@
 import { cp, rm, mkdir, access, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-const required=['src/index.html','src/dashboard.html','src/navigation.html','src/road-tools.html','src/carriers.html','src/community.html','src/account.html','src/privacy.html','src/terms.html','src/support.html','src/manifest.webmanifest','src/sw.js','src/assets/backend.js','src/assets/rc1-design-system.css','src/assets/rc1-design-system.js','src/assets/carriers-rc2.js','src/assets/community-rc2.js'];
+const required=['src/index.html','src/dashboard.html','src/navigation.html','src/road-tools.html','src/carriers.html','src/community.html','src/account.html','src/privacy.html','src/terms.html','src/support.html','src/manifest.webmanifest','src/sw.js','src/assets/backend.js','src/assets/rc1-design-system.css','src/assets/rc1-design-system.js','src/assets/carriers-rc2.js','src/assets/community-rc2.js','src/assets/permits/pdf-import.mjs','src/assets/permits/pdf-batch-core.mjs','src/assets/permits/pdf-batch-ui.mjs'];
 for(const file of required)await access(file);
 const manifest=JSON.parse(await readFile('src/manifest.webmanifest','utf8'));
 if(manifest.name!=='Drivers Lounge'||manifest.display!=='standalone')throw new Error('Store-ready manifest validation failed.');
@@ -35,6 +35,7 @@ const mobileHeadTags=[
   '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">',
   '<link rel="apple-touch-icon" href="/assets/drivers-lounge-logo.png">'
 ];
+const permitPdfModule='<script type="module" src="/assets/permits/pdf-batch-ui.mjs"></script>';
 
 async function htmlFiles(dir){
   const entries=await readdir(dir,{withFileTypes:true});
@@ -49,7 +50,7 @@ async function htmlFiles(dir){
 
 let enhanced=0;
 for(const file of await htmlFiles('dist')){
-  let html=await readFile(file,'utf8');
+  let html=await readFile(file,'utf8'),changed=false;
   if(!/<head[\s>]/i.test(html)||!/<\/head>/i.test(html))throw new Error(`Missing <head> in ${file}`);
   const additions=mobileHeadTags.filter(tag=>{
     const name=tag.match(/name="([^"]+)"/)?.[1];
@@ -58,12 +59,15 @@ for(const file of await htmlFiles('dist')){
     if(rel)return !new RegExp(`<link[^>]+rel=["']${rel}["']`,'i').test(html);
     return true;
   });
-  if(additions.length){
-    html=html.replace(/<\/head>/i,`${additions.join('')}</head>`);
-    await writeFile(file,html);
+  if(additions.length){html=html.replace(/<\/head>/i,`${additions.join('')}</head>`);changed=true;}
+  if(file.endsWith('permitted-loads.html')&&!html.includes('/assets/permits/pdf-batch-ui.mjs')){
+    if(!/<\/body>/i.test(html))throw new Error('Missing </body> in permitted-loads.html');
+    html=html.replace(/<\/body>/i,`${permitPdfModule}</body>`);changed=true;
   }
+  if(changed)await writeFile(file,html);
   const requiredMarkers=['application-name','mobile-web-app-capable','apple-mobile-web-app-capable','apple-mobile-web-app-title','apple-touch-icon'];
   for(const marker of requiredMarkers)if(!html.includes(marker))throw new Error(`Mobile metadata injection failed for ${file}: ${marker}`);
+  if(file.endsWith('permitted-loads.html')&&!html.includes('/assets/permits/pdf-batch-ui.mjs'))throw new Error('Private permit PDF importer injection failed.');
   enhanced++;
 }
 
