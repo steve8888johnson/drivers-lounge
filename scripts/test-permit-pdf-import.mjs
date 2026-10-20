@@ -43,15 +43,21 @@ test('imported fields invalidate review and preserve original evidence arrays',(
 });
 
 test('packet profile fills blanks but never overwrites conflicting saved values',()=>{
- const trip=blankTrip();trip.name='Untitled permitted load';trip.profile.weightLb='85000';
+ const trip=blankTrip();trip.name='Untitled permitted load';trip.departure='';trip.profile.weightLb='85000';
  const packet={trip:{name:'UT → CO permitted load',departure:'2026-10-19',profile:{heightFt:'13.5',widthFt:'8.5',lengthFt:'75',weightLb:'86002',axles:'6',axleWeights:'',hazmat:''}},conflicts:[]};
  const result=mergeTripProfileFromPacket(trip,packet);
  assert.equal(trip.profile.heightFt,'13.5');assert.equal(trip.profile.weightLb,'85000');assert.equal(trip.name,'UT → CO permitted load');assert.equal(trip.departure,'2026-10-19');assert.match(result.conflicts.join(' '),/weightLb/i);
 });
 
-test('batch summary retains parser conflicts and border-order issues',()=>{
+test('packet import does not silently replace an existing departure decision',()=>{
+ const trip=blankTrip();trip.departure='2026-10-20';
+ mergeTripProfileFromPacket(trip,{trip:{name:'Imported permits',departure:'2026-10-19',profile:{}},conflicts:[]});
+ assert.equal(trip.departure,'2026-10-20');
+});
+
+test('batch summary retains parser conflicts, file-specific warnings and border-order issues',()=>{
  const trip=blankTrip(),ut=blankPermit(),co=blankPermit();ut.state='UT';ut.number='UT-1';ut.exit={label:'US-491 CO Border',state:'CO',road:'US-491'};co.state='CO';co.number='CO-1';co.entry={label:'US-491 UT Line',state:'UT',road:'US-491'};co.exit={label:'US-491 NM Line',state:'NM',road:'US-491'};trip.permits=[co,ut];
  const ordered=orderTripPermits(trip);assert.deepEqual(trip.permits.map(p=>p.state),['UT','CO']);
  const report=summarizePdfBatch([{name:'ut.pdf',permit:ut,qrCodes:['a'],warnings:['review restriction']}],{conflicts:['profile mismatch']},ordered,{conflicts:['saved mismatch']});
- assert.equal(report.fileCount,1);assert.equal(report.qrCount,1);assert.match(report.message,/UT/);assert.deepEqual(report.warnings.sort(),['profile mismatch','review restriction','saved mismatch'].sort());
+ assert.equal(report.fileCount,1);assert.equal(report.qrCount,1);assert.match(report.message,/UT/);assert.deepEqual(report.warnings.sort(),['profile mismatch','saved mismatch','ut.pdf: review restriction'].sort());
 });
