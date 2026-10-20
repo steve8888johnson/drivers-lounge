@@ -10,6 +10,7 @@ const isoDate=value=>{
 };
 const compact=value=>String(value||'').replace(/\r/g,'').replace(/[ \t]+/g,' ').replace(/\n[ \t]+/g,'\n').trim();
 const lineValue=(text,label)=>compact(text).match(new RegExp(`(?:^|\\n)\\s*${label}\\s*:?\\s*([^\\n]+)`,'i'))?.[1]?.trim()||'';
+const inlineValue=(text,label)=>compact(text).match(new RegExp(`\\b${label}\\s*:\\s*([^\\n]+)`,'i'))?.[1]?.trim()||'';
 
 function detectState(text){
   if(/UTAH\s+DEPARTMENT\s+OF\s+TRANSPORTATION|\bUDOT\b/i.test(text))return'UT';
@@ -52,8 +53,8 @@ function routeStops(text,state){
     const pair=normalized.match(/\bFrom\s*:\s*([\s\S]{1,260}?)\s+\bTo\s*:\s*([^\n]{2,260})/i);
     if(pair){origin=pair[1].replace(/\n/g,' ').trim();destination=pair[2].trim();}
   }
-  if(!origin)origin=lineValue(normalized,'(?:Route Description:\\s*)?Origin')||lineValue(normalized,'Border Start')||lineValue(normalized,'From');
-  if(!destination)destination=lineValue(normalized,'Destination')||lineValue(normalized,'Border End')||lineValue(normalized,'To')||lineValue(normalized,'Final Destination');
+  if(!origin)origin=lineValue(normalized,'(?:Route Description:\\s*)?Origin')||inlineValue(normalized,'Border Start')||lineValue(normalized,'From');
+  if(!destination)destination=lineValue(normalized,'Destination')||inlineValue(normalized,'Border End')||lineValue(normalized,'To')||lineValue(normalized,'Final Destination');
   origin=origin.replace(/^\[Loaded Route Origin:\s*/i,'').replace(/\]\s*$/,'').trim();
   destination=destination.replace(/^\[Loaded Route Destination:\s*/i,'').replace(/\]\s*$/,'').trim();
   return{entry:inferBorderEdge(origin,state),exit:inferBorderEdge(destination,state)};
