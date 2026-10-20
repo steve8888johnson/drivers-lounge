@@ -24,9 +24,10 @@ async function saveOpenForms(){
  await waitFor(()=>!layout?.inert,{timeout:12000,message:'Current permit changes could not be saved before PDF import.'});
  if(status?.dataset.error==='true')throw Error(status.textContent||'Current permit changes could not be saved.');
 }
+function storedTripId(){try{return JSON.parse(localStorage.getItem('dl-last-permit-trip')||'null')||'';}catch{return localStorage.getItem('dl-last-permit-trip')||'';}}
 function currentTripId(){
  const picker=$('#trip-picker');if(picker?.value)return picker.value;
- const hash=new URLSearchParams(location.hash.replace(/^#/,''));return hash.get('trip')||localStorage.getItem('dl-last-permit-trip')||'';
+ const hash=new URLSearchParams(location.hash.replace(/^#/,''));return hash.get('trip')||storedTripId();
 }
 async function currentSavedTrip(){
  const id=currentTripId(),trips=await listTrips(),trip=trips.find(item=>item.id===id);if(!trip)throw Error('Create or choose a permitted load before importing PDFs.');
@@ -62,8 +63,8 @@ async function extractFiles(files){
  return records;
 }
 
-async function commitRecords(records){
- await saveOpenForms();const trip=await currentSavedTrip(),texts=records.map(record=>record.pdf.text),packet=parsePermitPacketTexts(texts),claimed=new Set(),entries=[];
+async function commitRecords(records,trip){
+ const texts=records.map(record=>record.pdf.text),packet=parsePermitPacketTexts(texts),claimed=new Set(),entries=[];
  for(const record of records){
   const target=choosePermitTarget(trip,record.permit,claimed);claimed.add(target.id);applyImportedPermit(target,record.permit);record.permit=target;
   for(const raw of record.qrCodes){
@@ -79,9 +80,10 @@ async function commitRecords(records){
 }
 
 async function importPdfs(files){
- if(busy||!files.length)return;setBusy(true);setAppStatus('Reading permit PDFs privately on this device…');
+ if(busy||!files.length)return;
  try{
-  const records=await extractFiles(files),{trip,report}=await commitRecords(records);
+  await saveOpenForms();const trip=await currentSavedTrip();setBusy(true);setAppStatus('Reading permit PDFs privately on this device…');
+  const records=await extractFiles(files),{report}=await commitRecords(records,trip);
   setPanel(report.message,report.warnings.length?'warning':'good');setAppStatus(report.message);
   location.hash=`trip=${encodeURIComponent(trip.id)}&tab=review`;location.reload();
  }catch(error){setPanel(error?.message||'PDF permit import failed. No route was approved.','error');setAppStatus(error?.message||'PDF permit import failed.',true);setBusy(false);}
