@@ -1,3 +1,5 @@
+import{parseIssuedRouteSteps}from'./route-text.mjs';
+
 const clean=value=>String(value??'').replace(/[\u0000-\u001f\u007f]/g,' ').replace(/\s+/g,' ').trim();
 const finite=value=>{const number=Number(value);return Number.isFinite(number)?number:null};
 
@@ -19,7 +21,9 @@ function safeLine(step,index){
 }
 
 export function buildIssuedRouteReview(permit={}){
- const lines=(Array.isArray(permit.steps)?permit.steps:[]).map(safeLine),withGeometry=lines.filter(line=>line.hasGeometry).length;
+ const storedSteps=Array.isArray(permit.steps)?permit.steps:[],textDraft=!storedSteps.length&&clean(permit.routeText)?parseIssuedRouteSteps(permit.routeText,permit.state):null;
+ const sourceSteps=storedSteps.length?storedSteps:textDraft?.steps||[],derivedFromText=!storedSteps.length&&sourceSteps.length>0;
+ const lines=sourceSteps.map(safeLine),withGeometry=lines.filter(line=>line.hasGeometry).length;
  const missingRoad=lines.filter(line=>!line.road).length,missingSourceLine=lines.filter(line=>!line.sourceLine).length;
  const hasOriginal=Array.isArray(permit.documents)&&permit.documents.some(document=>['application/pdf','image/jpeg','image/png','image/webp'].includes(document?.type));
  const permitReviewed=Boolean(permit.review?.hash&&permit.review?.at),geometryReviewed=Boolean(permit.geometryReview?.hash&&permit.geometryReview?.at);
@@ -27,12 +31,13 @@ export function buildIssuedRouteReview(permit={}){
  const issues=[];
  if(!hasOriginal)issues.push('Original permit pages are not stored in this device wallet.');
  if(!lines.length)issues.push('No structured issued-route lines are available.');
+ if(derivedFromText)issues.push('Route lines shown here were derived for parked review from preserved permit text and have not been saved as reviewed maneuvers.');
  if(missingRoad)issues.push(`${missingRoad} route line${missingRoad===1?' has':'s have'} no identified road name.`);
  if(missingSourceLine)issues.push(`${missingSourceLine} route line${missingSourceLine===1?' is':'s are'} not tied to an original source line.`);
  if(lines.length&&withGeometry!==lines.length)issues.push(`${lines.length-withGeometry} of ${lines.length} route lines have no reviewed GPS geometry.`);
  if(!permitReviewed)issues.push('Permit fields and route text have not been confirmed against the original.');
  if(!geometryReviewed)issues.push('Route geometry has not been independently confirmed.');
- const guidanceReady=Boolean(lines.length&&withGeometry===lines.length&&hasOriginal&&permitReviewed&&geometryReviewed&&!missingRoad&&!missingSourceLine);
+ const guidanceReady=Boolean(!derivedFromText&&lines.length&&withGeometry===lines.length&&hasOriginal&&permitReviewed&&geometryReviewed&&!missingRoad&&!missingSourceLine);
  return{
   state:clean(permit.state).toUpperCase(),
   number:clean(permit.number),
@@ -41,7 +46,7 @@ export function buildIssuedRouteReview(permit={}){
   restrictions:clean(permit.restrictions),
   lines,
   counts:{total:lines.length,withGeometry,withoutGeometry:lines.length-withGeometry,missingRoad,missingSourceLine},
-  evidence:{hasOriginal,permitReviewed,geometryReviewed,routeConfidence,stepConfidence},
+  evidence:{hasOriginal,permitReviewed,geometryReviewed,routeConfidence,stepConfidence,derivedFromText},
   guidanceReady,
   status:guidanceReady?'ready':lines.length?'draft':'missing',
   issues
