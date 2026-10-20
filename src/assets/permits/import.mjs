@@ -119,7 +119,9 @@ function measurement(text,label){
 function loadDescription(source){
   const explicit=source.match(/(?:^|\n)\s*Load Description\s*:\s*([^\n]{1,160})/i)?.[1];
   const labeled=source.match(/(?:^|\n)\s*LOAD\s*:\s*([^\n]{1,160})/i)?.[1];
-  return clean((explicit||labeled||'').replace(/\s+From\s*:.*$/i,''),160);
+  return clean((explicit||labeled||'')
+    .replace(/\s+(?:Gross\s+Weight|\bGVW|Total\s+Gross|Overall\s+Width|Max\.?\s+Width)\s*:.*$/i,'')
+    .replace(/\s+From\s*:.*$/i,''),160);
 }
 export function parseLoadProfile(text){
   const source=compact(text),profile={heightFt:'',widthFt:'',lengthFt:'',weightLb:'',axles:'',axleWeights:'',hazmat:''};
@@ -151,9 +153,8 @@ export function classifyQR(raw) {
   } catch { return { kind: 'manual', raw, message: 'Unrecognized or proprietary QR payload retained. Enter the authorized route from the original permit.' }; }
 }
 
-export function parsePermitText(text) {
-  const source=clean(text,50000),p=blankPermit();p.state=detectState(source);p.timeZone=permitTimeZoneForState(p.state);p.number=permitNumber(source,p.state);
-  const route=extractAuthorizedRouteText(source,p.state);p.routeText=route.text;
+function basePermitFromText(text){
+  const source=clean(text,50000),p=blankPermit();p.routeText=clean(source,20000);p.state=detectState(source);p.timeZone=permitTimeZoneForState(p.state);p.number=permitNumber(source,p.state);
   [p.validFrom,p.validTo]=effectiveDates(source,p.state);Object.assign(p,routeStops(source,p.state));p.restrictions=restrictionSection(source);
   p.kind=/annual/i.test(source)?'annual':/multiple\s+trips?|multi[- ]trip/i.test(source)?'multi-trip':'single-trip';
   const load=parseLoadProfile(source);p.limits={};for(const key of['heightFt','widthFt','lengthFt','weightLb','axles'])if(Number(load.profile[key])>0)p.limits[key]=Number(load.profile[key]);
@@ -165,21 +166,35 @@ export function parsePermitText(text) {
     timeZone:permitTimeZoneConfidence(p.state),
     entry:{score:p.entry.label ? .7 : 0,source:'Origin text extraction; confirm border state and road'},
     exit:{score:p.exit.label ? .7 : 0,source:'Destination text extraction; confirm border state and road'},
-    routeText:{score:p.routeText ? (route.extracted?.78:.35) : 0,source:route.extracted?'Authorized-route section isolated from the permit text; compare every line with the original':'No state-specific route section was isolated; copied permit text retained for manual identification'},
+    routeText:{score:p.routeText ? .4 : 0,source:'Copied permit text retained exactly; identify and verify every authorized route instruction'},
     restrictions:{score:p.restrictions ? .4 : 0,source:'Restriction-section text extraction; verify every page and condition'}
   };
   return p;
 }
 
-export function parsePermitPacketTexts(texts){
+export function parsePermitText(text){return basePermitFromText(text);}
+
+export function parsePermitPdfText(text){
+  const p=basePermitFromText(text),route=extractAuthorizedRouteText(text,p.state);
+  if(route.extracted){
+    p.routeText=route.text;
+    p.confidence.routeText={score:.78,source:'Authorized-route section isolated from the local PDF text; compare every line with the original permit before confirmation'};
+  }else p.confidence.routeText={score:p.routeText?.35:0,source:'No state-specific route section was isolated; full copied PDF text retained for manual identification'};
+  return p;
+}
+
+function parsePacketTexts(texts,parser){
   const sources=(Array.isArray(texts)?texts:[]).map(value=>clean(value,50000)).filter(value=>value.trim()),trip=blankTrip(),conflicts=[];
-  trip.permits=sources.map(parsePermitText);const ordered=orderPermits(trip.permits);trip.permits=ordered.permits;
+  trip.permits=sources.map(parser);const ordered=orderPermits(trip.permits);trip.permits=ordered.permits;
   const loads=sources.map(parseLoadProfile),fields=['heightFt','widthFt','lengthFt','weightLb','axles'];
   for(const field of fields){const values=[...new Set(loads.map(item=>item.profile[field]).filter(Boolean))];if(values.length)trip.profile[field]=values[0];if(values.length>1)conflicts.push(`${field}: permit texts disagree (${values.join(' / ')}).`);}
   trip.profile.axleWeights=loads.map(item=>item.profile.axleWeights).find(Boolean)||'';
   trip.name=`${trip.permits.map(p=>p.state||'?').join(' → ')} permitted load`;trip.departure=trip.permits.map(p=>p.validFrom).filter(Boolean).sort().at(-1)||trip.departure;
   return{trip,conflicts,issues:ordered.issues,loadDescriptions:[...new Set(loads.map(item=>item.description).filter(Boolean))]};
 }
+
+export function parsePermitPacketTexts(texts){return parsePacketTexts(texts,parsePermitText);}
+export function parsePermitPdfPacketTexts(texts){return parsePacketTexts(texts,parsePermitPdfText);}
 
 export async function importPublicQR(url, fetcher = fetch) {
   const classification = classifyQR(url);
