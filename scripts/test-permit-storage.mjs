@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import 'fake-indexeddb/auto';
 import { blankTrip, blankPermit } from '../src/assets/permits/core.mjs';
-import { saveTrip, listTrips, addDocument, getDocument, verifyWallet, importPacket, deleteTrip } from '../src/assets/permits/storage.mjs';
+import { saveTrip, listTrips, addDocument, addDocumentsAtomic, getDocument, verifyWallet, importPacket, deleteTrip } from '../src/assets/permits/storage.mjs';
 
 test('wallet atomically saves originals, imports safely, strips review and deletes only its trip', async () => {
   const trip = blankTrip(), permit = blankPermit(); trip.permits.push(permit);
@@ -19,4 +19,15 @@ test('wallet atomically saves originals, imports safely, strips review and delet
   await deleteTrip(trip); assert.equal(await getDocument(permit.documents[0].id), undefined); await verifyWallet(imported);
   imported.permits[0].documents[0].id = 'missing'; await assert.rejects(() => verifyWallet(imported), /missing/);
   await saveTrip(imported); await deleteTrip(imported);
+});
+
+test('multi-PDF originals commit in one wallet transaction and reject the entire invalid batch',async()=>{
+  const trip=blankTrip(),ut=blankPermit(),co=blankPermit();ut.state='UT';co.state='CO';trip.permits.push(ut,co);
+  const utFile=new File(['%PDF-1.7 ut'],'ut.pdf',{type:'application/pdf'}),coFile=new File(['%PDF-1.7 co'],'co.pdf',{type:'application/pdf'});
+  const records=await addDocumentsAtomic(trip,[{permit:ut,file:utFile},{permit:co,file:coFile}]);
+  assert.equal(records.length,2);assert.equal(ut.documents.length,1);assert.equal(co.documents.length,1);await verifyWallet(trip);
+  const before=ut.documents.length;
+  await assert.rejects(()=>addDocumentsAtomic(trip,[{permit:ut,file:new File(['bad'],'bad.html',{type:'text/html'})},{permit:co,file:new File(['%PDF'],'later.pdf',{type:'application/pdf'})}]),/Choose/);
+  assert.equal(ut.documents.length,before);assert.equal(co.documents.length,1);
+  await deleteTrip(trip);
 });
