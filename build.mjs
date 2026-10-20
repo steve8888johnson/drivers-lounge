@@ -1,7 +1,7 @@
 import { cp, rm, mkdir, access, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-const required=['src/index.html','src/dashboard.html','src/navigation.html','src/road-tools.html','src/carriers.html','src/community.html','src/account.html','src/privacy.html','src/terms.html','src/support.html','src/manifest.webmanifest','src/sw.js','src/assets/backend.js','src/assets/rc1-design-system.css','src/assets/rc1-design-system.js','src/assets/carriers-rc2.js','src/assets/community-rc2.js','src/assets/permits/pdf-import.mjs','src/assets/permits/pdf-batch-core.mjs','src/assets/permits/pdf-batch-ui.mjs','src/assets/permits/route-text.mjs','src/assets/permits/official-provider.mjs','src/assets/permits/route-review.mjs','src/assets/permits/route-review-ui.mjs'];
+const required=['src/index.html','src/dashboard.html','src/navigation.html','src/road-tools.html','src/carriers.html','src/community.html','src/account.html','src/privacy.html','src/terms.html','src/support.html','src/manifest.webmanifest','src/sw.js','src/assets/backend.js','src/assets/rc1-design-system.css','src/assets/rc1-design-system.js','src/assets/carriers-rc2.js','src/assets/community-rc2.js','src/assets/permits/pdf-import.mjs','src/assets/permits/pdf-batch-core.mjs','src/assets/permits/pdf-batch-ui.mjs','src/assets/permits/route-text.mjs','src/assets/permits/official-provider.mjs','src/assets/permits/route-review.mjs','src/assets/permits/route-review-ui.mjs','src/assets/permits/permit-guidance-guard.mjs'];
 for(const file of required)await access(file);
 const manifest=JSON.parse(await readFile('src/manifest.webmanifest','utf8'));
 if(manifest.name!=='Drivers Lounge'||manifest.display!=='standalone')throw new Error('Store-ready manifest validation failed.');
@@ -37,7 +37,8 @@ const mobileHeadTags=[
 ];
 const permitModules=[
   '<script type="module" src="/assets/permits/pdf-batch-ui.mjs"></script>',
-  '<script type="module" src="/assets/permits/route-review-ui.mjs"></script>'
+  '<script type="module" src="/assets/permits/route-review-ui.mjs"></script>',
+  '<script type="module" src="/assets/permits/permit-guidance-guard.mjs"></script>'
 ];
 
 async function htmlFiles(dir){
