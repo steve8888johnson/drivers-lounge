@@ -39,7 +39,8 @@ export function inferBorderState(label,ownState=''){
 }
 
 export function inferBorderEdge(label,ownState=''){
- return{label:String(label||'').replace(/\s+/g,' ').trim(),state:inferBorderState(label,ownState),road:canonicalPermitRoad(label)};
+ const normalizedLabel=String(label||'').replace(/\s+/g,' ').trim(),state=inferBorderState(normalizedLabel,ownState);
+ return{label:normalizedLabel,state,road:state?canonicalPermitRoad(normalizedLabel):''};
 }
 
 export function permitTimeZoneConfidence(state){return permitTimeZoneNeedsReview(state)?{score:.45,source:'Default state time zone; route crosses or may cross a split-zone state. Confirm from the original permit and route.'}:{score:.7,source:'Default issuing-state time zone; confirm against the original permit.'};}
