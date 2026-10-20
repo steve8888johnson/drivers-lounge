@@ -1,7 +1,7 @@
 import test from'node:test';
 import assert from'node:assert/strict';
 import{buildMaster}from'../src/assets/permits/core.mjs';
-import{extractAuthorizedRouteText,parsePermitPacketTexts,parsePermitText}from'../src/assets/permits/import.mjs';
+import{extractAuthorizedRouteText,parsePermitPdfPacketTexts,parsePermitPdfText}from'../src/assets/permits/import.mjs';
 import{canonicalPermitRoad}from'../src/assets/permits/state-meta.mjs';
 import{
  unit179PermitPacketTexts,utahPermitText,coloradoPermitText,newMexicoPermitText,texasPermitText
@@ -23,8 +23,8 @@ test('state-specific permit extraction isolates the issued route instead of fill
  }
 });
 
-test('four-state packet imports in geographic order with exact border-road continuity',()=>{
- const packet=parsePermitPacketTexts([...unit179PermitPacketTexts].reverse());
+test('four-state PDF packet imports in geographic order with exact border-road continuity',()=>{
+ const packet=parsePermitPdfPacketTexts([...unit179PermitPacketTexts].reverse());
  assert.deepEqual(packet.trip.permits.map(permit=>permit.state),['UT','CO','NM','TX']);
  assert.deepEqual(packet.trip.permits.map(permit=>permit.number),['9000000001','26SW0000001','NM26000001','261019000001']);
  assert.deepEqual(packet.issues,[]);
@@ -40,7 +40,7 @@ test('four-state packet imports in geographic order with exact border-road conti
 });
 
 test('packet load profile agrees across permits and preserves the final Texas route page',()=>{
- const packet=parsePermitPacketTexts(unit179PermitPacketTexts);
+ const packet=parsePermitPdfPacketTexts(unit179PermitPacketTexts);
  assert.deepEqual(packet.trip.profile,{heightFt:'13.5',widthFt:'8.5',lengthFt:'75',weightLb:'86002',axles:'6',axleWeights:packet.trip.profile.axleWeights,hazmat:''});
  assert.ok(packet.trip.profile.axleWeights.length>0);
  assert.equal(packet.trip.departure,'2026-10-19');
@@ -54,7 +54,7 @@ test('packet load profile agrees across permits and preserves the final Texas ro
 });
 
 test('important restrictions remain evidence while complex curfews are not silently converted into a simple movement window',()=>{
- const nm=parsePermitText(newMexicoPermitText),tx=parsePermitText(texasPermitText),co=parsePermitText(coloradoPermitText);
+ const nm=parsePermitPdfText(newMexicoPermitText),tx=parsePermitPdfText(texasPermitText),co=parsePermitPdfText(coloradoPermitText);
  assert.match(nm.restrictions,/25 mph/);
  assert.match(nm.restrictions,/65 miles per hour/);
  assert.match(nm.restrictions,/Front Escort Required/);
@@ -67,8 +67,8 @@ test('important restrictions remain evidence while complex curfews are not silen
  assert.match(co.restrictions,/load-posted structures/i);
 });
 
-test('an imported packet remains fail-closed until originals, manual confirmation and reviewed geometry are present',()=>{
- const packet=parsePermitPacketTexts(unit179PermitPacketTexts),trip=packet.trip;
+test('an imported PDF packet remains fail-closed until originals, manual confirmation and reviewed geometry are present',()=>{
+ const packet=parsePermitPdfPacketTexts(unit179PermitPacketTexts),trip=packet.trip;
  trip.acknowledged=true;
  const master=buildMaster(trip,{geometry:true});
  assert.equal(master.ready,false);
