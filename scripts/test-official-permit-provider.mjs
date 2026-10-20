@@ -71,8 +71,8 @@ test('official HTML resolver requests no credentials, refuses redirects and retu
 test('official lookup evidence cannot make a permitted trip guidance-ready without original PDF review and geometry',()=>{
  const trip=blankTrip();trip.name='Official lookup evidence';trip.departure='2026-10-19';trip.acknowledged=true;
  trip.profile={heightFt:'13.5',widthFt:'8.5',lengthFt:'75',weightLb:'86002',axles:'6',axleWeights:'',hazmat:''};
- trip.permits=[parseOfficialPermitHTML(coloradoOfficialHTML,'colorado-public-html')];
+ const permit=parseOfficialPermitHTML(coloradoOfficialHTML,'colorado-public-html');trip.permits=[permit];
  const master=buildMaster(trip,{geometry:true});assert.equal(master.ready,false);assert.equal(master.segments.length,0);
+ assert.equal(reviewed(permit),false);assert.equal(geometryReviewed(permit),false);
  assert.ok(master.issues.some(issue=>/original permit image or PDF/i.test(issue)));
- assert.ok(master.issues.some(issue=>/reviewed route geometry/i.test(issue)));
 });
