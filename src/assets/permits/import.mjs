@@ -81,7 +81,7 @@ export function parseLoadProfile(text){
   const axles=source.match(/Total\s+Axles\s*:?\s*(\d{1,2})/i);if(axles)profile.axles=axles[1];
   const evidence=[...source.matchAll(/(?:^|\n)\s*(?:Weights?|Distances?|Spacing)\s*:?\s*([^\n]+)/gi)].map(match=>match[0].trim());profile.axleWeights=clean(evidence.join('\n'),500);
   const description=source.match(/(?:Load Description|LOAD)\s*:?\s*([^\n]{2,160})/i)?.[1]?.trim()||'';
-  return{profile,description,confidence:Object.fromEntries(Object.entries(profile).map(([key,value])=>[key,{score:value?.length?.75:0,source:value?'Permit text extraction; confirm against original':'Not extracted'}]))};
+  return{profile,description,confidence:Object.fromEntries(Object.entries(profile).map(([key,value])=>[key,{score:value ? .75 : 0,source:value?'Permit text extraction; confirm against original':'Not extracted'}]))};
 }
 
 export function classifyQR(raw) {
