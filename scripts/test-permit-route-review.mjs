@@ -3,6 +3,7 @@ import assert from'node:assert/strict';
 import{parsePermitPdfText}from'../src/assets/permits/import.mjs';
 import{parseIssuedRouteSteps}from'../src/assets/permits/route-text.mjs';
 import{buildIssuedRouteReview}from'../src/assets/permits/route-review.mjs';
+import{exampleTrip}from'../src/assets/permits/examples.mjs';
 import{texasPermitText}from'./fixtures/permit-packet-unit-179.mjs';
 
 test('PDF-extracted route lines are visible for parked review but cannot imply guidance readiness',()=>{
@@ -22,6 +23,24 @@ test('review model exposes source mileage and permit-line evidence without modif
  assert.equal(exit.distanceMiles,61.5);assert.equal(exit.cumulativeMiles,61.7);assert.equal(exit.estimatedTime,'00:56');
  assert.ok(exit.sourceLine>=1);assert.equal(exit.sourceKind,'permit-table-row');
  assert.equal(exit.hasGeometry,false);assert.equal(exit.pointCount,0);
+});
+
+test('preserved Illinois example text produces parked-review lines but never approved guidance',()=>{
+ const illinois=exampleTrip().permits.find(permit=>permit.state==='IL'),review=buildIssuedRouteReview(illinois);
+ assert.ok(review.counts.total>=4);
+ assert.equal(review.evidence.derivedFromText,true);
+ assert.equal(review.guidanceReady,false);
+ assert.equal(review.counts.withGeometry,0);
+ assert.ok(review.lines.some(line=>/fork keep left/i.test(line.instruction)));
+ assert.ok(review.lines.some(line=>/exit 5 keep right/i.test(line.instruction)));
+ assert.ok(review.issues.some(issue=>/derived for parked review/i.test(issue)));
+});
+
+test('cropped Ohio photo evidence remains visibly missing rather than inventing route instructions',()=>{
+ const ohio=exampleTrip().permits.find(permit=>permit.state==='OH'),review=buildIssuedRouteReview(ohio);
+ assert.equal(review.guidanceReady,false);
+ assert.equal(review.counts.withGeometry,0);
+ assert.ok(review.issues.some(issue=>/No structured issued-route lines/i.test(issue)));
 });
 
 test('guidance-ready review requires originals, permit confirmation and geometry on every line',()=>{
