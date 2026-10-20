@@ -1,5 +1,6 @@
 import{sanitizePermit}from'./core.mjs';
 import{classifyQR,importPublicQR,parsePermitPdfPacketTexts,parsePermitPdfText,scanImage}from'./import.mjs';
+import{parseIssuedRouteSteps}from'./route-text.mjs';
 import{addDocumentsAtomic,listTrips,saveTrip}from'./storage.mjs';
 import{extractPermitPdf,validatePermitPdf}from'./pdf-import.mjs';
 import{applyImportedPermit,choosePermitTarget,mergeTripProfileFromPacket,orderTripPermits,summarizePdfBatch}from'./pdf-batch-core.mjs';
@@ -58,7 +59,12 @@ async function extractFiles(files){
  for(let index=0;index<files.length;index++){
   const file=files[index];setPanel(`Reading ${index+1} of ${files.length}: ${file.name} · nothing is being uploaded…`,'working');
   const pdf=await extractPermitPdf(file,{scanPage:blob=>scanImage(blob),onProgress:progress=>setPanel(`${file.name} · ${progress.stage==='qr'?'Scanning QR':'Reading text'} · page ${progress.pageNumber} of ${progress.pageCount}`,'working')});
-  const permit=parsePermitPdfText(pdf.text);records.push({file,name:file.name,pdf,permit,qrCodes:pdf.qrCodes,warnings:[...pdf.warnings]});
+  const permit=parsePermitPdfText(pdf.text),routeDraft=parseIssuedRouteSteps(permit.routeText,permit.state);
+  if(routeDraft.steps.length){
+   permit.steps=routeDraft.steps;
+   permit.confidence.routeSteps={score:.62,source:'Draft maneuvers parsed from issued permit route text; no GPS geometry or detour was created'};
+  }
+  records.push({file,name:file.name,pdf,permit,routeDraft,qrCodes:pdf.qrCodes,warnings:[...pdf.warnings,...routeDraft.warnings]});
  }
  return records;
 }
@@ -101,7 +107,7 @@ function installStyles(){
 async function mount(){
  await waitFor(()=>$('#import-originals')&&$('#trip-picker'),{timeout:15000,message:'Permit wallet controls did not load.'});installStyles();
  const existing=$('#pdf-batch-import');if(existing)return;
- const wrapper=document.createElement('section');wrapper.id='pdf-batch-import';wrapper.className='pdf-batch-import';wrapper.innerHTML=`<strong>Import a complete multi-state PDF packet</strong><p>Select each state's original permit PDF together. Text and QR pages are read in this browser; the app does not upload the PDF contents to the Drivers Lounge server. Extraction is a draft—not verification.</p><label class="file-button full">Read permit PDFs locally<input id="import-permit-pdfs-local" type="file" multiple accept="application/pdf,.pdf"></label><p>Each original is stored in this device's private permit wallet. Every state route, restriction page, date, dimension and border handoff remains unconfirmed until you review it.</p><div id="pdf-batch-status" class="pdf-batch-status" hidden role="status" aria-live="polite"></div>`;
+ const wrapper=document.createElement('section');wrapper.id='pdf-batch-import';wrapper.className='pdf-batch-import';wrapper.innerHTML=`<strong>Import a complete multi-state PDF packet</strong><p>Select each state's original permit PDF together. Text and QR pages are read in this browser; the app does not upload the PDF contents to the Drivers Lounge server. Extraction is a draft—not verification.</p><label class="file-button full">Read permit PDFs locally<input id="import-permit-pdfs-local" type="file" multiple accept="application/pdf,.pdf"></label><p>Each original is stored in this device's private permit wallet. Route-table lines become draft maneuvers for review, but no GPS geometry, connector road, detour or legal approval is created. Every state route, restriction page, date, dimension and border handoff remains unconfirmed until you review it.</p><div id="pdf-batch-status" class="pdf-batch-status" hidden role="status" aria-live="polite"></div>`;
  const anchor=$('#import-originals').closest('label');anchor.insertAdjacentElement('afterend',wrapper);
  $('#import-permit-pdfs-local').addEventListener('change',event=>{const files=[...event.target.files];event.target.value='';void importPdfs(files);});
  const report=priorReport();if(report){const panel=$('#pdf-batch-status');panel.hidden=false;panel.dataset.tone=report.warnings?.length?'warning':'good';panel.innerHTML=reportMarkup(report);}
