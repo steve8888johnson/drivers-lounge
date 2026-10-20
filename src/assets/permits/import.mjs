@@ -52,8 +52,8 @@ function routeStops(text,state){
     const pair=normalized.match(/\bFrom\s*:\s*([\s\S]{1,260}?)\s+\bTo\s*:\s*([^\n]{2,260})/i);
     if(pair){origin=pair[1].replace(/\n/g,' ').trim();destination=pair[2].trim();}
   }
-  if(!origin)origin=lineValue(normalized,'(?:Route Description:\\s*)?Origin')||lineValue(normalized,'From');
-  if(!destination)destination=lineValue(normalized,'Destination')||lineValue(normalized,'To')||lineValue(normalized,'Final Destination');
+  if(!origin)origin=lineValue(normalized,'(?:Route Description:\\s*)?Origin')||lineValue(normalized,'Border Start')||lineValue(normalized,'From');
+  if(!destination)destination=lineValue(normalized,'Destination')||lineValue(normalized,'Border End')||lineValue(normalized,'To')||lineValue(normalized,'Final Destination');
   origin=origin.replace(/^\[Loaded Route Origin:\s*/i,'').replace(/\]\s*$/,'').trim();
   destination=destination.replace(/^\[Loaded Route Destination:\s*/i,'').replace(/\]\s*$/,'').trim();
   return{entry:inferBorderEdge(origin,state),exit:inferBorderEdge(destination,state)};
@@ -68,19 +68,22 @@ function measurement(text,label){
   const match=text.match(new RegExp(`${label}\\s*:?\\s*(\\d{1,3})\\s*['’]\\s*(?:(\\d{1,2})\\s*(?:\"|''|″))?`,'i'));
   return match?feetValue(match[1],match[2]):'';
 }
+function loadDescription(source){
+  const explicit=source.match(/(?:^|\n)\s*Load Description\s*:\s*([^\n]{1,160})/i)?.[1];
+  const labeled=source.match(/(?:^|\n)\s*LOAD\s*:\s*([^\n]{1,160})/i)?.[1];
+  return clean((explicit||labeled||'').replace(/\s+From\s*:.*$/i,''),160);
+}
 export function parseLoadProfile(text){
   const source=compact(text),profile={heightFt:'',widthFt:'',lengthFt:'',weightLb:'',axles:'',axleWeights:'',hazmat:''};
-  profile.widthFt=measurement(source,'(?:Overall|Max\\.?|Maximum)?\\s*Width');
-  profile.heightFt=measurement(source,'(?:Overall|Max\\.?|Maximum)?\\s*Height');
-  profile.lengthFt=measurement(source,'(?:Overall|Max\\.?|Maximum)?\\s*Length');
-  if(!profile.widthFt||!profile.heightFt||!profile.lengthFt){
-    const table=source.match(/\bWidth\s+Length\s+Height\b[\s\S]{0,180}?(\d{1,2})\s*['’]\s*(\d{1,2})?\s*(?:\"|''|″)?\s+(\d{1,3})\s*['’]\s*(\d{1,2})?\s*(?:\"|''|″)?\s+(\d{1,2})\s*['’]\s*(\d{1,2})?\s*(?:\"|''|″)?/i);
-    if(table){profile.widthFt ||= feetValue(table[1],table[2]);profile.lengthFt ||= feetValue(table[3],table[4]);profile.heightFt ||= feetValue(table[5],table[6]);}
-  }
+  const table=source.match(/\bWidth\s+Length\s+Height\b[\s\S]{0,180}?(\d{1,2})\s*['’]\s*(\d{1,2})?\s*(?:\"|''|″)?\s+(\d{1,3})\s*['’]\s*(\d{1,2})?\s*(?:\"|''|″)?\s+(\d{1,2})\s*['’]\s*(\d{1,2})?\s*(?:\"|''|″)?/i);
+  if(table){profile.widthFt=feetValue(table[1],table[2]);profile.lengthFt=feetValue(table[3],table[4]);profile.heightFt=feetValue(table[5],table[6]);}
+  profile.widthFt ||= measurement(source,'(?:Overall|Max\\.?|Maximum)?\\s*Width');
+  profile.heightFt ||= measurement(source,'(?:Overall|Max\\.?|Maximum)?\\s*Height');
+  profile.lengthFt ||= measurement(source,'(?:Overall|Max\\.?|Maximum)?\\s*Length');
   const weight=source.match(/(?:Gross\s+Weight|\bGVW|Total\s+Gross)\s*:?\s*([\d,]{4,})/i);if(weight)profile.weightLb=weight[1].replace(/,/g,'');
   const axles=source.match(/Total\s+Axles\s*:?\s*(\d{1,2})/i);if(axles)profile.axles=axles[1];
   const evidence=[...source.matchAll(/(?:^|\n)\s*(?:Weights?|Distances?|Spacing)\s*:?\s*([^\n]+)/gi)].map(match=>match[0].trim());profile.axleWeights=clean(evidence.join('\n'),500);
-  const description=source.match(/(?:Load Description|LOAD)\s*:?\s*([^\n]{2,160})/i)?.[1]?.trim()||'';
+  const description=loadDescription(source);
   return{profile,description,confidence:Object.fromEntries(Object.entries(profile).map(([key,value])=>[key,{score:value ? .75 : 0,source:value?'Permit text extraction; confirm against original':'Not extracted'}]))};
 }
 
