@@ -20,7 +20,10 @@ test('New Mexico inline QR imports identity and dates without retaining private 
  assert.equal(result.permit.complete,false);
  const serialized=JSON.stringify(result);
  for(const privateValue of['PRIVATE CARRIER','5551234567','PRIVATEVIN','PRIVATEPLATE','0000000'])assert.equal(serialized.includes(privateValue),false);
- assert.match(result.message,/authorized route.*must come from the complete original permit/i);
+ assert.match(result.message,/complete original permit is still required/i);
+ assert.match(result.message,/not the authorized route/i);
+ assert.ok(result.safeSummary.includes('Permit time zone: Mountain'));
+ assert.ok(result.safeSummary.includes('Permit type: Single trip'));
 });
 
 test('inline metadata parser rejects vague text, URLs and unsupported permit prefixes',()=>{
