@@ -16,6 +16,10 @@ const lineMap=raw=>{
  return entries;
 };
 const first=(map,keys)=>keys.map(key=>map.get(key)).find(Boolean)||'';
+const timeZoneName=value=>({
+ 'America/New_York':'Eastern','America/Chicago':'Central','America/Denver':'Mountain','America/Phoenix':'Arizona','America/Los_Angeles':'Pacific','America/Anchorage':'Alaska','Pacific/Honolulu':'Hawaii'
+}[value]||value||'Unconfirmed');
+const permitKindName=value=>value==='single-trip'?'Single trip':value==='multi-trip'?'Multiple trips':value==='annual'?'Annual / other':value||'Unconfirmed';
 
 export function parseInlinePermitMetadataQR(raw){
  const source=String(raw||'');if(!source.trim()||source.length>MAX_QR_LENGTH||/^https?:/i.test(source.trim()))return null;
@@ -35,8 +39,8 @@ export function parseInlinePermitMetadataQR(raw){
  };
  return{
   kind:'permit-metadata',permit,
-  safeSummary:[`${state} permit ${permit.number}`,start?`Effective ${start}`:'',end?`Expires ${end}`:'',type?clean(type).slice(0,80):''].filter(Boolean),
-  message:'Permit identity and dates were read from the QR. The authorized route, restrictions, dimensions, axle data and escort requirements were not in this QR and must come from the complete original permit.'
+  safeSummary:[`${state} permit ${permit.number}`,start?`Effective ${start}`:'',end?`Expires ${end}`:'',`Permit time zone: ${timeZoneName(permit.timeZone)}`,`Permit type: ${permitKindName(permit.kind)}`].filter(Boolean),
+  message:'The complete original permit is still required. This QR supplied identity and dates only—not the authorized route, restrictions, dimensions, axle data, escort requirements or permission to move.'
  };
 }
 
@@ -51,7 +55,7 @@ export function authenticatedOfficialPermitReference(raw){
   const normalized=new URL('https://utcview.com/Permit/index');normalized.searchParams.set('permit_number',number);normalized.searchParams.set('iftaOnly','No');
   return{
    kind:'official-authenticated',state:'UT',permitNumber:number,url:normalized.href,
-   message:'Utah permit lookup detected. The issuing system requires an authorized account, so Drivers Lounge will retain the reference but will not sign in, send stored credentials or bypass access controls. Import the complete original PDF for the route and restrictions.'
+   message:'Utah permit lookup detected. The issuing system requires an authorized account, so Drivers Lounge will retain the sanitized reference but will not sign in, send stored credentials or bypass access controls. Import the complete original PDF for the route and restrictions.'
   };
  }catch{return null;}
 }
