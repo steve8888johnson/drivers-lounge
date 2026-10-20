@@ -6,8 +6,10 @@ import{publicPermitReference,publicProviderURL}from'../src/assets/permits/provid
 import{resolvePermitURL}from'../api/permit-route.mjs';
 import{coloradoOfficialHTML,texasOfficialHTML}from'./fixtures/official-permit-html.mjs';
 
-const coloradoURL='https://coopr.codot.gov/Mobile/Lookup.aspx?PermitID=1966694';
-const texasHttpURL='http://txpros.txdmv.gov/PermitDetails02.aspx?PermitID=15397987&QRUSER=1';
+// Arbitrary numeric lookup IDs exercise URL validation without committing any
+// identifier from a user's actual permit packet.
+const coloradoURL='https://coopr.codot.gov/Mobile/Lookup.aspx?PermitID=1234567';
+const texasHttpURL='http://txpros.txdmv.gov/PermitDetails02.aspx?PermitID=7654321&QRUSER=1';
 
 test('official permit URLs use exact host, path and query allowlists',()=>{
  const co=publicOfficialPermitReference(coloradoURL),tx=publicOfficialPermitReference(texasHttpURL);
@@ -16,14 +18,14 @@ test('official permit URLs use exact host, path and query allowlists',()=>{
  assert.equal(publicPermitReference(coloradoURL).format,'colorado-public-html');
  assert.equal(publicProviderURL(texasHttpURL).protocol,'https:');
  for(const unsafe of[
-  'https://coopr.codot.gov.evil.test/Mobile/Lookup.aspx?PermitID=1966694',
-  'http://coopr.codot.gov/Mobile/Lookup.aspx?PermitID=1966694',
-  'https://coopr.codot.gov:444/Mobile/Lookup.aspx?PermitID=1966694',
-  'https://coopr.codot.gov/Mobile/Lookup.aspx?PermitID=1966694&next=http://127.0.0.1',
-  'https://user:pass@coopr.codot.gov/Mobile/Lookup.aspx?PermitID=1966694',
-  'https://txpros.txdmv.gov.evil.test/PermitDetails02.aspx?PermitID=15397987&QRUSER=1',
-  'https://txpros.txdmv.gov/PermitDetails02.aspx?PermitID=15397987&QRUSER=0',
-  'https://txpros.txdmv.gov/PermitDetails02.aspx?PermitID=15397987&QRUSER=1&redirect=elsewhere',
+  'https://coopr.codot.gov.evil.test/Mobile/Lookup.aspx?PermitID=1234567',
+  'http://coopr.codot.gov/Mobile/Lookup.aspx?PermitID=1234567',
+  'https://coopr.codot.gov:444/Mobile/Lookup.aspx?PermitID=1234567',
+  'https://coopr.codot.gov/Mobile/Lookup.aspx?PermitID=1234567&next=http://127.0.0.1',
+  'https://user:pass@coopr.codot.gov/Mobile/Lookup.aspx?PermitID=1234567',
+  'https://txpros.txdmv.gov.evil.test/PermitDetails02.aspx?PermitID=7654321&QRUSER=1',
+  'https://txpros.txdmv.gov/PermitDetails02.aspx?PermitID=7654321&QRUSER=0',
+  'https://txpros.txdmv.gov/PermitDetails02.aspx?PermitID=7654321&QRUSER=1&redirect=elsewhere',
   'https://txpros.txdmv.gov/PermitDetails02.aspx?PermitID=abc&QRUSER=1'
  ])assert.equal(publicOfficialPermitReference(unsafe),null,unsafe);
 });
