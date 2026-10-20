@@ -27,7 +27,9 @@ function parseTableLine(line,lineNumber){
  };
 }
 function parseNumberedLine(line,lineNumber){
- const match=clean(line).match(/^\d+[.)]\s*(.+)$/);if(!match)return null;
+ // A numbered instruction must have whitespace after the delimiter. This prevents
+ // decimal mileage such as "0.00" or "69.40" from being misread as item 0 or 69.
+ const match=clean(line).match(/^\d+[.)]\s+(.+)$/);if(!match)return null;
  const text=match[1].replace(/^\[(?:state|toll)\]\s*/i,'').trim();
  if(!text||/^border (?:start|end)/i.test(text))return null;
  return{text,road:roadFromInstruction(text),lane:'',routeLine:lineNumber,points:[],source:{kind:'permit-numbered-line',original:clean(line)}};
