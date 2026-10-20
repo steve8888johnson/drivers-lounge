@@ -29,10 +29,20 @@ function applyField(form,name,value,conflicts){
  if(current&&current!==incoming){conflicts.push(`${name} already contains ${current}`);return false;}
  if(current===incoming)return false;element.value=incoming;dispatch(element,'input');dispatch(element,'change');return true;
 }
+function ensureTimeZone(permit){
+ const form=$('#permit-form'),element=form?.elements?.timeZone,value=String(permit?.timeZone||'').trim();if(!element||!value||String(element.value||'').trim())return false;
+ element.value=value;
+ if(element.value!==value){const option=[...element.options].find(item=>item.value===value||item.textContent.trim().toLowerCase()==='mountain');if(option)option.selected=true;}
+ if(String(element.value||'').trim()){dispatch(element,'input');dispatch(element,'change');return true;}return false;
+}
+function stabilizeMetadata(permit){
+ for(const delay of[0,60,240,600])setTimeout(()=>ensureTimeZone(permit),delay);
+}
 function applyPermitMetadata(supplement,card){
  const form=$('#permit-form');if(!form)return;
  const permit=supplement.permit,conflicts=[];let changed=false;
- for(const key of['state','number','validFrom','validTo','timeZone','kind'])changed=applyField(form,key,permit?.[key],conflicts)||changed;
+ for(const key of['state','number','validFrom','validTo','kind'])changed=applyField(form,key,permit?.[key],conflicts)||changed;
+ changed=ensureTimeZone(permit)||changed;stabilizeMetadata(permit);
  if(form.elements.complete){form.elements.complete.checked=false;dispatch(form.elements.complete,'change');}
  addSummary(card,supplement,conflicts);
  const confidence=$('#confidence');if(confidence)confidence.textContent='QR metadata is a draft only. The complete original permit must supply and confirm the route, restrictions, border handoffs, dimensions, axle data and any escort or travel-window requirements.';
