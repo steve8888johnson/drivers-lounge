@@ -1,5 +1,5 @@
 import{sanitizePermit}from'./core.mjs';
-import{classifyQR,importPublicQR,parsePermitPacketTexts,parsePermitText,scanImage}from'./import.mjs';
+import{classifyQR,importPublicQR,parsePermitPdfPacketTexts,parsePermitPdfText,scanImage}from'./import.mjs';
 import{addDocumentsAtomic,listTrips,saveTrip}from'./storage.mjs';
 import{extractPermitPdf,validatePermitPdf}from'./pdf-import.mjs';
 import{applyImportedPermit,choosePermitTarget,mergeTripProfileFromPacket,orderTripPermits,summarizePdfBatch}from'./pdf-batch-core.mjs';
@@ -58,13 +58,13 @@ async function extractFiles(files){
  for(let index=0;index<files.length;index++){
   const file=files[index];setPanel(`Reading ${index+1} of ${files.length}: ${file.name} · nothing is being uploaded…`,'working');
   const pdf=await extractPermitPdf(file,{scanPage:blob=>scanImage(blob),onProgress:progress=>setPanel(`${file.name} · ${progress.stage==='qr'?'Scanning QR':'Reading text'} · page ${progress.pageNumber} of ${progress.pageCount}`,'working')});
-  const permit=parsePermitText(pdf.text);records.push({file,name:file.name,pdf,permit,qrCodes:pdf.qrCodes,warnings:[...pdf.warnings]});
+  const permit=parsePermitPdfText(pdf.text);records.push({file,name:file.name,pdf,permit,qrCodes:pdf.qrCodes,warnings:[...pdf.warnings]});
  }
  return records;
 }
 
 async function commitRecords(records,trip){
- const texts=records.map(record=>record.pdf.text),packet=parsePermitPacketTexts(texts),claimed=new Set(),entries=[];
+ const texts=records.map(record=>record.pdf.text),packet=parsePermitPdfPacketTexts(texts),claimed=new Set(),entries=[];
  for(const record of records){
   const target=choosePermitTarget(trip,record.permit,claimed);claimed.add(target.id);applyImportedPermit(target,record.permit);record.permit=target;
   for(const raw of record.qrCodes){
