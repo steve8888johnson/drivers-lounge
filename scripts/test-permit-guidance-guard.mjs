@@ -43,7 +43,10 @@ test('visible route checks keep guidance locked even when the route badge says r
 test('multiple failures are retained instead of being hidden behind a single acknowledgment',()=>{
  const decision=permitGuidanceDecision({tripExists:true});
  assert.equal(decision.allowed,false);
- assert.ok(decision.reasons.length>=5);
- assert.match(decision.reasons.join(' '),/original permit PDF or image/i);
- assert.match(decision.reasons.join(' '),/curfews, escorts, restrictions and travel conditions/i);
+ assert.deepEqual(decision.reasons,[
+  'Permit order, confirmations, restrictions or route geometry still need review.',
+  'Every original permit PDF or image must be present in this device wallet.',
+  'The current route review is not marked ready for departure checks.',
+  'Confirm current curfews, escorts, restrictions and travel conditions for this departure.'
+ ]);
 });
