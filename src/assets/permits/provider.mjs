@@ -1,17 +1,20 @@
 import { blankPermit, clean, pointOK } from './core.mjs';
 import { inferBorderEdge, permitTimeZoneConfidence, permitTimeZoneForState } from './state-meta.mjs';
+import { publicOfficialPermitReference } from './official-provider.mjs';
 
 // Read-only public references observed on issued permits. No credentials,
 // returned apiKey, remote scripts, SSML, alternative routes or navigation UI are used.
-export function publicProviderURL(raw) {
+export function publicPermitReference(raw) {
+  const official = publicOfficialPermitReference(raw); if (official) return official;
   try {
     const u = new URL(raw);
     if (u.protocol !== 'https:' || u.port || u.username || u.password || u.search || u.hash) return null;
-    if (u.hostname === 'permitnav.promiles.com' && /^\/permitnav3\/api\/Navigation\/json\/[A-Z]{2}\/PROD\/\d+\/\d+\/t$/.test(u.pathname)) return u;
-    if (u.hostname === 'webapps.dot.illinois.gov' && /^\/ITAP\/api\/v1\/permits\/[A-Z0-9-]+\/[A-Z0-9]+\/route\/navigation$/.test(u.pathname)) return u;
+    if (u.hostname === 'permitnav.promiles.com' && /^\/permitnav3\/api\/Navigation\/json\/[A-Z]{2}\/PROD\/\d+\/\d+\/t$/.test(u.pathname)) return { url: u, format: 'promiles-public-json' };
+    if (u.hostname === 'webapps.dot.illinois.gov' && /^\/ITAP\/api\/v1\/permits\/[A-Z0-9-]+\/[A-Z0-9]+\/route\/navigation$/.test(u.pathname)) return { url: u, format: 'illinois-public-json' };
   } catch { /* Unknown references stay in the manual workflow. */ }
   return null;
 }
+export function publicProviderURL(raw) { return publicPermitReference(raw)?.url || null; }
 export function decodePolyline(encoded, precision) {
   if (typeof encoded !== 'string' || encoded.length > 2000000 || ![5, 6].includes(precision)) throw Error('Unsupported provider geometry.');
   let index = 0, lat = 0, lng = 0; const points = [], factor = 10 ** precision;
