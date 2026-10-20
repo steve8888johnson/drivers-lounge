@@ -4,10 +4,12 @@ import{listTrips,verifyWallet}from'./storage.mjs';
 const $=selector=>document.querySelector(selector);
 let refreshTimer=null,refreshToken=0,lastDecision={allowed:false,reasons:['Permit guidance has not been evaluated.']},walletCache={key:'',verified:false,error:''};
 
-export function permitGuidanceDecision({tripExists=false,masterReady=false,walletVerified=false,conditionsChecked=false,routeReadinessReady=false,visibleIssueCount=0,guidanceRunning=false,completed=false}={}){
+export function permitGuidanceDecision({tripExists=false,masterReady=false,walletVerified=false,conditionsChecked=false,routeReadinessReady=false,visibleIssueCount=0,guidanceRunning=false,completed=false,pageBusy=false,statusError=false}={}){
  const reasons=[];
  if(!tripExists)reasons.push('Choose a saved permitted load.');
  if(completed)reasons.push('This single-trip movement is already marked complete.');
+ if(pageBusy)reasons.push('A permit or wallet operation is still in progress.');
+ if(statusError)reasons.push('Resolve the current permit-workflow error before guidance.');
  if(!masterReady)reasons.push('Permit order, confirmations, restrictions or route geometry still need review.');
  if(!walletVerified)reasons.push('Every original permit PDF or image must be present in this device wallet.');
  if(!routeReadinessReady)reasons.push('The current route review is not marked ready for departure checks.');
@@ -36,12 +38,21 @@ function installStyles(){
  .permit-guidance-interlock{margin:14px 0;padding:12px 14px;border:2px solid #d94a5a;border-radius:11px;background:#4e1520;color:#fff4f5;font-size:12px;font-weight:850;line-height:1.45}.permit-guidance-interlock strong{display:block;margin-bottom:3px;letter-spacing:.04em}.permit-guidance-interlock[hidden]{display:none}#panel-route[data-permit-guidance-locked="true"] #start-guidance{pointer-events:none;opacity:.42;filter:saturate(.35)}
  `;document.head.append(style);
 }
+function setAttributeIfChanged(element,name,value){if(element?.getAttribute(name)!==value)element?.setAttribute(name,value);}
+function setDisabledIfChanged(element,value){if(element&&element.disabled!==value)element.disabled=value;}
 function applyDecision(decision,extra=''){
  lastDecision=decision;const button=$('#start-guidance'),route=$('#panel-route'),banner=ensureBanner();if(!button||!route)return;
- route.dataset.permitGuidanceLocked=decision.allowed?'false':'true';button.dataset.permitSafetyInterlock=decision.allowed?'clear':'blocked';button.disabled=!decision.allowed;
- if(decision.allowed){button.removeAttribute('aria-disabled');button.removeAttribute('title');if(banner)banner.hidden=true;return;}
- button.setAttribute('aria-disabled','true');button.title='Resolve every permit-route safety check before starting guidance.';
- if(banner){banner.hidden=false;banner.replaceChildren();const strong=document.createElement('strong');strong.textContent='GUIDANCE LOCKED';const text=document.createElement('span');text.textContent=`${decision.reasons[0]||'Permit guidance is not ready.'}${extra?` ${extra}`:''}`;banner.append(strong,text);}
+ const locked=!decision.allowed;
+ setAttributeIfChanged(route,'data-permit-guidance-locked',locked?'true':'false');
+ setAttributeIfChanged(button,'data-permit-safety-interlock',locked?'blocked':'clear');
+ setDisabledIfChanged(button,locked);
+ if(!locked){button.removeAttribute('aria-disabled');button.removeAttribute('title');if(banner&&!banner.hidden)banner.hidden=true;return;}
+ setAttributeIfChanged(button,'aria-disabled','true');button.title='Resolve every permit-route safety check before starting guidance.';
+ if(banner){
+  if(banner.hidden)banner.hidden=false;
+  const message=`${decision.reasons[0]||'Permit guidance is not ready.'}${extra?` ${extra}`:''}`;
+  if(banner.dataset.message!==message){banner.dataset.message=message;banner.replaceChildren();const strong=document.createElement('strong');strong.textContent='GUIDANCE LOCKED';const text=document.createElement('span');text.textContent=message;banner.append(strong,text);}
+ }
 }
 async function refresh(){
  const token=++refreshToken,button=$('#start-guidance');if(!button)return;
@@ -52,7 +63,8 @@ async function refresh(){
   tripExists:Boolean(trip),masterReady:Boolean(master.ready),walletVerified:Boolean(wallet.verified),
   conditionsChecked:Boolean($('#conditions-checked')?.checked),routeReadinessReady:/^Ready for departure checks$/i.test($('#route-readiness')?.textContent?.trim()||''),
   visibleIssueCount:document.querySelectorAll('#route-checks .issue-list li').length,
-  guidanceRunning:Boolean($('#stop-guidance')&&!$('#stop-guidance').disabled),completed:Boolean(trip?.completedAt)
+  guidanceRunning:Boolean($('#stop-guidance')&&!$('#stop-guidance').disabled),completed:Boolean(trip?.completedAt),
+  pageBusy:Boolean($('.layout')?.inert),statusError:$('#status')?.dataset.error==='true'
  });
  applyDecision(decision,wallet.error&&!wallet.verified?wallet.error:'');
 }
@@ -61,11 +73,15 @@ function blockUnsafeClick(event){
  if(lastDecision.allowed)return;event.preventDefault();event.stopImmediatePropagation();applyDecision(lastDecision);
  const status=$('#nav-status');if(status)status.textContent=lastDecision.reasons.join(' ');
 }
+function observeReadiness(){
+ const targets=[$('#route-readiness'),$('#route-checks'),$('#status'),$('#stop-guidance'),$('.layout')].filter(Boolean);
+ for(const target of targets)new MutationObserver(schedule).observe(target,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['disabled','data-error','inert','class']});
+}
 function mount(){
  if(!$('#panel-route')||!$('#start-guidance')||!$('#trip-picker')){setTimeout(mount,100);return;}
  installStyles();ensureBanner();$('#start-guidance').addEventListener('click',blockUnsafeClick,true);$('#conditions-checked')?.addEventListener('change',schedule);$('#trip-picker').addEventListener('change',()=>{walletCache={key:'',verified:false,error:''};schedule();});
  document.addEventListener('click',event=>{if(event.target.closest?.('[data-tab="route"],#save-trip,#confirm-permit,#confirm-geometry,#finish-trip,#cache-trip'))setTimeout(schedule,80);});
- new MutationObserver(schedule).observe($('#panel-route'),{childList:true,subtree:true,attributes:true,attributeFilter:['disabled','hidden','class','data-permit-guidance-locked']});
+ observeReadiness();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')schedule();});
  setInterval(()=>{if(!$('#panel-route')?.hidden)schedule();},1000);schedule();
 }
 if(typeof document!=='undefined'){if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();}
