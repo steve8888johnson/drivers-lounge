@@ -1,5 +1,6 @@
 import{sanitizePermit}from'./core.mjs';
 import{classifyQR,importPublicQR,parsePermitPdfPacketTexts,parsePermitPdfText,scanImage}from'./import.mjs';
+import{publicProviderURL}from'./provider.mjs';
 import{parseIssuedRouteSteps}from'./route-text.mjs';
 import{addDocumentsAtomic,listTrips,saveTrip}from'./storage.mjs';
 import{extractPermitPdf,validatePermitPdf}from'./pdf-import.mjs';
@@ -38,7 +39,8 @@ async function currentSavedTrip(){
 function exactDuplicate(permit,file){return(permit.documents||[]).some(document=>document.type==='application/pdf'&&document.name===file.name&&Number(document.size)===Number(file.size));}
 
 async function providerPermitFromQr(raw){
- const classification=classifyQR(raw);
+ const knownProvider=publicProviderURL(raw);
+ const classification=knownProvider?{kind:'public-provider',raw,url:knownProvider.href,message:'Allowlisted public issued-permit reference detected.'}:classifyQR(raw);
  if(classification.kind==='encoded-route')return{permit:classification.permit,warning:''};
  if(classification.kind==='public-provider'){
   try{
