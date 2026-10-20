@@ -106,15 +106,15 @@ export function parsePermitText(text) {
   p.kind=/annual/i.test(source)?'annual':/multiple\s+trips?|multi[- ]trip/i.test(source)?'multi-trip':'single-trip';
   const load=parseLoadProfile(source);p.limits={};for(const key of['heightFt','widthFt','lengthFt','weightLb','axles'])if(Number(load.profile[key])>0)p.limits[key]=Number(load.profile[key]);
   p.confidence={
-    state:{score:p.state?.9:0,source:'Issuing-agency text pattern; confirm against original'},
-    number:{score:p.number?.85:0,source:'Permit-number text pattern; confirm against original'},
-    validFrom:{score:p.validFrom?.85:0,source:'Effective-date text pattern; confirm against original'},
-    validTo:{score:p.validTo?.85:0,source:'Expiration-date text pattern; confirm against original'},
+    state:{score:p.state ? .9 : 0,source:'Issuing-agency text pattern; confirm against original'},
+    number:{score:p.number ? .85 : 0,source:'Permit-number text pattern; confirm against original'},
+    validFrom:{score:p.validFrom ? .85 : 0,source:'Effective-date text pattern; confirm against original'},
+    validTo:{score:p.validTo ? .85 : 0,source:'Expiration-date text pattern; confirm against original'},
     timeZone:permitTimeZoneConfidence(p.state),
-    entry:{score:p.entry.label?.7:0,source:'Origin text extraction; confirm border state and road'},
-    exit:{score:p.exit.label?.7:0,source:'Destination text extraction; confirm border state and road'},
-    routeText:{score:p.routeText?.4:0,source:'Copied permit text; identify and verify every authorized route instruction'},
-    restrictions:{score:p.restrictions?.4:0,source:'Restriction-section text extraction; verify every page and condition'}
+    entry:{score:p.entry.label ? .7 : 0,source:'Origin text extraction; confirm border state and road'},
+    exit:{score:p.exit.label ? .7 : 0,source:'Destination text extraction; confirm border state and road'},
+    routeText:{score:p.routeText ? .4 : 0,source:'Copied permit text; identify and verify every authorized route instruction'},
+    restrictions:{score:p.restrictions ? .4 : 0,source:'Restriction-section text extraction; verify every page and condition'}
   };
   return p;
 }
