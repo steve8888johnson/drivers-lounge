@@ -1,4 +1,3 @@
-import './qr-metadata-ui.mjs';
 import { blankTrip } from './core.mjs';
 import { parsePermitText } from './import.mjs';
 
