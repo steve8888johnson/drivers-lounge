@@ -1,10 +1,11 @@
 import test from'node:test';
 import assert from'node:assert/strict';
 import{authenticatedOfficialPermitReference,classifyPermitQrSupplement,parseInlinePermitMetadataQR}from'../src/assets/permits/qr-metadata.mjs';
-import{mergePermitQrSupplement,safeQrEvidence}from'../src/assets/permits/qr-metadata-wallet.mjs';
+import{choosePermitForQrSupplement,mergePermitQrSupplement,safeQrEvidence}from'../src/assets/permits/qr-metadata-wallet.mjs';
 
 const metadata=`Permit No: NM-SAMPLE-179\r\nStart Date: 10/19/2026\r\nEnd Date: 10/23/2026\r\nPermit Type: Single Trip OW Load\r\nCompany Name: PRIVATE CARRIER\r\nPhone: 5551234567\r\nUSDOT #: 0000000\r\nVIN #: PRIVATEVIN\r\nPlate No: PRIVATEPLATE\r\nTruck Make: KW\r\nTruck Year: 2025`;
-const blank=()=>({state:'',number:'',kind:'single-trip',validFrom:'',validTo:'',timeZone:'',entry:{label:'',state:'',road:''},exit:{label:'',state:'',road:''},routeText:'',restrictions:'',complete:false,qr:[],confidence:{},review:{key:'old'},geometryReview:{key:'old'}});
+const utahRaw='https://utcview.com/Permit/index?VIN=SENSITIVEVIN&Plate=SENSITIVEPLATE&permit_number=1234567890&State=UT&iftaOnly=No';
+const blank=(id='blank')=>({id,state:'',number:'',kind:'single-trip',validFrom:'',validTo:'',timeZone:'',entry:{label:'',state:'',road:''},exit:{label:'',state:'',road:''},routeText:'',restrictions:'',complete:false,qr:[],documents:[],steps:[],confidence:{},review:{key:'old'},geometryReview:{key:'old'}});
 
 test('New Mexico inline QR imports identity and dates without retaining private vehicle or contact data',()=>{
  const result=parseInlinePermitMetadataQR(metadata);
@@ -31,15 +32,17 @@ test('inline metadata parser rejects vague text, URLs and unsupported permit pre
 });
 
 test('Utah lookup is recognized as authenticated evidence without retaining VIN or plate query values',()=>{
- const raw='https://utcview.com/Permit/index?VIN=SENSITIVEVIN&Plate=SENSITIVEPLATE&permit_number=1234567890&State=UT&iftaOnly=No';
- const result=authenticatedOfficialPermitReference(raw);
+ const result=authenticatedOfficialPermitReference(utahRaw);
  assert.equal(result.kind,'official-authenticated');
  assert.equal(result.state,'UT');
  assert.equal(result.permitNumber,'1234567890');
+ assert.equal(result.timeZone,'America/Denver');
  assert.match(result.message,/will not sign in.*bypass access controls/i);
+ assert.match(result.message,/complete original permit is still required/i);
  assert.equal(result.url.includes('SENSITIVEVIN'),false);
  assert.equal(result.url.includes('SENSITIVEPLATE'),false);
  assert.equal(result.url,'https://utcview.com/Permit/index?permit_number=1234567890&iftaOnly=No');
+ assert.ok(result.safeSummary.includes('Remote import and sign-in disabled'));
 });
 
 test('authenticated lookup allowlist rejects lookalike hosts, extra parameters, credentials and insecure URLs',()=>{
@@ -68,6 +71,7 @@ test('metadata wallet merge persists exact dates, Mountain time and single-trip 
  assert.equal(permit.routeText,'');assert.equal(permit.restrictions,'');assert.equal(permit.entry.label,'');assert.equal(permit.exit.label,'');
  assert.equal(permit.complete,false);assert.equal(permit.review,null);assert.equal(permit.geometryReview,null);
  assert.equal(permit.qr.length,1);assert.equal(permit.qr[0],safeQrEvidence(supplement));
+ assert.match(permit.qr[0],/Complete original permit: required/);
  const stored=JSON.stringify(permit);
  for(const privateValue of['PRIVATE CARRIER','5551234567','PRIVATEVIN','PRIVATEPLATE','0000000'])assert.equal(stored.includes(privateValue),false);
 });
@@ -82,11 +86,30 @@ test('wallet merge never silently overwrites conflicting permit identity or date
  assert.ok(result.conflicts.some(value=>value.startsWith('timeZone ')));
 });
 
-test('authenticated Utah wallet evidence stores only the sanitized official reference',()=>{
- const raw='https://utcview.com/Permit/index?VIN=SENSITIVEVIN&Plate=SENSITIVEPLATE&permit_number=1234567890&State=UT&iftaOnly=No';
- const supplement=authenticatedOfficialPermitReference(raw),permit=blank();
+test('scanning a different state creates a separate permit instead of corrupting the selected state record',()=>{
+ const nmSupplement=parseInlinePermitMetadataQR(metadata),utSupplement=authenticatedOfficialPermitReference(utahRaw),nm=blank('nm');
+ mergePermitQrSupplement(nm,nmSupplement);const trip={permits:[nm]};
+ const choice=choosePermitForQrSupplement(trip,'nm',utSupplement);
+ assert.equal(choice.created,true);assert.notEqual(choice.permit,nm);assert.equal(trip.permits.length,2);
+ mergePermitQrSupplement(choice.permit,utSupplement);
+ assert.deepEqual(trip.permits.map(permit=>[permit.state,permit.number]),[['NM','NM-SAMPLE-179'],['UT','1234567890']]);
+ assert.deepEqual([nm.validFrom,nm.validTo,nm.timeZone],['2026-10-19','2026-10-23','America/Denver']);
+ assert.equal(choice.permit.routeText,'');assert.equal(choice.permit.restrictions,'');assert.equal(choice.permit.complete,false);
+});
+
+test('repeated scans reuse the exact permit record and a compatible blank selection is filled',()=>{
+ const supplement=parseInlinePermitMetadataQR(metadata),existing=blank('existing');mergePermitQrSupplement(existing,supplement);
+ let trip={permits:[existing]};let choice=choosePermitForQrSupplement(trip,'missing',supplement);
+ assert.equal(choice.permit,existing);assert.equal(choice.reused,'exact');assert.equal(trip.permits.length,1);
+ const empty=blank('empty');trip={permits:[empty]};choice=choosePermitForQrSupplement(trip,'empty',supplement);
+ assert.equal(choice.permit,empty);assert.equal(choice.reused,'selected');assert.equal(choice.created,false);
+});
+
+test('authenticated Utah wallet evidence stores only sanitized reference data and blocks remote actions',()=>{
+ const supplement=authenticatedOfficialPermitReference(utahRaw),permit=blank();
  mergePermitQrSupplement(permit,supplement);
- assert.equal(permit.state,'UT');assert.equal(permit.number,'1234567890');assert.equal(permit.complete,false);
- assert.deepEqual(permit.qr,['https://utcview.com/Permit/index?permit_number=1234567890&iftaOnly=No']);
+ assert.equal(permit.state,'UT');assert.equal(permit.number,'1234567890');assert.equal(permit.timeZone,'America/Denver');assert.equal(permit.complete,false);
+ assert.equal(permit.qr.length,1);assert.match(permit.qr[0],/Sanitized reference: https:\/\/utcview\.com\/Permit\/index\?permit_number=1234567890&iftaOnly=No/);
+ assert.match(permit.qr[0],/Remote import or sign-in: disabled/);assert.match(permit.qr[0],/Complete original permit: required/);
  assert.equal(JSON.stringify(permit).includes('SENSITIVEVIN'),false);assert.equal(JSON.stringify(permit).includes('SENSITIVEPLATE'),false);
 });
