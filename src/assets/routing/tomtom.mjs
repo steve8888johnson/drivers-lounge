@@ -53,8 +53,9 @@ const coordinateOf=point=>{
  return Number.isFinite(lat)&&Number.isFinite(lng)?[lat,lng]:null;
 };
 const pointIndexFor=(instruction,geometry)=>{
- const explicit=integer(instruction?.pointIndex,-1);
- if(explicit>=0&&explicit<geometry.length)return explicit;
+ const value=instruction?.pointIndex;
+ const explicit=(typeof value==='number'||(typeof value==='string'&&value.trim()!==''))?Number(value):NaN;
+ if(Number.isInteger(explicit)&&explicit>=0&&explicit<geometry.length)return explicit;
  const coordinate=coordinateOf(instruction?.point);if(!coordinate)return 0;
  const nearest=nearestGeometryDistance(coordinate,geometry);
  return Number.isFinite(nearest?.index)?nearest.index:0;

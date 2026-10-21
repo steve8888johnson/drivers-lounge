@@ -10,10 +10,10 @@ This file is the human-readable, ready-to-paste companion to `rc2-store-metadata
 Drivers Lounge
 
 **Subtitle**  
-Free tools and community for commercial drivers
+Truck routes and driver tools
 
 **Promotional text**  
-Built by drivers for drivers. Plan truck trips, check road intelligence, research carriers, connect with the driver community, and save useful offers without charging drivers for core services.
+Built by drivers for drivers. Plan truck trips, review restrictions, connect with other drivers, and find useful road tools. Core driver services stay free.
 
 **Description**  
 Drivers Lounge is a driver-first toolkit for commercial drivers.
@@ -48,7 +48,7 @@ Business
 Drivers Lounge
 
 **Short description**  
-Driver-first navigation planning, road intelligence, carrier research and community tools.
+Plan truck routes, review restrictions, and connect with fellow drivers.
 
 **Full description**  
 Drivers Lounge brings practical commercial-driver tools together in one driver-first app.

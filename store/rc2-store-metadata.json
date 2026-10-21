@@ -1,9 +1,13 @@
 {
   "release": "2.0.0-rc.2",
   "appName": "Drivers Lounge",
-  "subtitle": "Free tools and community for commercial drivers",
-  "shortDescription": "Driver-first navigation planning, road intelligence, carrier research, community tools and saved offers.",
-  "categories": ["Navigation", "Business", "Social"],
+  "subtitle": "Truck routes and driver tools",
+  "shortDescription": "Plan truck routes, review restrictions, and connect with fellow drivers.",
+  "categories": [
+    "Navigation",
+    "Business",
+    "Social"
+  ],
   "urls": {
     "privacy": "/privacy",
     "terms": "/terms",
@@ -53,5 +57,7 @@
     "physical iOS/Android device testing",
     "store screenshots and final artwork",
     "explicit production promotion approval"
-  ]
+  ],
+  "promotionalText": "Built by drivers for drivers. Plan truck trips, review restrictions, connect with other drivers, and find useful road tools. Core driver services stay free.",
+  "keywords": "truck driver,trucking,truck navigation,road reports,carrier reviews,CDL,truck stops,community"
 }

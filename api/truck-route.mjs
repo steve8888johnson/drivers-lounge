@@ -4,7 +4,7 @@ import{normalizeTomTomRoute,toTomTomVehicleParams}from'../src/assets/routing/tom
 import{applyResolvedStopAudit}from'../src/assets/routing/stop-quality.mjs';
 
 const send=(res,status,body)=>{res.setHeader('Cache-Control','private, no-store');res.setHeader('Content-Type','application/json');res.statusCode=status;res.end(JSON.stringify(body));};
-const validCoordinate=value=>Number.isFinite(Number(value))&&Math.abs(Number(value))<=180;
+const validCoordinate=value=>(typeof value==='number'||(typeof value==='string'&&value.trim()!==''))&&Number.isFinite(Number(value))&&Math.abs(Number(value))<=180;
 const envKey=name=>String(process.env[name]||'').trim();
 const providerLabel=id=>id==='tomtom'?'TomTom Routing API v1':'HERE Routing API v8';
 const makeProvider=(id,key)=>key?{id:id==='tomtom'?'tomtom':'here',key:String(key).trim(),label:providerLabel(id)}:null;
@@ -63,6 +63,7 @@ async function resolveTomTomStop(query,provider,fetcher){
 
 export async function resolveTruckStop(stop,providerOrKey,fetcher=fetch){
  if(stop&&validCoordinate(stop.lat)&&validCoordinate(stop.lng)&&Math.abs(Number(stop.lat))<=90)return{lat:Number(stop.lat),lng:Number(stop.lng),label:String(stop.label||`${stop.lat}, ${stop.lng}`).slice(0,180),resultType:'coordinate',confidence:1};
+ if(stop&&typeof stop==='object'&&('lat'in stop||'lng'in stop))throw providerError('Enter valid latitude and longitude for the selected stop.',{statusCode:422,retryable:false});
  const query=String(stop?.address||stop?.label||stop||'').trim();
  if(query.length<3||query.length>300)throw providerError('Enter a more specific origin and destination.',{statusCode:422,retryable:false});
  const provider=typeof providerOrKey==='string'?makeProvider('here',providerOrKey):providerOrKey;

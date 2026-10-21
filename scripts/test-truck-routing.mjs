@@ -1,7 +1,7 @@
 import test from'node:test';import assert from'node:assert/strict';
 import{decodeFlexiblePolyline,normalizeHereRoute,normalizeTruckProfile,toHereVehicleParams,validateTruckProfile}from'../src/assets/routing/core.mjs';
 import{normalizeTomTomRoute,toTomTomVehicleParams}from'../src/assets/routing/tomtom.mjs';
-import{buildHereRouteURL,buildTomTomRouteURL,calculateTruckRoute}from'../api/truck-route.mjs';
+import{buildHereRouteURL,buildTomTomRouteURL,calculateTruckRoute,resolveTruckStop}from'../api/truck-route.mjs';
 
 const alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 function encUnsigned(value){let output='';do{let chunk=value&31;value=Math.floor(value/32);if(value)chunk|=32;output+=alphabet[chunk]}while(value);return output}
@@ -53,3 +53,29 @@ test('HERE server adapter geocodes, routes and returns only normalized data',asy
 test('TomTom fallback adapter geocodes, routes and exposes limitations',async()=>{let calls=0;const fetcher=async url=>{calls++;const href=String(url);if(href.includes('/search/2/geocode/')){const isDallas=decodeURIComponent(href).includes('Dallas');return new Response(JSON.stringify({results:[{type:'Geography',id:isDallas?'dallas':'houston',matchConfidence:{score:.99},address:{freeformAddress:isDallas?'Dallas, TX':'Houston, TX'},position:isDallas?{lat:32.7767,lon:-96.797}:{lat:29.7604,lon:-95.3698}}]}),{status:200,headers:{'content-type':'application/json'}})}return new Response(JSON.stringify(tomtomPayload),{status:200,headers:{'content-type':'application/json'}})};const result=await calculateTruckRoute({origin:{address:'Dallas, TX'},destination:{address:'Houston, TX'},profile},{fetcher,apiKey:'test-key',provider:'tomtom'});assert.equal(calls,3);assert.equal(result.route.provider,'TomTom Routing API v1');assert.equal(result.origin.label,'Dallas, TX');assert.ok(result.profileWarnings.some(value=>/fallback receives/i.test(value)));assert.equal(JSON.stringify(result).includes('test-key'),false)});
 
 test('server adapter fails closed without provider credentials',async()=>{await assert.rejects(()=>calculateTruckRoute({origin:{address:'Dallas'},destination:{address:'Houston'},profile},{apiKey:''}),/not configured/i)});
+
+test('missing or invalid coordinate input is rejected before provider lookup',async()=>{
+ let calls=0;const fetcher=async()=>{calls++;throw Error('Unexpected provider lookup')};
+ for(const stop of[{lat:null,lng:null},{lat:'',lng:''},{lat:' ',lng:' '},{lat:false,lng:true},{lat:91,lng:0},{lat:0,lng:181},{lat:32.7},{lng:-96.8}]){
+  await assert.rejects(()=>resolveTruckStop(stop,{id:'tomtom',key:'test'},fetcher),/valid latitude and longitude/i);
+ }
+ assert.equal(calls,0);
+});
+test('valid zero coordinates remain usable',async()=>{
+ const stop=await resolveTruckStop({lat:0,lng:0},null);
+ assert.equal(stop.lat,0);assert.equal(stop.lng,0);
+});
+test('TomTom instructions without pointIndex resolve to their coordinate',()=>{
+ const payload=structuredClone(tomtomPayload);
+ for(const step of payload.routes[0].guidance.instructions)delete step.pointIndex;
+ const route=normalizeTomTomRoute(payload,profile);
+ assert.deepEqual(route.steps.map(step=>step.geometryIndex),[0,1,2]);
+});
+test('invalid TomTom pointIndex does not move later maneuvers to route start',()=>{
+ for(const value of[null,'',false,-1,0.4,999]){
+  const payload=structuredClone(tomtomPayload);
+  payload.routes[0].guidance.instructions[1].pointIndex=value;
+  const route=normalizeTomTomRoute(payload,profile);
+  assert.equal(route.steps[1].geometryIndex,1);
+ }
+});
