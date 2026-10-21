@@ -53,9 +53,11 @@ export function authenticatedOfficialPermitReference(raw){
   const number=url.searchParams.get('permit_number')||'';
   if(!/^\d{6,20}$/.test(number)||!/^no$/i.test(url.searchParams.get('iftaOnly')||'No'))return null;
   const normalized=new URL('https://utcview.com/Permit/index');normalized.searchParams.set('permit_number',number);normalized.searchParams.set('iftaOnly','No');
+  const timeZone=permitTimeZoneForState('UT');
   return{
-   kind:'official-authenticated',state:'UT',permitNumber:number,url:normalized.href,
-   message:'Utah permit lookup detected. The issuing system requires an authorized account, so Drivers Lounge will retain the sanitized reference but will not sign in, send stored credentials or bypass access controls. Import the complete original PDF for the route and restrictions.'
+   kind:'official-authenticated',state:'UT',permitNumber:number,timeZone,url:normalized.href,
+   safeSummary:[`UT permit ${number}`,`Permit time zone: ${timeZoneName(timeZone)}`,'Permit type and effective dates: confirm from the original','Authorized account access required','Remote import and sign-in disabled'],
+   message:'The complete original permit is still required. Utah permit lookup detected, but the issuing system requires an authorized account. Drivers Lounge retained only a sanitized reference and will not sign in, send stored credentials, open a remote import action or bypass access controls.'
   };
  }catch{return null;}
 }
