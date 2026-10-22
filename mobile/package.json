@@ -1,0 +1,35 @@
+{
+  "name": "drivers-lounge-mobile",
+  "version": "2.0.0-rc.2",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "build": "node scripts/build.mjs",
+    "init": "node scripts/platforms.mjs",
+    "sync": "npm run build && node scripts/platforms.mjs",
+    "android": "cap open android",
+    "ios": "cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "8.5.3",
+    "@capacitor/android": "8.5.3",
+    "@capacitor/ios": "8.5.3",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/browser": "8.0.5",
+    "@capacitor/geolocation": "8.2.4",
+    "@capacitor-community/text-to-speech": "8.0.2",
+    "@capacitor-community/keep-awake": "8.0.1",
+    "@supabase/supabase-js": "2.116.0",
+    "leaflet": "1.9.4",
+    "pdfjs-dist": "6.4.299"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3",
+    "esbuild": "0.28.2",
+    "sharp": "0.35.5"
+  }
+}

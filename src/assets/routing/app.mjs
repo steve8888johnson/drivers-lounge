@@ -34,6 +34,7 @@ function formatMiles(meters,digits=1){const miles=Number(meters||0)/1609.344;ret
 function formatDuration(seconds){const minutes=Math.max(0,Math.round(Number(seconds||0)/60)),hours=Math.floor(minutes/60),remainder=minutes%60;return hours?`${hours} hr ${remainder} min`:`${remainder} min`;}
 function escapeText(value){return String(value??'').replace(/[\u0000-\u001f\u007f]/g,' ').trim();}
 function speak(message){
+  if(window.DL_NATIVE){if(message)void window.DL_NATIVE.speak(message);return;}
   if(!message||!('speechSynthesis'in window))return;
   speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(message);utterance.rate=.98;utterance.pitch=1;utterance.volume=1;speechSynthesis.speak(utterance);
 }
@@ -193,7 +194,7 @@ function startGuidance(){
  state.guidanceFrozen=false;state.offRouteHits=0;state.lastSpokenStep=-1;state.lastPromptBand='';document.body.classList.add('drive-mode');$('#drive-hud').hidden=false;$('#route-review').hidden=true;mapMessage('');guidanceWarning('');void requestWakeLock();speak('Commercial truck guidance started. Posted signs and official restrictions control.');state.watchId=navigator.geolocation.watchPosition(updateGuidance,guidanceError,{enableHighAccuracy:true,maximumAge:1000,timeout:15000});setTimeout(()=>state.map?.invalidateSize(),80);
 }
 function stopGuidance(message='Guidance stopped.'){
- if(state.watchId!==null&&navigator.geolocation)navigator.geolocation.clearWatch(state.watchId);state.watchId=null;if(state.wakeLock){state.wakeLock.release().catch(()=>{});state.wakeLock=null}if('speechSynthesis'in window)speechSynthesis.cancel();document.body.classList.remove('drive-mode');$('#drive-hud').hidden=true;guidanceWarning('');state.guidanceFrozen=false;state.offRouteHits=0;if(message)setStatus(message);setTimeout(()=>state.map?.invalidateSize(),80);
+ if(state.watchId!==null&&navigator.geolocation)navigator.geolocation.clearWatch(state.watchId);state.watchId=null;if(state.wakeLock){state.wakeLock.release().catch(()=>{});state.wakeLock=null}window.DL_NATIVE?.cancelSpeech();if('speechSynthesis'in window)speechSynthesis.cancel();document.body.classList.remove('drive-mode');$('#drive-hud').hidden=true;guidanceWarning('');state.guidanceFrozen=false;state.offRouteHits=0;if(message)setStatus(message);setTimeout(()=>state.map?.invalidateSize(),80);
 }
 
 function useCurrentLocation(){
@@ -213,7 +214,7 @@ function bind(){
  for(const element of $$('#profile-editor input:not(#permitted-load),#profile-editor select,#avoid-tolls,#route-preference'))element.addEventListener('change',()=>{clearCalculatedRoute({keepInputs:true});updateProfileStatus();});
  $('#permitted-load').addEventListener('change',()=>{clearCalculatedRoute({keepInputs:true});syncPermittedMode({announce:true});updateProfileStatus();});
  $('#save-profile').addEventListener('click',saveProfile);$('#clear-route').addEventListener('click',()=>clearCalculatedRoute({keepInputs:false}));$('#route-confirmed').addEventListener('change',updateReadiness);$('#start-guidance').addEventListener('click',startGuidance);$('#stop-guidance').addEventListener('click',()=>stopGuidance());$('#recenter').addEventListener('click',()=>{if(state.latestPosition&&state.map)state.map.setView([state.latestPosition.coords.latitude,state.latestPosition.coords.longitude],16);});$('#fit-route').addEventListener('click',()=>state.routeLine&&state.map?.fitBounds(state.routeLine.getBounds(),{padding:[35,35]}));
- window.addEventListener('online',updateNetwork);window.addEventListener('offline',updateNetwork);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&state.watchId!==null&&!state.wakeLock)void requestWakeLock();});window.addEventListener('beforeunload',()=>stopGuidance(''));
+ window.addEventListener('online',updateNetwork);window.addEventListener('offline',updateNetwork);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&state.watchId!==null&&!state.wakeLock)void requestWakeLock();});window.addEventListener('beforeunload',()=>stopGuidance(''));window.addEventListener('dl-native-pause',()=>{if(state.watchId!==null||document.body.classList.contains('drive-mode'))stopGuidance('Guidance paused while the app was hidden. Restart when safely in the foreground.');});window.addEventListener('dl-native-voice-unavailable',()=>guidanceWarning('Voice is unavailable. Stop safely before checking on-screen directions.'));
 }
 
 function boot(){

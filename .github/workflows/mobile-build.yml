@@ -1,0 +1,68 @@
+name: Native preview builds
+on:
+  push:
+    branches: [feature/routing-first]
+    paths: ['mobile/**', 'src/**', 'build.mjs', '.github/workflows/mobile-build.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: native-preview-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  DL_API_ORIGIN: https://drivers-lounge-7artkb8ai-steves-projects-c46af6ff.vercel.app
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+      - run: npm test
+      - run: npm ci --prefix mobile
+      - run: npm test --prefix mobile
+      - run: npm run build --prefix mobile
+      - run: node mobile/scripts/platforms.mjs android
+      - name: Compile Android debug app
+        run: bash gradlew assembleDebug --no-daemon
+        working-directory: mobile/android
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: drivers-lounge-android-preview
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+  ios:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+      - run: npm ci --prefix mobile
+      - run: npm test --prefix mobile
+      - run: npm run build --prefix mobile
+      - run: node mobile/scripts/platforms.mjs ios
+      - name: Compile iOS simulator app
+        run: xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+        working-directory: mobile
+      - name: Package simulator artifact
+        run: ditto -c -k --sequesterRsrc --keepParent mobile/build/Build/Products/Debug-iphonesimulator/App.app mobile/drivers-lounge-ios-simulator.zip
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: drivers-lounge-ios-simulator-preview
+          path: mobile/drivers-lounge-ios-simulator.zip
+          if-no-files-found: error
+          retention-days: 14

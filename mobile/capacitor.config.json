@@ -1,0 +1,19 @@
+{
+  "appId": "dev.atlasdigital.driverslounge",
+  "appName": "Drivers Lounge",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "ios": {
+    "contentInset": "automatic"
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": false
+    }
+  }
+}

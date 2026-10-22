@@ -196,7 +196,9 @@ async function startCamera() {
   }; void scan();
 }
 function say(message, key = message) {
-  if (!$('#voice-enabled').checked || !('speechSynthesis' in window) || key === spoken) return;
+  if (!$('#voice-enabled').checked || key === spoken) return;
+  if (window.DL_NATIVE) { spoken = key; void window.DL_NATIVE.speak(message); return; }
+  if (!('speechSynthesis' in window)) return;
   spoken = key; speechSynthesis.cancel(); const utterance = new SpeechSynthesisUtterance(message); utterance.rate = .95; speechSynthesis.speak(utterance);
 }
 function distance(m) { return m < 160 ? `${Math.round(m * 3.28084 / 10) * 10} ft` : `${(m / 1609.344).toFixed(1)} mi`; }
@@ -284,6 +286,7 @@ function stopGuidance(message = 'Guidance is off. Location sharing stopped.') {
   guidanceVersion += 1;
   if (watching !== null) navigator.geolocation?.clearWatch(watching); watching = null; clearInterval(timer); clearInterval(crewTimer);
   if (trip?.shared) void crew.stop(trip.shared).catch(() => {});
+  window.DL_NATIVE?.cancelSpeech();
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   progress = null; lastFix = null; master = null; activeState = ''; spoken = ''; spokenHazmat.clear();
   $('#active-permit').textContent = 'NO ACTIVE PERMIT'; $('#maneuver').textContent = 'Guidance is off';
@@ -294,6 +297,7 @@ function stopGuidance(message = 'Guidance is off. Location sharing stopped.') {
 }
 async function prepareOffline() {
   if (dirty) throw Error('Save changes before preparing offline.'); await verifyWallet(trip); await persist();
+  if (window.DL_NATIVE) { status('The app is installed and the saved trip is ready on this device. Keep original permits available. Maps and live services still need internet.'); return; }
   if (!('serviceWorker' in navigator)) throw Error('Offline page loading is not supported here. Export a trip packet and keep the originals separately.');
   const registration = await navigator.serviceWorker.register('/sw.js'); await navigator.serviceWorker.ready;
   const installing = registration.installing || registration.waiting;
@@ -349,6 +353,8 @@ on('#refresh-crew', 'click', refreshCrew);
 function connection() { $('#connection').textContent = navigator.onLine ? 'Device wallet · online' : 'Offline · device wallet'; if (!navigator.onLine) { $('#crew-status').textContent = 'Offline — crew positions are unavailable.'; $('#crew-positions').textContent = ''; } }
 window.addEventListener('online', connection); window.addEventListener('offline', connection);
 document.addEventListener('visibilitychange', () => { if (document.hidden) { void stopCamera(); if (watching !== null) stopGuidance('Guidance paused while app was hidden. Restart when safely in the foreground.'); } });
+window.addEventListener('dl-native-pause', () => { void stopCamera(); if (watching !== null) stopGuidance('Guidance paused while app was hidden. Restart when safely in the foreground.'); });
+window.addEventListener('dl-native-voice-unavailable', () => { $('#nav-status').textContent = 'Voice is unavailable. Stop safely before checking on-screen directions.'; });
 window.addEventListener('pagehide', () => { stopGuidance(); void stopCamera(); objectURLs.forEach(URL.revokeObjectURL); });
 window.addEventListener('beforeunload', event => { if (dirty) { event.preventDefault(); event.returnValue = ''; } });
 async function launchWallet() {
@@ -358,5 +364,5 @@ async function launchWallet() {
   status(launch.missing ? 'The linked trip is not saved on this device. Showing another available load; check the load name or import its backup before proceeding.' : 'Private device wallet ready. Create a load and import every state permit.', launch.missing);
 }
 window.addEventListener('hashchange', safe(async () => { const params = new URLSearchParams(location.hash.slice(1)); if (!['trip','tab','new'].some(key => params.has(key))) return; if (await changeGuard()) await launchWallet(); else switchTab(tab); }));
-try { await launchWallet(); connection(); if ('serviceWorker' in navigator) void navigator.serviceWorker.register('/sw.js').catch(() => {}); }
+try { await launchWallet(); connection(); if (!window.DL_NATIVE && 'serviceWorker' in navigator) void navigator.serviceWorker.register('/sw.js').catch(() => {}); }
 catch (e) { status(`Device storage unavailable: ${e.message}. Enable browser storage before using the permit wallet.`, true); document.querySelectorAll('button,input,select,textarea').forEach(el => el.disabled = true); }

@@ -60,7 +60,8 @@ async function offlineStatus(registration){
   channel.port1.onmessage=event=>{clearTimeout(timer);channel.port1.close();$('offline-state').textContent=event.data?.referenceReady?'Offline library saved on this device. Terms, summaries and links are available after a reload without a connection. External sources still require internet.':'Offline reference is incomplete. Reopen this page with a connection to download it.';};
   worker.postMessage({type:'reference-cache-status'},[channel.port2]);
 }
-if('serviceWorker' in navigator){
+if(window.DL_NATIVE){$('offline-state').textContent='This reference library is installed with the app. External sources still require internet.';}
+else if('serviceWorker' in navigator){
   try{
     const registration=await navigator.serviceWorker.register('/sw.js').catch(()=>navigator.serviceWorker.getRegistration('/'));
     if(!registration)throw Error('No offline registration');
