@@ -10,7 +10,7 @@ concurrency:
   group: native-preview-${{ github.ref }}
   cancel-in-progress: true
 env:
-  DL_API_ORIGIN: https://drivers-lounge-7artkb8ai-steves-projects-c46af6ff.vercel.app
+  DL_API_ORIGIN: https://drivers-lounge-d5b2e2l0y-steves-projects-c46af6ff.vercel.app
 jobs:
   android:
     runs-on: ubuntu-24.04
@@ -35,10 +35,25 @@ jobs:
       - name: Compile Android debug app
         run: bash gradlew assembleDebug --no-daemon
         working-directory: mobile/android
+      - name: Prepare Android testing download
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p mobile/test-artifacts
+          cp mobile/android/app/build/outputs/apk/debug/app-debug.apk mobile/test-artifacts/Drivers-Lounge-Test.apk
+          cp mobile/TESTING.md mobile/test-artifacts/START-HERE.md
+          cp mobile/www/native-build.json mobile/test-artifacts/build-info.json
+          signer="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
+          "$signer" verify --verbose --print-certs mobile/test-artifacts/Drivers-Lounge-Test.apk > mobile/test-artifacts/android-signature.txt
+          aapt="$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)"
+          "$aapt" dump badging mobile/test-artifacts/Drivers-Lounge-Test.apk > mobile/test-artifacts/android-package.txt
+          grep -q "package: name='dev.atlasdigital.driverslounge.preview'" mobile/test-artifacts/android-package.txt
+          grep -q "application-label:'Drivers Lounge Test'" mobile/test-artifacts/android-package.txt
+          sha256sum mobile/test-artifacts/Drivers-Lounge-Test.apk > mobile/test-artifacts/SHA256SUMS.txt
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: drivers-lounge-android-preview
-          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          path: mobile/test-artifacts/
           if-no-files-found: error
           retention-days: 14
   ios:

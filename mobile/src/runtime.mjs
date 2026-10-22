@@ -54,6 +54,13 @@ if (Capacitor.isNativePlatform()) {
     const css = document.createElement('style');
     css.textContent = 'body{padding-bottom:env(safe-area-inset-bottom)}#dl-install-app{display:none!important}';
     document.head.append(css);
+    if (DL_PREVIEW_BUILD) {
+      const testNotice=document.createElement('aside');
+      testNotice.setAttribute('aria-label','Test build information');
+      testNotice.style.cssText='margin:12px;padding:12px;border:1px solid #efb442;border-radius:10px;background:#17202d;color:#fff;font:14px/1.5 system-ui';
+      testNotice.textContent='Drivers Lounge Test · '+DL_BUILD_REVISION+'. Use test data. Route verification is incomplete; this is not a validated truck-navigation release.';
+      (document.querySelector('main') || document.body).prepend(testNotice);
+    }
     if (/\/(?:navigation|permitted-loads)(?:\.html)?$/.test(location.pathname)) {
       const note = document.createElement('p');
       note.className = 'inline-status';

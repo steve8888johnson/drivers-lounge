@@ -7,6 +7,10 @@ const mobile=fileURLToPath(new URL('../',import.meta.url));
 const run=(...args)=>execFileSync(process.execPath,[join(mobile,'node_modules/@capacitor/cli/bin/capacitor'),...args],{cwd:mobile,stdio:'inherit'});
 const exists=async path=>access(path).then(()=>true,()=>false);
 await access(join(mobile,'www/index.html'));
+const buildInfo=JSON.parse(await readFile(join(mobile,'www/native-build.json'),'utf8'));
+const preview=buildInfo.channel==='preview';
+const displayName=preview?'Drivers Lounge Test':'Drivers Lounge';
+const applicationId=preview?'dev.atlasdigital.driverslounge.preview':'dev.atlasdigital.driverslounge';
 const platforms=process.argv.slice(2);
 if(!platforms.length) platforms.push('android','ios');
 if(platforms.some(p=>!['android','ios'].includes(p)))throw Error('Supported platforms: android, ios.');
@@ -31,6 +35,10 @@ if(platforms.includes('android')) {
   return text.replace('</manifest>',tags.join('\n')+'\n</manifest>');
  });
  await patch('android/app/build.gradle',text=>text.replace(/versionCode \d+/,'versionCode 2000001').replace(/versionName "[^"]+"/,'versionName "2.0.0"'));
+ await patch('android/app/build.gradle',text=>text.replace(/applicationId "[^"]+"/,'applicationId "'+applicationId+'"'));
+ await patch('android/app/src/main/res/values/strings.xml',text=>text
+   .replace(/(<string name="app_name">)[^<]+/, '$1'+displayName)
+   .replace(/(<string name="title_activity_main">)[^<]+/, '$1'+displayName));
  const res=join(mobile,'android/app/src/main/res');
  // Use the existing brand art for legacy and adaptive icons.
  for(const [density,size] of Object.entries({mdpi:48,hdpi:72,xhdpi:96,xxhdpi:144,xxxhdpi:192})) {
@@ -54,6 +62,7 @@ if(platforms.includes('android')) {
 }
 if(platforms.includes('ios')) {
  await patch('ios/App/App/Info.plist',text=>{
+  text=text.replace(/(<key>CFBundleDisplayName<\/key>\s*<string>)[^<]+/, '$1'+displayName);
   const descriptions={
    NSLocationWhenInUseUsageDescription:'Drivers Lounge uses your location for current-position lookup and foreground truck guidance.',
    NSLocationAlwaysAndWhenInUseUsageDescription:'Drivers Lounge uses location only while the app is open. Background guidance is not supported.',
@@ -63,6 +72,7 @@ if(platforms.includes('ios')) {
   return text.replace(/<\/dict>\s*<\/plist>\s*$/,extra+'\n</dict>\n</plist>\n');
  });
  await patch('ios/App/App.xcodeproj/project.pbxproj',text=>text.replace(/CURRENT_PROJECT_VERSION = [^;]+;/g,'CURRENT_PROJECT_VERSION = 2000001;').replace(/MARKETING_VERSION = [^;]+;/g,'MARKETING_VERSION = 2.0.0;'));
+ await patch('ios/App/App.xcodeproj/project.pbxproj',text=>text.replace(/PRODUCT_BUNDLE_IDENTIFIER = [^;]+;/g,'PRODUCT_BUNDLE_IDENTIFIER = '+applicationId+';'));
  const assets=join(mobile,'ios/App/App/Assets.xcassets');
  await sharp(logo).resize(1024,1024,{fit:'contain',background}).flatten({background}).png()
   .toFile(join(assets,'AppIcon.appiconset/AppIcon-512@2x.png'));

@@ -8,6 +8,7 @@ import { rewriteLocalRoutes } from './routes.mjs';
 const mobile = fileURLToPath(new URL('../', import.meta.url)), root = resolve(mobile, '..');
 const backend = apiOrigin(process.env.DL_API_ORIGIN || 'https://driverslounge.app');
 const release = process.env.DL_RELEASE === '1';
+const sourceRevision=/^[0-9a-f]{40}$/i.test(process.env.GITHUB_SHA||'')?process.env.GITHUB_SHA:'local';
 if (release && backend !== 'https://driverslounge.app') throw Error('Store builds must use the production API.');
 const healthResponse = await fetch(backend + '/api/truck-route-health', {signal:AbortSignal.timeout(20000)});
 if (!healthResponse.ok) throw Error('The selected API has no healthy truck-routing endpoint.');
@@ -58,10 +59,10 @@ await cp(join(mobile,'node_modules/leaflet/dist'),join(vendor,'leaflet'),{recurs
 await cp(join(mobile,'node_modules/pdfjs-dist/build'),join(vendor,'pdf'),{recursive:true});
 for(const name of ['cmaps','standard_fonts','wasm']) await cp(join(mobile,'node_modules/pdfjs-dist',name),join(vendor,'pdf',name),{recursive:true});
 await build({entryPoints:[join(mobile,'src/runtime.mjs')],bundle:true,format:'iife',platform:'browser',target:'es2022',
- minify:true,define:{DL_API_ORIGIN:JSON.stringify(backend)},outfile:join(www,'assets/native-runtime.js')});
+ minify:true,define:{DL_API_ORIGIN:JSON.stringify(backend),DL_PREVIEW_BUILD:JSON.stringify(!release),DL_BUILD_REVISION:JSON.stringify(sourceRevision.slice(0,8))},outfile:join(www,'assets/native-runtime.js')});
 await rm(join(www,'sw.js'),{force:true});
 await writeFile(join(www,'native-build.json'),JSON.stringify({channel:release?'release':'preview',apiOrigin:backend,
- appId:'dev.atlasdigital.driverslounge',foregroundGuidanceOnly:true},null,2)+'\n');
+ appId:release?'dev.atlasdigital.driverslounge':'dev.atlasdigital.driverslounge.preview',sourceRevision,foregroundGuidanceOnly:true},null,2)+'\n');
 let references=0;
 const all=new Set((await walk(www)).map(p=>'/'+relative(www,p).replaceAll('\\','/')));
 for(const page of pages) {
