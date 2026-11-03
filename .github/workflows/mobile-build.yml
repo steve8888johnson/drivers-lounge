@@ -1,7 +1,7 @@
 name: Native preview builds
 on:
   push:
-    branches: [feature/routing-first]
+    branches: [feature/routing-first, feature/routing-bulletproof]
     paths: ['mobile/**', 'src/**', 'build.mjs', '.github/workflows/mobile-build.yml']
   workflow_dispatch:
 permissions:
@@ -10,7 +10,7 @@ concurrency:
   group: native-preview-${{ github.ref }}
   cancel-in-progress: true
 env:
-  DL_API_ORIGIN: https://drivers-lounge-d5b2e2l0y-steves-projects-c46af6ff.vercel.app
+  DL_API_ORIGIN: https://beta.driverslounge.app
 jobs:
   android:
     runs-on: ubuntu-24.04
