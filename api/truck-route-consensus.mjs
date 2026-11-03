@@ -1,6 +1,8 @@
 import{calculateTruckRoute,providerSequenceFromOptions}from'./truck-route.mjs';
 import{applyRouteConsensus}from'../src/assets/routing/route-consensus.mjs';
 import{applyRouteIntegrityAudit}from'../src/assets/routing/route-integrity.mjs';
+import{applyRoutingPolicy,readRoutingPolicy}from'../src/assets/routing/routing-policy.mjs';
+import{attachRouteSafetyRecord}from'../src/assets/routing/route-safety-record.mjs';
 
 const send=(res,status,body)=>{res.setHeader('Cache-Control','private, no-store');res.setHeader('Content-Type','application/json');res.statusCode=status;res.end(JSON.stringify(body));};
 
@@ -12,46 +14,42 @@ async function readJsonBody(req,limit=16384){
 }
 
 const providerSummary=provider=>({id:provider.id,label:provider.label});
+const revision=()=>String(process.env.VERCEL_GIT_COMMIT_SHA||process.env.GITHUB_SHA||'unknown').slice(0,40);
+async function finalize(result,input,policy,now){
+ const policyResult=applyRoutingPolicy(result,input,policy);
+ return attachRouteSafetyRecord(policyResult,input,policy,{now,revision:revision()});
+}
 
-export async function calculateConsensusTruckRoute(input,{calculator=calculateTruckRoute,providers=providerSequenceFromOptions()}={}){
+export async function calculateConsensusTruckRoute(input,{calculator=calculateTruckRoute,providers=providerSequenceFromOptions(),policy=readRoutingPolicy(),now=new Date()}={}){
  if(!Array.isArray(providers)||!providers.length)throw Object.assign(Error('Commercial truck routing is not configured yet.'),{statusCode:503});
  const primaryProvider=providers[0],primary=applyRouteIntegrityAudit(await calculator(input,{providers:[primaryProvider]}));
  if(providers.length<2){
   const crossCheck={
-   schema:'dl-route-consensus/v1',status:'single-provider',confidence:'unverified',checkedAt:new Date().toISOString(),
+   schema:'dl-route-consensus/v1',status:'single-provider',confidence:'unverified',checkedAt:new Date(now).toISOString(),
    providers:[primaryProvider.label],guidanceEligible:Boolean(primary.route?.guidanceEligible),
    reasons:['Only one professional truck-routing provider is configured. This route has not been independently cross-checked.'],
-   notice:{code:'singleProviderRoute',title:'Independent provider cross-check is not configured. Treat this as a single-provider route candidate.',severity:'warning',blocking:false}
+   notice:{code:'singleProviderRoute',title:'Independent provider cross-check is not configured. Treat this as a single-provider route candidate.',severity:'warning',blocking:false},
+   configuredProviders:providers.map(providerSummary)
   };
   const notices=[...(primary.route?.notices||[]),crossCheck.notice];
-  return{
-   ...primary,
-   route:{...primary.route,notices,crossCheck},
-   crossCheck:{...crossCheck,configuredProviders:providers.map(providerSummary)}
-  };
+  return finalize({...primary,route:{...primary.route,notices,crossCheck},crossCheck},input,policy,now);
  }
  const secondaryProvider=providers[1];
- const secondaryInput={
-  ...input,
-  origin:{lat:primary.origin.lat,lng:primary.origin.lng,label:primary.origin.label},
-  destination:{lat:primary.destination.lat,lng:primary.destination.lng,label:primary.destination.label}
- };
+ const secondaryInput={...input,origin:{lat:primary.origin.lat,lng:primary.origin.lng,label:primary.origin.label},destination:{lat:primary.destination.lat,lng:primary.destination.lng,label:primary.destination.label}};
  let secondary;
  try{secondary=applyRouteIntegrityAudit(await calculator(secondaryInput,{providers:[secondaryProvider]}));}
  catch(error){
-  const notice={code:'secondaryProviderUnavailable',title:`${secondaryProvider.label} could not independently verify this route. Guidance is blocked until the cross-check succeeds or an authorized reviewer clears the route.`,severity:'critical',blocking:true};
+  const notice={code:'secondaryProviderUnavailable',title:`${secondaryProvider.label} could not independently verify this route. Guidance is blocked until the cross-check succeeds.`,severity:'critical',blocking:true};
   const notices=[...(primary.route?.notices||[]),notice],criticalNotices=[...(primary.route?.criticalNotices||[]),notice];
-  return{
-   ...primary,
-   route:{...primary.route,notices,criticalNotices,guidanceEligible:false,crossCheck:{schema:'dl-route-consensus/v1',status:'blocked',confidence:'blocked',providers:[primaryProvider.label,secondaryProvider.label],guidanceEligible:false,reasons:[String(error?.message||'Secondary provider unavailable')],notice}},
-   crossCheck:{status:'blocked',providers:[primaryProvider.label,secondaryProvider.label],secondaryError:String(error?.message||'Secondary provider unavailable'),configuredProviders:providers.map(providerSummary)}
-  };
+  const crossCheck={schema:'dl-route-consensus/v1',status:'blocked',confidence:'blocked',providers:[primaryProvider.label,secondaryProvider.label],guidanceEligible:false,reasons:[String(error?.message||'Secondary provider unavailable')],notice,secondaryError:String(error?.message||'Secondary provider unavailable'),configuredProviders:providers.map(providerSummary)};
+  return finalize({...primary,route:{...primary.route,notices,criticalNotices,guidanceEligible:false,crossCheck},crossCheck},input,policy,now);
  }
  const result=applyRouteConsensus(primary,secondary,{primaryProvider:primaryProvider.label,secondaryProvider:secondaryProvider.label});
  result.crossCheck.configuredProviders=providers.map(providerSummary);
  result.crossCheck.primaryIntegrity=primary.integrityAudit;
  result.crossCheck.secondaryIntegrity=secondary.integrityAudit;
- return result;
+ result.route={...(result.route||{}),crossCheck:result.crossCheck};
+ return finalize(result,input,policy,now);
 }
 
 export default async function handler(req,res){

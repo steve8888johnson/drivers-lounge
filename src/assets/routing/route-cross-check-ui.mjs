@@ -1,3 +1,8 @@
+import'./route-packet-ui.mjs';
+import'./route-incident-ui.mjs';
+import'./routing-policy-ui.mjs';
+import'./guidance-event-bridge.mjs';
+
 const $=selector=>document.querySelector(selector);
 
 const rounded=value=>Number.isFinite(Number(value))?Math.round(Number(value)*10)/10:null;
