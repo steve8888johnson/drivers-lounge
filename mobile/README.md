@@ -35,10 +35,12 @@ The identifier has not been confirmed as registered in either store.
 
 - Native GPS bridges to the existing route-quality, accuracy and deviation guards.
   A Stop action cancels a watch even if the permission request is still pending.
-- Guidance works in the foreground only. Hiding the app or locking the device stops
-  GPS watches and speech. Returning does not automatically restart guidance.
-- The screen stays awake while a GPS watch is active. No background location
-  service or entitlement is requested.
+- Active guidance uses a native background-location watcher. Android shows a persistent
+  location notification; iOS declares the location background mode and system indicator.
+  Stopping guidance removes the watcher. If the operating system interrupts location,
+  the app fails closed and requires a parked restart rather than inventing a route.
+- The screen stays awake while foreground guidance is active. Explicit screen lock or
+  app backgrounding keeps the native location watcher active.
 - Native text-to-speech speaks existing guidance prompts; failures show a warning.
 - Same-app JSON API calls use native HTTPS to the configured Drivers Lounge backend.
   Other requests retain normal browser transport. API redirects are refused.

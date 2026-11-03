@@ -78,6 +78,8 @@ export function auditCommercialRoute(route,profile={}){
   const sourceIds=[...new Set([...coverageRegionSources,...unique.map(item=>item.sourceId).filter(Boolean)])];
   return{
     version:AUDIT_VERSION,
+    coverageModel:'partial-official-library',
+    officialCoverageComplete:false,
     checkedAt:new Date().toISOString(),
     status:critical.length?'blocked':coverageRegionSources.length&&coverage<0.8?'review':'clear',
     namedRoadCoveragePct:Math.round(coverage*100),

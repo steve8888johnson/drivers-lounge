@@ -6,6 +6,7 @@ import{
   validateTruckProfile
 }from'./core.mjs';
 import{formatLocalDateTimeInput,permittedModePresentation}from'./ui-core.mjs';
+import{offlineRouteEligibility}from'./offline-route.mjs';
 
 if(!document.querySelector('link[data-routing-polish]')){
  const polish=document.createElement('link');polish.rel='stylesheet';polish.href='/assets/routing/routing-polish.css';polish.dataset.routingPolish='true';document.head.append(polish);
@@ -20,7 +21,7 @@ const MAX_ROUTE_AGE_MS=60*60*1000;
 const state={
   map:null,route:null,origin:null,destination:null,routeLine:null,startMarker:null,endMarker:null,truckMarker:null,
   originCoordinate:null,watchId:null,wakeLock:null,stepIndex:0,lastSpokenStep:-1,lastPromptBand:'',offRouteHits:0,
-  guidanceFrozen:false,cumulative:[],latestPosition:null,calculating:false
+  guidanceFrozen:false,cumulative:[],latestPosition:null,calculating:false,safetyRecord:null,lastEvidenceAt:0
 };
 
 function setStatus(message,tone=''){
@@ -39,6 +40,7 @@ function speak(message){
   speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(message);utterance.rate=.98;utterance.pitch=1;utterance.volume=1;speechSynthesis.speak(utterance);
 }
 function safeJsonParse(value){try{return JSON.parse(value)}catch{return null}}
+function emitRoutingEvent(type,detail={}){const EventCtor=window.CustomEvent;if(typeof EventCtor!=='function')return;document.dispatchEvent(new EventCtor('routing-guidance-event',{detail:{type,timestamp:new Date().toISOString(),routeId:state.safetyRecord?.id||state.route?.safetyRecordId||'',...detail}}));}
 
 const presets={
   'standard-semi':{heightFt:13,heightIn:6,widthFt:8,widthIn:6,overallLengthFt:72,trailerLengthFt:53,grossWeightLb:80000,currentWeightLb:80000,axleCount:5,trailerAxleCount:2,trailerCount:1,singleAxleGroupLb:12000,tandemAxleGroupLb:34000,tripleAxleGroupLb:0},
@@ -96,7 +98,7 @@ function loadProfile(){
 }
 function applyPreset(name){if(name==='custom')return;writeProfileForm({...presets[name],preset:name,avoidTolls:$('#avoid-tolls').checked,routePreference:$('#route-preference').value});}
 
-function routeFresh(){return state.route&&Date.now()-new Date(state.route.calculatedAt).valueOf()<MAX_ROUTE_AGE_MS;}
+function routeFresh(){const age=state.route?Date.now()-new Date(state.route.calculatedAt).valueOf():Infinity,expires=Date.parse(state.safetyRecord?.expiresAt||'');return Boolean(state.route&&state.safetyRecord?.decision?.allowed===true&&age>=0&&age<MAX_ROUTE_AGE_MS&&Number.isFinite(expires)&&expires>Date.now());}
 function readinessItems(){
  const items=[];const origin=$('#origin').value.trim(),destination=$('#destination').value.trim(),validation=validateTruckProfile(readProfileForm());
  items.push({ok:Boolean(origin&&destination),text:origin&&destination?'Origin and destination entered.':'Enter an origin and destination.'});
@@ -104,7 +106,7 @@ function readinessItems(){
  if(validation.warnings.length)items.push({ok:false,warning:true,text:validation.warnings[0]});
  if(state.route){
   items.push({ok:state.route.guidanceEligible,text:state.route.guidanceEligible?'Commercial route returned without critical provider notices.':'Provider notices block guidance.'});
-  items.push({ok:routeFresh(),text:routeFresh()?'Route candidate is fresh for guidance.':'Route candidate is over one hour old; calculate again.'});
+  items.push({ok:routeFresh(),text:routeFresh()?'Versioned route safety record is current.':'The route safety record is missing, blocked or expired; calculate again.'});
  }else items.push({ok:false,text:'A licensed commercial route must return without critical notices.'});
  return items;
 }
@@ -118,6 +120,15 @@ function updateReadiness(){
  const items=readinessItems();list.replaceChildren(...items.map(item=>{const li=document.createElement('li');li.className=item.ok?'good':item.warning?'':'bad';li.textContent=item.text;return li}));
  const ready=items.every(item=>item.ok||item.warning)&&Boolean(state.route?.guidanceEligible)&&routeFresh();$('#readiness-chip').textContent=ready?'Ready for parked review':'Not ready';$('#readiness-chip').className=`status-chip ${ready?'good':'warning'}`;$('#readiness-heading').textContent=ready?'Route candidate ready for parked review':'Complete the route and profile';
  const confirmed=$('#route-confirmed').checked;$('#start-guidance').disabled=!(ready&&confirmed);return ready;
+}
+function restoreSavedRoute(){
+ const saved=safeJsonParse(localStorage.getItem(ROUTE_KEY)),eligibility=offlineRouteEligibility(saved);
+ if(!eligibility.eligible)return false;
+ if(saved.route?.profile)writeProfileForm(saved.route.profile);
+ $('#origin').value=saved.origin?.label||'';$('#destination').value=saved.destination?.label||'';state.originCoordinate=saved.origin?.resultType==='coordinate'?{lat:saved.origin.lat,lng:saved.origin.lng,label:saved.origin.label}:null;
+ renderReview({...saved,profileWarnings:[...(saved.profileWarnings||[]),'Restored the exact reviewed route from this device. No new route or detour was calculated.']});
+ if(!navigator.onLine)mapMessage('Offline reviewed-route mode: follow only the saved route. Rerouting, live restrictions and new map tiles are unavailable.','bad');
+ setStatus('Reviewed route restored. Recheck the parked review and current conditions before guidance.','warning');return true;
 }
 function clearCalculatedRoute({keepInputs=true}={}){
  stopGuidance('');state.route=null;state.origin=null;state.destination=null;state.cumulative=[];$('#route-review').hidden=true;$('#route-confirmed').checked=false;$('#fit-route').disabled=true;$('#map-empty').hidden=false;mapMessage('');
@@ -143,12 +154,13 @@ function addNotice(container,message,tone=''){
  const div=document.createElement('div');div.className=`route-notice ${tone}`.trim();div.textContent=message;container.append(div);
 }
 function renderReview(result){
- state.route=result.route;state.origin=result.origin;state.destination=result.destination;drawRoute();
+ state.route=result.route;state.origin=result.origin;state.destination=result.destination;state.safetyRecord=result.safetyRecord||null;state.lastEvidenceAt=0;drawRoute();
  const summary=routeSummary(state.route);$('#review-distance').textContent=`${summary.miles} mi`;$('#review-duration').textContent=formatDuration(state.route.durationSeconds);$('#review-arrival').textContent=new Date(Date.now()+state.route.durationSeconds*1000).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});$('#provider-name').textContent=state.route.provider||'Commercial provider';
  const stops=$('#resolved-stops');stops.replaceChildren();for(const[type,stop]of[['origin',state.origin],['destination',state.destination]]){const row=document.createElement('div');row.className=`resolved-stop ${type}`;const badge=document.createElement('b');badge.textContent=type==='origin'?'A':'B';const copy=document.createElement('span'),strong=document.createElement('strong'),small=document.createElement('small');strong.textContent=stop.label;small.textContent=`${stop.resultType||'location'} · confidence ${Math.round(Number(stop.confidence||1)*100)}%`;copy.append(strong,small);row.append(badge,copy);stops.append(row);}
  const noticeBox=$('#route-notices');noticeBox.className='notice-list';noticeBox.replaceChildren();for(const warning of result.profileWarnings||[])addNotice(noticeBox,warning,'warning');if(!state.route.notices.length)addNotice(noticeBox,'No provider notices were returned. This does not guarantee every restriction or temporary condition is known.');for(const notice of state.route.notices)addNotice(noticeBox,`${notice.title}${notice.code?` (${notice.code})`:''}`,notice.severity==='critical'?'critical':'warning');
  const list=$('#maneuver-list');list.replaceChildren();for(const step of state.route.steps){const li=document.createElement('li'),copy=document.createElement('span'),strong=document.createElement('strong'),small=document.createElement('small'),distance=document.createElement('b');strong.textContent=step.instruction||'Continue';small.textContent=step.road||step.direction||'Road name unavailable';distance.textContent=step.lengthMeters?formatMiles(step.lengthMeters):'';copy.append(strong,small);li.append(copy,distance);list.append(li);}
- $('#route-confirmed').checked=false;$('#route-review').hidden=false;$('#route-review').scrollIntoView({behavior:'smooth',block:'start'});localStorage.setItem(ROUTE_KEY,JSON.stringify({route:state.route,origin:state.origin,destination:state.destination,savedAt:new Date().toISOString()}));
+ $('#route-confirmed').checked=false;$('#route-review').hidden=false;$('#route-review').scrollIntoView({behavior:'smooth',block:'start'});localStorage.setItem(ROUTE_KEY,JSON.stringify({route:state.route,origin:state.origin,destination:state.destination,safetyRecord:state.safetyRecord,savedAt:new Date().toISOString()}));
+ document.dispatchEvent(new CustomEvent('routing-review-rendered',{detail:result}));
  setStatus(state.route.guidanceEligible?'Commercial route candidate ready for parked review.':'The route returned critical notices. Guidance is blocked.',state.route.guidanceEligible?'good':'bad');updateReadiness();
 }
 async function calculateRoute(event){
@@ -172,7 +184,7 @@ function maneuverArrow(step){const text=`${step?.action||''} ${step?.direction||
 function guidanceWarning(message){const element=$('#drive-warning');element.textContent=message;element.hidden=!message;}
 async function requestWakeLock(){if(!('wakeLock'in navigator)||document.visibilityState!=='visible')return;try{state.wakeLock=await navigator.wakeLock.request('screen');state.wakeLock.addEventListener('release',()=>state.wakeLock=null)}catch{/* Device may refuse wake lock. */}}
 function freezeForDeviation(distance,accuracy){
- if(state.guidanceFrozen)return;state.guidanceFrozen=true;guidanceWarning(`ROUTE DEVIATION: ${Math.round(distance)} m from the reviewed route (GPS ±${Math.round(accuracy)} m). Pull over safely. Do not accept an automatic detour.`);mapMessage('Route deviation detected. Guidance is frozen until the route is resolved.','bad');speak('Route deviation. Pull over safely. Do not take an automatic detour.');if(state.watchId!==null)navigator.geolocation.clearWatch(state.watchId);state.watchId=null;
+ if(state.guidanceFrozen)return;state.guidanceFrozen=true;emitRoutingEvent('deviation',{distanceMeters:distance,accuracyMeters:accuracy,reason:'Route deviation froze guidance'});guidanceWarning(`ROUTE DEVIATION: ${Math.round(distance)} m from the reviewed route (GPS ±${Math.round(accuracy)} m). Pull over safely. Do not accept an automatic detour.`);mapMessage('Route deviation detected. Guidance is frozen until the route is resolved.','bad');speak('Route deviation. Pull over safely. Do not take an automatic detour.');if(state.watchId!==null)navigator.geolocation.clearWatch(state.watchId);state.watchId=null;
 }
 function updateGuidance(position){
  if(!state.route||state.guidanceFrozen)return;const latitude=position.coords.latitude,longitude=position.coords.longitude,accuracy=Number(position.coords.accuracy||999),point=[latitude,longitude];state.latestPosition=position;
@@ -180,20 +192,22 @@ function updateGuidance(position){
  $('#current-speed').textContent=Number.isFinite(position.coords.speed)?String(Math.max(0,Math.round(position.coords.speed*2.23694))):'—';
  if(accuracy>75){guidanceWarning(`GPS accuracy is weak (±${Math.round(accuracy)} m). Route-deviation decisions are paused.`);state.offRouteHits=0;return;}
  const nearest=nearestGeometryDistance(point,state.route.geometry);if(!Number.isFinite(nearest.distance))return;
+ const evidenceNow=Date.now();if(evidenceNow-state.lastEvidenceAt>=15000){state.lastEvidenceAt=evidenceNow;emitRoutingEvent('fix',{latitude,longitude,accuracyMeters:accuracy,speedMps:Number.isFinite(position.coords.speed)?position.coords.speed:null,distanceMeters:nearest.distance,geometryIndex:nearest.index,stepIndex:state.stepIndex});}
  const threshold=Math.max(120,accuracy*2.5);if(nearest.distance>threshold)state.offRouteHits++;else{state.offRouteHits=0;guidanceWarning('');}
  if(state.offRouteHits>=3){freezeForDeviation(nearest.distance,accuracy);return;}
  const{step,index}=nextStepForIndex(nearest.index);if(!step)return;
  state.stepIndex=index;const stepDistance=step.coordinate?distanceMeters(point,step.coordinate):0,remaining=cumulativeRemaining(nearest.index);$('#maneuver-icon').textContent=maneuverArrow(step);$('#maneuver-road').textContent=escapeText(step.road||'TRUCK ROUTE').toUpperCase();$('#next-maneuver').textContent=escapeText(step.instruction||'Continue');$('#maneuver-distance').textContent=stepDistance<305?`${Math.max(1,Math.round(stepDistance*3.28084))} ft`:formatMiles(stepDistance);$('#remaining-distance').textContent=formatMiles(remaining);$('#arrival-time').textContent=new Date(Date.now()+state.route.durationSeconds*Math.max(0,remaining/state.route.distanceMeters)*1000).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
  const band=stepDistance<160?'now':stepDistance<500?'quarter':stepDistance<1800?'mile':'';if(index!==state.lastSpokenStep||band&&band!==state.lastPromptBand){state.lastSpokenStep=index;state.lastPromptBand=band;speak(`${band==='mile'?'In about one mile, ':band==='quarter'?'In a quarter mile, ':band==='now'?'Now, ':''}${step.instruction||'continue'}`);}
 }
-function guidanceError(error){const message=error.code===1?'Location permission is blocked. Allow precise location before guidance.':error.code===3?'GPS timed out. Pull over safely and restore location service.':'GPS is unavailable. Pull over safely and restore location service.';guidanceWarning(message);mapMessage(message,'bad');speak(message);}
+function guidanceError(error){const message=error.code===1?'Location permission is blocked. Allow precise location before guidance.':error.code===3?'GPS timed out. Pull over safely and restore location service.':'GPS is unavailable. Pull over safely and restore location service.';emitRoutingEvent('gps-error',{code:error.code,message});guidanceWarning(message);mapMessage(message,'bad');speak(message);}
 function startGuidance(){
  if(!updateReadiness()||!state.route?.guidanceEligible||!$('#route-confirmed').checked){setStatus('Complete the parked route review before guidance.','bad');return;}
  if(!navigator.geolocation){setStatus('This device does not provide live GPS.','bad');return;}
  if(state.route.profile?.permittedLoad){location.href='/permitted-loads';return;}
- state.guidanceFrozen=false;state.offRouteHits=0;state.lastSpokenStep=-1;state.lastPromptBand='';document.body.classList.add('drive-mode');$('#drive-hud').hidden=false;$('#route-review').hidden=true;mapMessage('');guidanceWarning('');void requestWakeLock();speak('Commercial truck guidance started. Posted signs and official restrictions control.');state.watchId=navigator.geolocation.watchPosition(updateGuidance,guidanceError,{enableHighAccuracy:true,maximumAge:1000,timeout:15000});setTimeout(()=>state.map?.invalidateSize(),80);
+ state.guidanceFrozen=false;state.offRouteHits=0;state.lastSpokenStep=-1;state.lastPromptBand='';state.lastEvidenceAt=0;emitRoutingEvent('start',{message:'Commercial truck guidance started'});document.body.classList.add('drive-mode');$('#drive-hud').hidden=false;$('#route-review').hidden=true;mapMessage('');guidanceWarning('');void requestWakeLock();speak('Commercial truck guidance started. Posted signs and official restrictions control.');state.watchId=navigator.geolocation.watchPosition(updateGuidance,guidanceError,{enableHighAccuracy:true,maximumAge:1000,timeout:15000});setTimeout(()=>state.map?.invalidateSize(),80);
 }
 function stopGuidance(message='Guidance stopped.'){
+ const wasActive=state.watchId!==null||document.body.classList.contains('drive-mode');if(wasActive)emitRoutingEvent('stop',{message:message||'Guidance stopped'});
  if(state.watchId!==null&&navigator.geolocation)navigator.geolocation.clearWatch(state.watchId);state.watchId=null;if(state.wakeLock){state.wakeLock.release().catch(()=>{});state.wakeLock=null}window.DL_NATIVE?.cancelSpeech();if('speechSynthesis'in window)speechSynthesis.cancel();document.body.classList.remove('drive-mode');$('#drive-hud').hidden=true;guidanceWarning('');state.guidanceFrozen=false;state.offRouteHits=0;if(message)setStatus(message);setTimeout(()=>state.map?.invalidateSize(),80);
 }
 
@@ -220,5 +234,6 @@ function bind(){
 function boot(){
  loadProfile();initMap();bind();updateNetwork();void checkEngine();syncPermittedMode();updateReadiness();
  const now=new Date(Date.now()+15*60*1000);now.setMinutes(Math.ceil(now.getMinutes()/15)*15,0,0);$('#departure-time').value=formatLocalDateTimeInput(now);
+ requestAnimationFrame(()=>restoreSavedRoute());
 }
 boot();

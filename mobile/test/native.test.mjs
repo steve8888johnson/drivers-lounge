@@ -1,39 +1,23 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createGeolocation, locationError } from '../src/geolocation.mjs';
+import { createGeolocation, locationError, toBrowserPosition } from '../src/geolocation.mjs';
 import { createApiFetch, apiOrigin } from '../src/api.mjs';
 import { rewriteLocalRoutes } from '../scripts/routes.mjs';
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
-function geoFixture() {
- let resolveWatch, callback, resolvePosition;
- const clears=[], counts=[];
- const plugin={watchPosition:async(options,cb)=>{callback=cb;return await new Promise(r=>resolveWatch=r)},
-  clearWatch:async({id})=>clears.push(id),getCurrentPosition:()=>new Promise(r=>resolvePosition=r)};
- const gps=createGeolocation(plugin,count=>counts.push(count));
- return {gps,clears,counts,position:value=>resolvePosition(value),registered:id=>resolveWatch(id),
-  emit:(...args)=>callback(...args)};
+function geoFixture({background=true,prepareBackground=async()=>{}}={}) {
+ let resolveWatch,backgroundCallback,foregroundCallback,resolvePosition;
+ const removes=[],clears=[],counts=[],prepared=[];
+ const foreground={watchPosition:async(options,callback)=>{foregroundCallback=callback;return await new Promise(resolve=>resolveWatch=resolve)},clearWatch:async({id})=>clears.push(id),getCurrentPosition:()=>new Promise(resolve=>resolvePosition=resolve)};
+ const backgroundPlugin=background?{addWatcher:async(options,callback)=>{backgroundCallback=callback;return await new Promise(resolve=>resolveWatch=resolve)},removeWatcher:async({id})=>removes.push(id)}:null;
+ const gps=createGeolocation(foreground,(count,state)=>counts.push({count,...state}),{backgroundPlugin,prepareBackground:async()=>{prepared.push(true);await prepareBackground();}});
+ return{gps,removes,clears,counts,prepared,position:value=>resolvePosition(value),registered:id=>resolveWatch(id),emit:(position,error)=>background?backgroundCallback(position,error):foregroundCallback(position,error)};
 }
-test('clearWatch before native registration prevents starting a watcher',async()=>{
- const f=geoFixture(); const id=f.gps.watchPosition(()=>assert.fail()); f.gps.clearWatch(id);await tick();
- assert.equal(f.gps.watchCount,0);assert.deepEqual(f.clears,[]);
-});
-test('stop during permission prompt clears the eventual native watch exactly once',async()=>{
- const f=geoFixture();const id=f.gps.watchPosition(()=>assert.fail());await tick();
- f.gps.clearWatch(id);f.registered('native-7');await tick();f.emit({coords:{}});
- f.gps.clearWatch(id);assert.deepEqual(f.clears,['native-7']);assert.equal(f.gps.watchCount,0);
-});
-test('active GPS delivers fixes and stops callbacks after clear',async()=>{
- const f=geoFixture(), seen=[];const id=f.gps.watchPosition(value=>seen.push(value));
- await tick();f.registered('native-8');await tick();f.emit({coords:{latitude:32}});
- f.gps.clearWatch(id);f.emit({coords:{latitude:33}});
- assert.equal(seen.length,1);assert.deepEqual(f.clears,['native-8']);
-});
-test('backgrounding cancels pending watches and ignores late single fixes',async()=>{
- const f=geoFixture();f.gps.watchPosition(()=>assert.fail());f.gps.getCurrentPosition(()=>assert.fail());
- await tick();f.gps.pause();f.registered('native-9');f.position({coords:{}});await tick();
- assert.deepEqual(f.clears,['native-9']);assert.equal(f.gps.watchCount,0);assert.equal(f.counts.at(-1),0);
- f.gps.resume();assert.equal(f.gps.watchCount,0);
-});
+test('clearWatch before native registration prevents starting a watcher',async()=>{const f=geoFixture();const id=f.gps.watchPosition(()=>assert.fail());f.gps.clearWatch(id);await tick();assert.equal(f.gps.watchCount,0);assert.deepEqual(f.removes,[]);});
+test('stop during background registration removes eventual native watch once',async()=>{const f=geoFixture();const id=f.gps.watchPosition(()=>assert.fail());await tick();f.gps.clearWatch(id);f.registered('native-7');await tick();f.gps.clearWatch(id);assert.deepEqual(f.removes,['native-7']);});
+test('background GPS delivers fixes and stops after clear',async()=>{const f=geoFixture(),seen=[];const id=f.gps.watchPosition(value=>seen.push(value));await tick();f.registered('native-8');await tick();f.emit({latitude:32,longitude:-102,accuracy:5,time:Date.now()});f.gps.clearWatch(id);f.emit({latitude:33,longitude:-101,accuracy:5,time:Date.now()});assert.equal(seen.length,1);assert.equal(seen[0].coords.latitude,32);assert.deepEqual(f.removes,['native-8']);});
+test('backgrounding keeps active background watcher and invalidates pending one-time fix',async()=>{const f=geoFixture(),seen=[];f.gps.watchPosition(value=>seen.push(value));f.gps.getCurrentPosition(()=>assert.fail());await tick();f.registered('native-9');await tick();f.gps.pause();f.emit({latitude:32,longitude:-102,accuracy:5,time:Date.now()});f.position({coords:{latitude:31,longitude:-101,accuracy:5},timestamp:Date.now()});await tick();assert.equal(seen.length,1);assert.equal(f.gps.watchCount,1);f.gps.resume();f.gps.shutdown();await tick();assert.deepEqual(f.removes,['native-9']);});
+test('notification permission failure releases watcher before registration',async()=>{let error;const f=geoFixture({prepareBackground:async()=>{throw Object.assign(Error('Notification required'),{code:'PERMISSION_DENIED'})}});f.gps.watchPosition(()=>assert.fail(),value=>error=value);await tick();await tick();assert.equal(error.code,1);assert.equal(f.gps.watchCount,0);});
+test('simulated native positions are rejected',()=>assert.throws(()=>toBrowserPosition({latitude:32,longitude:-102,accuracy:5,simulated:true}),/Simulated/i));
 test('native watch rejection reaches the error callback and releases wake state',async()=>{
  let error;const counts=[];const gps=createGeolocation({watchPosition:async()=>{throw {code:'OS-PLUG-GLOC-0003'}}},n=>counts.push(n));
  gps.watchPosition(()=>assert.fail(),e=>error=e);await tick();

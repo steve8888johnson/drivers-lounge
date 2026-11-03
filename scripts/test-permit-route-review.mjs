@@ -3,8 +3,15 @@ import assert from'node:assert/strict';
 import{parsePermitPdfText}from'../src/assets/permits/import.mjs';
 import{parseIssuedRouteSteps}from'../src/assets/permits/route-text.mjs';
 import{buildIssuedRouteReview}from'../src/assets/permits/route-review.mjs';
+import{confirmGeometry,confirmPermit}from'../src/assets/permits/core.mjs';
 import{exampleTrip}from'../src/assets/permits/examples.mjs';
 import{texasPermitText}from'./fixtures/permit-packet-unit-179.mjs';
+
+function reviewableTexasPermit(){
+ const permit=parsePermitPdfText(texasPermitText),draft=parseIssuedRouteSteps(permit.routeText,permit.state);let point=[31,-101];
+ permit.steps=draft.steps.map(step=>{const next=[point[0]+.0005,point[1]-.0005],copy={...step,points:[point,next]};point=next;return copy;});
+ permit.documents=[{id:'doc-1',name:'original.pdf',type:'application/pdf',size:1000}];permit.complete=true;confirmPermit(permit);confirmGeometry(permit);return permit;
+}
 
 test('PDF-extracted route lines are visible for parked review but cannot imply guidance readiness',()=>{
  const permit=parsePermitPdfText(texasPermitText),draft=parseIssuedRouteSteps(permit.routeText,permit.state);permit.steps=draft.steps;
@@ -44,16 +51,14 @@ test('cropped Ohio photo evidence remains visibly missing rather than inventing 
 });
 
 test('guidance-ready review requires originals, permit confirmation and geometry on every line',()=>{
- const permit=parsePermitPdfText(texasPermitText),draft=parseIssuedRouteSteps(permit.routeText,permit.state);permit.steps=draft.steps.map((step,index)=>({...step,points:[[31+index/100,-101-index/100],[31.001+index/100,-101.001-index/100]]}));
- permit.documents=[{id:'doc-1',name:'original.pdf',type:'application/pdf',size:1000}];permit.review={hash:'permit-hash',at:'2026-10-19T12:00:00Z'};permit.geometryReview={hash:'geometry-hash',at:'2026-10-19T12:05:00Z'};
+ const permit=reviewableTexasPermit();
  const review=buildIssuedRouteReview(permit);
  assert.equal(review.guidanceReady,true);assert.equal(review.status,'ready');assert.deepEqual(review.issues,[]);
  assert.equal(review.counts.withGeometry,review.counts.total);assert.equal(review.counts.withoutGeometry,0);
 });
 
 test('one missing road name or geometry line keeps the review locked',()=>{
- const permit=parsePermitPdfText(texasPermitText),draft=parseIssuedRouteSteps(permit.routeText,permit.state);permit.steps=draft.steps.map((step,index)=>({...step,points:[[31+index/100,-101-index/100],[31.001+index/100,-101.001-index/100]]}));
- permit.steps[1].road='';permit.steps[2].points=[];permit.documents=[{id:'doc-1',name:'original.pdf',type:'application/pdf',size:1000}];permit.review={hash:'permit-hash',at:'2026-10-19T12:00:00Z'};permit.geometryReview={hash:'geometry-hash',at:'2026-10-19T12:05:00Z'};
+ const permit=reviewableTexasPermit();permit.steps[1].road='';permit.steps[2].points=[];
  const review=buildIssuedRouteReview(permit);
  assert.equal(review.guidanceReady,false);assert.equal(review.counts.missingRoad,1);assert.equal(review.counts.withoutGeometry,1);
  assert.ok(review.issues.some(issue=>/no identified road name/i.test(issue)));

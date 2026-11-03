@@ -31,6 +31,10 @@ export const supabaseTableGroups = [
   {
     migration: '017_rc2_offer_delivery_preferences.sql',
     tables: ['communication_preferences']
+  },
+  {
+    migration: 'migrations/20261103000000_routing_safety_ledger.sql',
+    tables: ['routing_safety_records', 'routing_incidents', 'routing_route_invalidations']
   }
 ];
 

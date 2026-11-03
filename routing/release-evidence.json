@@ -1,0 +1,23 @@
+{
+  "schema": "dl-routing-release-evidence/v1",
+  "updatedAt": "2026-11-03T00:00:00.000Z",
+  "status": "incomplete",
+  "automatedRoutes": 0,
+  "highRiskUrbanRoutes": 0,
+  "hazmatRoutes": 0,
+  "permitPackets": 0,
+  "permitFormats": 0,
+  "physicalRoadMiles": 0,
+  "professionalTesters": 0,
+  "statesFieldTested": 0,
+  "openCriticalDefects": 0,
+  "dualProviderConfigured": false,
+  "officialCoverageCertified": false,
+  "backgroundGuidanceDeviceTested": false,
+  "offlineRecoveryDeviceTested": false,
+  "independentRoutingReviewCompleted": false,
+  "mobileSecurityAssessmentCompleted": false,
+  "incidentResponseDrillCompleted": false,
+  "cloudEvidenceMigrationVerified": false,
+  "evidence": []
+}

@@ -1,4 +1,5 @@
 import { blankHazmat, blankHazmatRoute, sanitizeHazmat, sanitizeHazmatRoute, hazmatErrors } from './hazmat.mjs';
+import { confirmPermitRuleReview, permitRuleIssues } from './rule-engine.mjs';
 // Permit text is evidence. Geometry is a reviewed transcription, never a new route.
 export const CONTROLLING_NOTICE = 'Drivers Lounge assists with following issued permits. The issued permit and state restrictions remain controlling. Never take an unapproved detour.';
 export const STATES = 'AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC'.split(' ');
@@ -8,7 +9,7 @@ export const clean = (value, max = 20000) => String(value ?? '').slice(0, max);
 export function blankPermit() {
   return { id: id(), state: '', number: '', kind: 'single-trip', validFrom: '', validTo: '', timeZone: '',
     entry: { label: '', state: '', road: '' }, exit: { label: '', state: '', road: '' }, routeText: '',
-    restrictions: '', complete: false, qr: [], documents: [], steps: [], confidence: {}, limits: {}, travelWindow: null, geometrySource: null, review: null, geometryReview: null, hazmatRoute: blankHazmatRoute() };
+    restrictions: '', complete: false, qr: [], documents: [], steps: [], confidence: {}, limits: {}, travelWindow: null, geometrySource: null, ruleResolution: '', ruleReview: null, review: null, geometryReview: null, hazmatRoute: blankHazmatRoute() };
 }
 export function blankTrip() {
   return { schema: 'dl-permit-trip/v1', id: id(), revision: 1, name: '', departure: new Date().toLocaleDateString('en-CA'),
@@ -32,6 +33,7 @@ export function confirmPermit(p, reviewer = 'Device operator') {
   const errors = permitErrors(p, false);
   if (errors.length) throw Error(errors.join(' '));
   p.review = { key: reviewKey(p), at: new Date().toISOString(), by: reviewer };
+  try { confirmPermitRuleReview(p, reviewer); } catch { p.ruleReview = null; }
 }
 export function confirmGeometry(p, reviewer = 'Device operator') {
   if (!reviewed(p)) throw Error('Confirm the issued permit first.');
@@ -51,6 +53,7 @@ export function permitErrors(p, requireReview = true) {
   if (!p.documents.length) e.push(`${label}: retain an original permit image or PDF.`);
   if (p.travelWindow && !windowValid(p.travelWindow)) e.push(`${label}: correct the copied movement window and closed dates.`);
   if (requireReview && !reviewed(p)) e.push(`${label}: compare with the original and confirm extraction.`);
+  if (requireReview) e.push(...permitRuleIssues(p));
   return e;
 }
 export function profileErrors(p) {
@@ -183,7 +186,7 @@ export function movementWindow(permit, now = Date.now()) {
 export function sanitizePermit(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw Error('Permit data must be an object.');
   const p = blankPermit();
-  for (const field of ['state', 'number', 'kind', 'validFrom', 'validTo', 'timeZone', 'routeText', 'restrictions']) p[field] = clean(value[field]);
+  for (const field of ['state', 'number', 'kind', 'validFrom', 'validTo', 'timeZone', 'routeText', 'restrictions', 'ruleResolution']) p[field] = clean(value[field]);
   p.state = p.state.toUpperCase(); p.complete = value.complete === true;
   for (const key of ['entry', 'exit']) for (const field of ['label', 'state', 'road']) p[key][field] = clean(value[key]?.[field], 300);
   for (const key of ['heightFt', 'widthFt', 'lengthFt', 'weightLb', 'axles']) if (Number.isFinite(Number(value.limits?.[key])) && Number(value.limits[key]) > 0) p.limits[key] = Number(value.limits[key]);

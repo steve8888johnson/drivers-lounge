@@ -2,7 +2,7 @@ export function apiOrigin(value) {
   const url = new URL(value);
   if (url.protocol !== 'https:' || url.username || url.password || url.port ||
       url.pathname !== '/' || url.search || url.hash ||
-      !(url.hostname === 'driverslounge.app' ||
+      !(url.hostname === 'driverslounge.app' || url.hostname === 'beta.driverslounge.app' ||
         /^drivers-lounge-[a-z0-9-]+-steves-projects-c46af6ff\.vercel\.app$/.test(url.hostname)))
     throw new Error('Use the Drivers Lounge HTTPS production origin or a Drivers Lounge Vercel preview.');
   return url.origin;

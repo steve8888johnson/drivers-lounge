@@ -14,6 +14,7 @@ const healthResponse = await fetch(backend + '/api/truck-route-health', {signal:
 if (!healthResponse.ok) throw Error('The selected API has no healthy truck-routing endpoint.');
 const health = await healthResponse.json();
 if (!health.configured) throw Error('Configure the selected routing API before building the mobile app.');
+if (release && (!health.releaseReady || !health.crossCheckConfigured)) throw Error('Store build blocked: production routing must be release-ready, dual-provider cross-checked, and clear every official-coverage gate.');
 // This is public browser configuration, not server-side credentials.
 const configResponse = await fetch(backend + '/config.js', {signal:AbortSignal.timeout(20000)});
 if (!configResponse.ok) throw Error('Public app configuration is unavailable.');
@@ -62,7 +63,7 @@ await build({entryPoints:[join(mobile,'src/runtime.mjs')],bundle:true,format:'ii
  minify:true,define:{DL_API_ORIGIN:JSON.stringify(backend),DL_PREVIEW_BUILD:JSON.stringify(!release),DL_BUILD_REVISION:JSON.stringify(sourceRevision.slice(0,8))},outfile:join(www,'assets/native-runtime.js')});
 await rm(join(www,'sw.js'),{force:true});
 await writeFile(join(www,'native-build.json'),JSON.stringify({channel:release?'release':'preview',apiOrigin:backend,
- appId:release?'dev.atlasdigital.driverslounge':'dev.atlasdigital.driverslounge.preview',sourceRevision,foregroundGuidanceOnly:true},null,2)+'\n');
+ appId:release?'dev.atlasdigital.driverslounge':'dev.atlasdigital.driverslounge.preview',sourceRevision,foregroundGuidanceOnly:false,backgroundGuidance:true,routingReleaseReady:Boolean(health.releaseReady),crossCheckConfigured:Boolean(health.crossCheckConfigured)},null,2)+'\n');
 let references=0;
 const all=new Set((await walk(www)).map(p=>'/'+relative(www,p).replaceAll('\\','/')));
 for(const page of pages) {

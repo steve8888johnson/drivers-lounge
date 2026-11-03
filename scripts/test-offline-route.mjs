@@ -1,0 +1,4 @@
+import test from'node:test';import assert from'node:assert/strict';import{offlineRouteEligibility}from'../src/assets/routing/offline-route.mjs';
+const now=Date.parse('2026-11-03T12:00:00Z'),saved={safetyRecord:{schema:'dl-route-safety-record/v1',decision:{allowed:true},expiresAt:'2026-11-03T13:00:00Z'},route:{guidanceEligible:true,calculatedAt:'2026-11-03T11:55:00Z',geometry:[[1,1],[2,2]],steps:[{}],profile:{permittedLoad:false}}};
+test('only exact unexpired reviewed route resumes offline',()=>assert.equal(offlineRouteEligibility(saved,now).eligible,true));
+test('blocked, expired, incomplete or permitted route fails',()=>{for(const fn of[x=>x.safetyRecord.decision.allowed=false,x=>x.safetyRecord.expiresAt='2026-11-03T11:00:00Z',x=>x.route.geometry=[],x=>x.route.profile.permittedLoad=true]){const c=structuredClone(saved);fn(c);assert.equal(offlineRouteEligibility(c,now).eligible,false)}});

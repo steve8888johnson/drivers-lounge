@@ -1,0 +1,5 @@
+import test from'node:test';import assert from'node:assert/strict';import{evaluateRoutingReleaseEvidence}from'./check-routing-release.mjs';
+const approved={status:'approved',automatedRoutes:500,highRiskUrbanRoutes:100,hazmatRoutes:100,permitPackets:100,permitFormats:20,physicalRoadMiles:25000,professionalTesters:50,statesFieldTested:30,openCriticalDefects:0,dualProviderConfigured:true,officialCoverageCertified:true,backgroundGuidanceDeviceTested:true,offlineRecoveryDeviceTested:true,independentRoutingReviewCompleted:true,mobileSecurityAssessmentCompleted:true,incidentResponseDrillCompleted:true,cloudEvidenceMigrationVerified:true};
+test('beta permits infrastructure development',()=>assert.equal(evaluateRoutingReleaseEvidence({},{}).errors.length,0));
+test('production blocks incomplete evidence',()=>assert.ok(evaluateRoutingReleaseEvidence({}, {DL_RELEASE:'1'}).errors.length>10));
+test('approved evidence passes strict thresholds',()=>assert.deepEqual(evaluateRoutingReleaseEvidence(approved,{DL_RELEASE:'1',HERE_API_KEY:'h',TOMTOM_API_KEY:'t',DL_ROUTING_OFFICIAL_COVERAGE_COMPLETE:'true'}).errors,[]));

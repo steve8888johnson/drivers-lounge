@@ -4,6 +4,7 @@ import'./guidance-progress-guard.mjs';
 import'./road-context-ui.mjs';
 import'./route-cross-check-ui.mjs';
 import'./route-stop-adapter.mjs';
+import'./route-safety-ui.mjs';
 
 const ENDPOINT='/api/truck-location-search';
 const MIN_QUERY=3;

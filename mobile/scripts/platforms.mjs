@@ -27,7 +27,7 @@ async function patch(path, transform) {
 if(platforms.includes('android')) {
  await patch('android/app/src/main/AndroidManifest.xml',text=>{
   text=text.replace('android:allowBackup="true"','android:allowBackup="false"');
-  const permissions=['ACCESS_COARSE_LOCATION','ACCESS_FINE_LOCATION','CAMERA'];
+  const permissions=['ACCESS_COARSE_LOCATION','ACCESS_FINE_LOCATION','ACCESS_BACKGROUND_LOCATION','FOREGROUND_SERVICE','FOREGROUND_SERVICE_LOCATION','POST_NOTIFICATIONS','CAMERA'];
   const tags=permissions.filter(p=>!text.includes('android.permission.'+p)).map(p=>'<uses-permission android:name="android.permission.'+p+'" />');
   if(!text.includes('android.hardware.location.gps')) tags.push('<uses-feature android:name="android.hardware.location.gps" android:required="false" />');
   if(!text.includes('android.hardware.camera')) tags.push('<uses-feature android:name="android.hardware.camera" android:required="false" />');
@@ -39,6 +39,7 @@ if(platforms.includes('android')) {
  await patch('android/app/src/main/res/values/strings.xml',text=>text
    .replace(/(<string name="app_name">)[^<]+/, '$1'+displayName)
    .replace(/(<string name="title_activity_main">)[^<]+/, '$1'+displayName));
+ await patch('android/app/src/main/res/values/strings.xml',text=>{const additions=[];if(!text.includes('capacitor_background_geolocation_notification_channel_name'))additions.push('<string name="capacitor_background_geolocation_notification_channel_name">Truck Guidance Location</string>');if(!text.includes('capacitor_background_geolocation_notification_icon'))additions.push('<string name="capacitor_background_geolocation_notification_icon">mipmap/ic_launcher</string>');return additions.length?text.replace('</resources>',additions.join('\n')+'\n</resources>'):text;});
  const res=join(mobile,'android/app/src/main/res');
  // Use the existing brand art for legacy and adaptive icons.
  for(const [density,size] of Object.entries({mdpi:48,hdpi:72,xhdpi:96,xxhdpi:144,xxxhdpi:192})) {
@@ -65,10 +66,11 @@ if(platforms.includes('ios')) {
   text=text.replace(/(<key>CFBundleDisplayName<\/key>\s*<string>)[^<]+/, '$1'+displayName);
   const descriptions={
    NSLocationWhenInUseUsageDescription:'Drivers Lounge uses your location for current-position lookup and foreground truck guidance.',
-   NSLocationAlwaysAndWhenInUseUsageDescription:'Drivers Lounge uses location only while the app is open. Background guidance is not supported.',
+   NSLocationAlwaysAndWhenInUseUsageDescription:'Drivers Lounge uses location during active truck guidance, including when the screen is locked or the app is backgrounded. Stop guidance to end tracking.',
    NSCameraUsageDescription:'Scan permit QR codes and attach permit photos you choose to your trip.'
   };
-  const extra=Object.entries(descriptions).filter(([key])=>!text.includes('<key>'+key+'</key>')).map(([key,value])=>'<key>'+key+'</key><string>'+value+'</string>').join('\n');
+  let extra=Object.entries(descriptions).filter(([key])=>!text.includes('<key>'+key+'</key>')).map(([key,value])=>'<key>'+key+'</key><string>'+value+'</string>').join('\n');
+  if(!text.includes('<key>UIBackgroundModes</key>'))extra+=(extra?'\n':'')+'<key>UIBackgroundModes</key><array><string>location</string></array>';
   return text.replace(/<\/dict>\s*<\/plist>\s*$/,extra+'\n</dict>\n</plist>\n');
  });
  await patch('ios/App/App.xcodeproj/project.pbxproj',text=>text.replace(/CURRENT_PROJECT_VERSION = [^;]+;/g,'CURRENT_PROJECT_VERSION = 2000001;').replace(/MARKETING_VERSION = [^;]+;/g,'MARKETING_VERSION = 2.0.0;'));
@@ -80,4 +82,4 @@ if(platforms.includes('ios')) {
  const splash=await sharp({create:{width:2732,height:2732,channels:3,background}}).composite([{input:icon,gravity:'centre'}]).png().toBuffer();
  for(const name of await readdir(join(assets,'Splash.imageset')))if(name.endsWith('.png'))await writeFile(join(assets,'Splash.imageset',name),splash);
 }
-console.log('Native projects configured: '+platforms.join(', ')+'. Guidance is foreground only; no background location entitlement requested.');
+console.log('Native projects configured: '+platforms.join(', ')+'. Active guidance uses native background location with visible system indicators and explicit stop controls.');
