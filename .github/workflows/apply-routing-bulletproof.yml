@@ -41,6 +41,9 @@ jobs:
         run: |
           set -euo pipefail
           git apply --index --whitespace=error-all /tmp/routing-bulletproof.patch
+          # GitHub's automation token cannot update workflow files. That reviewed
+          # one-line workflow change is applied separately through the GitHub API.
+          git restore --source=HEAD --staged --worktree .github/workflows/mobile-build.yml
           git diff --cached --check
 
       - name: Commit and push isolated branch
