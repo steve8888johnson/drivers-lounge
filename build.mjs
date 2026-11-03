@@ -11,17 +11,30 @@ await mkdir('dist',{recursive:true});
 await cp('src','dist',{recursive:true});
 
 const normalizeEnv=value=>String(value||'').trim().replace(/^['"]|['"]$/g,'').replace(/\/$/,'');
-const supabaseUrl=[process.env.NEXT_PUBLIC_SUPABASE_URL,process.env.SUPABASE_URL]
+const environment=process.env.VERCEL_ENV||'development';
+let supabaseUrl=[process.env.NEXT_PUBLIC_SUPABASE_URL,process.env.SUPABASE_URL]
   .map(normalizeEnv)
   .find(value=>/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(value))||'';
-const supabaseAnonKey=normalizeEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||process.env.SUPABASE_ANON_KEY);
+let supabaseAnonKey=normalizeEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||process.env.SUPABASE_ANON_KEY);
+if((!supabaseUrl||!supabaseAnonKey)&&environment==='preview'){
+  const publicConfigUrl='https://beta.driverslounge.app/config.js';
+  const response=await fetch(publicConfigUrl,{redirect:'error',signal:AbortSignal.timeout(20000),headers:{Accept:'application/javascript'}});
+  if(!response.ok)throw new Error(`Public beta client configuration is unavailable (${response.status}).`);
+  const text=await response.text(),start=text.indexOf('{'),end=text.lastIndexOf('}');
+  if(start<0||end<=start)throw new Error('Public beta client configuration is unreadable.');
+  const config=JSON.parse(text.slice(start,end+1));
+  const publicUrl=normalizeEnv(config.supabaseUrl),publicKey=normalizeEnv(config.supabaseAnonKey);
+  if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(publicUrl)||!publicKey)throw new Error('Public beta client configuration is incomplete.');
+  supabaseUrl=publicUrl;
+  supabaseAnonKey=publicKey;
+}
 if(!supabaseUrl||!supabaseAnonKey)throw new Error('Valid public Supabase configuration is missing.');
 let keyRole='';try{keyRole=JSON.parse(Buffer.from(supabaseAnonKey.split('.')[1]||'','base64url').toString()).role}catch(_){}
 if(!supabaseAnonKey.startsWith('sb_publishable_')&&keyRole!=='anon')throw new Error('The browser requires a public publishable or anon key; privileged keys are forbidden.');
 const publicConfig=`window.DRIVERS_LOUNGE_CONFIG = ${JSON.stringify({
   supabaseUrl,
   supabaseAnonKey,
-  environment:process.env.VERCEL_ENV||'development',
+  environment,
   appName:'Drivers Lounge'
 },null,2)};\n`;
 await writeFile('dist/config.js',publicConfig,'utf8');
