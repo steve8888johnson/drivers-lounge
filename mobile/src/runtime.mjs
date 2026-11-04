@@ -6,12 +6,15 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { TextToSpeech } from '@capacitor-community/text-to-speech';
 import { KeepAwake } from '@capacitor-community/keep-awake';
 import { createBackgroundNavigationGeolocation } from './background-geolocation.mjs';
+import { createNativeDiagnostics } from './native-diagnostics.mjs';
 import { createApiFetch } from './api.mjs';
 
 const BackgroundGeolocation=registerPlugin('BackgroundGeolocation');
 
 if (Capacitor.isNativePlatform()) {
   let speechVersion=0,wakeQueue=Promise.resolve(),appActive=true,gps;
+  const diagnostics=createNativeDiagnostics({platform:Capacitor.getPlatform(),revision:DL_BUILD_REVISION,onChange:()=>window.dispatchEvent(new Event('dl-native-diagnostics-updated'))});
+  diagnostics.record('runtime-start',{page:location.pathname,online:navigator.onLine});
   const cancelSpeech=()=>{speechVersion++;void TextToSpeech.stop().catch(()=>{});};
   const speak=async text=>{
     const version=++speechVersion;
@@ -19,15 +22,16 @@ if (Capacitor.isNativePlatform()) {
       await TextToSpeech.stop();
       if(version!==speechVersion)return;
       await TextToSpeech.speak({text,lang:'en-US',rate:.98,pitch:1,volume:1,category:'playback',queueStrategy:0});
-    }catch{window.dispatchEvent(new Event('dl-native-voice-unavailable'));}
+    }catch{diagnostics.record('voice-unavailable',{page:location.pathname});window.dispatchEvent(new Event('dl-native-voice-unavailable'));}
   };
   const ensureBackgroundNotification=async()=>{
     if(Capacitor.getPlatform()!=='android')return true;
     try{
       let permission=(await LocalNotifications.checkPermissions()).display;
       if(permission!=='granted'&&permission!=='denied')permission=(await LocalNotifications.requestPermissions()).display;
+      if(permission!=='granted')diagnostics.record('notification-permission',{code:String(permission)});
       return permission==='granted';
-    }catch{return false;}
+    }catch{diagnostics.record('notification-permission',{code:'ERROR'});return false;}
   };
   const setWakeState=(count,active=appActive)=>{
     wakeQueue=wakeQueue.catch(()=>{}).then(()=>count>0&&active?KeepAwake.keepAwake():KeepAwake.allowSleep());
@@ -38,19 +42,21 @@ if (Capacitor.isNativePlatform()) {
     backgroundPlugin:BackgroundGeolocation,
     ensureBackgroundNotification,
     shouldUseBackground:()=>/^\/(?:navigation|permitted-loads)(?:\.html)?$/.test(location.pathname),
+    onDiagnostic:(type,details)=>type==='gps-fix'?diagnostics.recordFix(details):diagnostics.record(type,details),
     onWatchChange:count=>{
-      setWakeState(count,appActive);
+      setWakeState(count,appActive);diagnostics.record('watch-count',{watchCount:count,page:location.pathname});
       window.dispatchEvent(new CustomEvent('dl-native-location-watch',{detail:{count,backgroundCapable:true}}));
     },
     onAppModeChange:detail=>{
-      setWakeState(detail.watchCount,detail.active);
+      setWakeState(detail.watchCount,detail.active);diagnostics.record('app-state',{active:detail.active,watchCount:detail.watchCount,page:location.pathname});
       window.dispatchEvent(new CustomEvent('dl-native-app-state',{detail:{...detail,backgroundCapable:true}}));
     }
   });
   Object.defineProperty(navigator,'geolocation',{configurable:true,value:gps});
+  window.DL_NATIVE_DIAGNOSTICS=Object.freeze({snapshot:()=>diagnostics.snapshot(),exportText:()=>diagnostics.exportText(),clear:()=>diagnostics.clear()});
   window.DL_NATIVE=Object.freeze({
     apiOrigin:DL_API_ORIGIN,speak,cancelSpeech,
-    backgroundGuidanceSupported:true,
+    backgroundGuidanceSupported:true,diagnosticsAvailable:true,
     openLocationSettings:()=>gps.openSettings(),
     stopBackgroundGuidance:()=>gps.stopAll()
   });
@@ -60,13 +66,15 @@ if (Capacitor.isNativePlatform()) {
     appActive=Boolean(active);gps.setAppActive(appActive);
     document.documentElement.dataset.nativeAppState=appActive?'foreground':'background';
   };
+  const recordNetwork=()=>diagnostics.record('network-state',{online:navigator.onLine,page:location.pathname});
   void App.addListener('appStateChange',({isActive})=>setAppActive(isActive));
   void App.addListener('backButton',({canGoBack})=>{
     if(canGoBack)history.back();
     else if(!['/','/index.html'].includes(location.pathname))location.assign('/index.html');
   });
-  window.addEventListener('pageshow',()=>setAppActive(!document.hidden));
-  window.addEventListener('beforeunload',()=>{gps.stopAll();cancelSpeech();setWakeState(0,false);});
+  addEventListener('online',recordNetwork);addEventListener('offline',recordNetwork);
+  addEventListener('pageshow',()=>setAppActive(!document.hidden));
+  addEventListener('beforeunload',()=>{diagnostics.record('runtime-stop',{page:location.pathname,watchCount:gps.watchCount});gps.stopAll();cancelSpeech();setWakeState(0,false);});
   document.addEventListener('visibilitychange',()=>setAppActive(!document.hidden));
 
   document.addEventListener('click',event=>{

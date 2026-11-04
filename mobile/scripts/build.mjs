@@ -62,7 +62,7 @@ await build({entryPoints:[join(mobile,'src/runtime.mjs')],bundle:true,format:'ii
  minify:true,define:{DL_API_ORIGIN:JSON.stringify(backend),DL_PREVIEW_BUILD:JSON.stringify(!release),DL_BUILD_REVISION:JSON.stringify(sourceRevision.slice(0,8))},outfile:join(www,'assets/native-runtime.js')});
 await rm(join(www,'sw.js'),{force:true});
 await writeFile(join(www,'native-build.json'),JSON.stringify({channel:release?'release':'preview',apiOrigin:backend,
- appId:release?'dev.atlasdigital.driverslounge':'dev.atlasdigital.driverslounge.preview',sourceRevision,foregroundGuidanceOnly:true},null,2)+'\n');
+ appId:release?'dev.atlasdigital.driverslounge':'dev.atlasdigital.driverslounge.preview',sourceRevision,foregroundGuidanceOnly:false,backgroundGuidance:true,nativeDiagnostics:true,diagnosticsPrivacy:'local-no-coordinates'},null,2)+'\n');
 let references=0;
 const all=new Set((await walk(www)).map(p=>'/'+relative(www,p).replaceAll('\\','/')));
 for(const page of pages) {

@@ -12,7 +12,7 @@ Use Node 22. Install root dependencies with npm ci, then:
     cd mobile
     npm ci
     npm test
-    DL_API_ORIGIN=https://drivers-lounge-7artkb8ai-steves-projects-c46af6ff.vercel.app npm run build
+    DL_API_ORIGIN=https://drivers-lounge-f2fjsdxfm-steves-projects-c46af6ff.vercel.app npm run build
     npm run init
 
 On Windows PowerShell, set $env:DL_API_ORIGIN before npm run build.
@@ -28,7 +28,7 @@ npm run sync after changing the web app. Individual platform generation is also
 supported: node scripts/platforms.mjs android (or ios).
 
 App ID: dev.atlasdigital.driverslounge
-Version: 2.0.1; native build number: 2000002.
+Version: 2.0.1; native build number: 2000003.
 The identifier has not been confirmed as registered in either store.
 
 ## Current behavior
@@ -47,6 +47,11 @@ The identifier has not been confirmed as registered in either store.
   fails closed instead of attempting hidden location tracking.
 - Simulated and stale native locations are rejected before they reach route
   progress or deviation logic.
+- A bounded, device-only field diagnostics report records timing, GPS accuracy
+  bands, app foreground/background changes, native watcher counts, network changes
+  and voice failures. It never records coordinates, addresses, route geometry,
+  permit contents, account identifiers or device identifiers. The driver must
+  explicitly copy or download the report before it leaves the device.
 - Native text-to-speech speaks existing guidance prompts; failures show a warning.
 - Same-app JSON API calls use native HTTPS to the configured Drivers Lounge backend.
   Other requests retain normal browser transport. API redirects are refused.

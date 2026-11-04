@@ -39,3 +39,40 @@ test('screen wake lock is released while background guidance continues',async()=
  assert.match(source,/setWakeState\(detail\.watchCount,detail\.active\)/);
  assert.match(source,/beforeunload.*setWakeState\(0,false\)/);
 });
+
+
+test('native build metadata declares background guidance and local privacy-minimized diagnostics',async()=>{
+ const source=await read('scripts/build.mjs');
+ assert.match(source,/foregroundGuidanceOnly:false/);
+ assert.match(source,/backgroundGuidance:true/);
+ assert.match(source,/nativeDiagnostics:true/);
+ assert.match(source,/diagnosticsPrivacy:'local-no-coordinates'/);
+});
+
+test('native runtime exposes diagnostics without coordinates and records app, network and voice failures',async()=>{
+ const source=await read('src/runtime.mjs');
+ assert.match(source,/createNativeDiagnostics/);
+ assert.match(source,/DL_NATIVE_DIAGNOSTICS/);
+ assert.match(source,/diagnosticsAvailable:true/);
+ assert.match(source,/network-state/);
+ assert.match(source,/voice-unavailable/);
+ for(const line of source.split('\n').filter(line=>line.includes('diagnostics.record')))assert.doesNotMatch(line,/\b(?:latitude|longitude|address|permitNumber|userId|deviceId)\b/i);
+});
+
+test('diagnostics screen and assets are required by the root build and state their privacy boundary',async()=>{
+ const rootBuild=await readFile(new URL('../../build.mjs',import.meta.url),'utf8');
+ const page=await readFile(new URL('../../src/native-diagnostics.html',import.meta.url),'utf8');
+ for(const required of['src/native-diagnostics.html','src/assets/native-diagnostics-ui.js','src/assets/native-diagnostics.css'])assert.match(rootBuild,new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
+ for(const phrase of['does not record coordinates','route geometry','account identifiers','device identifiers'])assert.match(page,new RegExp(phrase,'i'));
+ assert.match(page,/noindex,nofollow/);
+});
+
+
+test('public privacy policy discloses the device-only diagnostics boundary',async()=>{
+ const privacy=await readFile(new URL('../../src/privacy.html',import.meta.url),'utf8');
+ assert.match(privacy,/Local field diagnostics/);
+ assert.match(privacy,/not sent to Drivers Lounge automatically/);
+ for(const excluded of['coordinates','addresses','route geometry','permit contents','account identifiers','device identifiers'])assert.match(privacy,new RegExp(excluded,'i'));
+ assert.match(privacy,/copy, download or share/);
+ assert.match(privacy,/clear it from the device/);
+});

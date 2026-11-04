@@ -46,7 +46,7 @@ if(platforms.includes('android')){
   if(!text.includes(service))text=text.replace('</application>',`<service android:name="${service}" android:enabled="true" android:exported="false" android:foregroundServiceType="location" tools:replace="android:exported" />\n</application>`);
   return text;
  });
- await patch('android/app/build.gradle',text=>text.replace(/versionCode \d+/,'versionCode 2000002').replace(/versionName "[^"]+"/,'versionName "2.0.1"').replace(/applicationId "[^"]+"/,`applicationId "${applicationId}"`));
+ await patch('android/app/build.gradle',text=>text.replace(/versionCode \d+/,'versionCode 2000003').replace(/versionName "[^"]+"/,'versionName "2.0.1"').replace(/applicationId "[^"]+"/,`applicationId "${applicationId}"`));
  await patch('android/app/src/main/res/values/strings.xml',text=>{
   text=text.replace(/(<string name="app_name">)[^<]+/,'$1'+displayName).replace(/(<string name="title_activity_main">)[^<]+/,'$1'+displayName);
   const values={
@@ -86,7 +86,7 @@ if(platforms.includes('ios')){
   else if(!/<key>UIBackgroundModes<\/key>\s*<array>[\s\S]*?<string>location<\/string>[\s\S]*?<\/array>/.test(text))text=text.replace(/(<key>UIBackgroundModes<\/key>\s*<array>)/,'$1<string>location</string>');
   return text;
  });
- await patch('ios/App/App.xcodeproj/project.pbxproj',text=>text.replace(/CURRENT_PROJECT_VERSION = [^;]+;/g,'CURRENT_PROJECT_VERSION = 2000002;').replace(/MARKETING_VERSION = [^;]+;/g,'MARKETING_VERSION = 2.0.1;').replace(/PRODUCT_BUNDLE_IDENTIFIER = [^;]+;/g,`PRODUCT_BUNDLE_IDENTIFIER = ${applicationId};`));
+ await patch('ios/App/App.xcodeproj/project.pbxproj',text=>text.replace(/CURRENT_PROJECT_VERSION = [^;]+;/g,'CURRENT_PROJECT_VERSION = 2000003;').replace(/MARKETING_VERSION = [^;]+;/g,'MARKETING_VERSION = 2.0.1;').replace(/PRODUCT_BUNDLE_IDENTIFIER = [^;]+;/g,`PRODUCT_BUNDLE_IDENTIFIER = ${applicationId};`));
  const assets=join(mobile,'ios/App/App/Assets.xcassets');
  await sharp(logo).resize(1024,1024,{fit:'contain',background}).flatten({background}).png().toFile(join(assets,'AppIcon.appiconset/AppIcon-512@2x.png'));
  const icon=await sharp(logo).resize(656,656,{fit:'contain',background}).png().toBuffer(),splash=await sharp({create:{width:2732,height:2732,channels:3,background}}).composite([{input:icon,gravity:'centre'}]).png().toBuffer();

@@ -87,6 +87,26 @@ any store release:
 10. Run at least a four-hour monitored route and record battery use, device heat,
     voice prompt timing, interruptions, Bluetooth behavior and reconnects.
 
+## Local field diagnostics
+
+The installed test app keeps a bounded diagnostics report on that device. Open
+**Safety Center → Native field diagnostics** after the background-guidance matrix.
+The report records event timing, GPS accuracy bands, foreground/background changes,
+active watcher counts, network transitions and voice failures. It intentionally
+excludes coordinates, addresses, route geometry, permit contents, account IDs and
+device IDs.
+
+1. Clear the previous local report before a new test.
+2. Run the parked lock-screen, app-switch and airplane-mode sequence.
+3. Press **Stop guidance**, return to Native field diagnostics, and confirm the
+   active watcher count returns to zero.
+4. Download the JSON report. Review its privacy statement before sharing it.
+5. Keep screenshots free of permit, account and location details.
+
+A report proves only what the device recorded during that test. It does not prove
+that a route is legal, that every GPS callback was delivered, or that all phone
+models and operating-system power modes behave the same way.
+
 ## Known limits
 
 - TomTom is configured. HERE/cross-provider verification is not configured, so

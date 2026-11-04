@@ -35,6 +35,7 @@ export function createBackgroundNavigationGeolocation({
   ensureBackgroundNotification=async()=>true,
   onWatchChange=()=>{},
   onAppModeChange=()=>{},
+  onDiagnostic=()=>{},
   clock=()=>Date.now(),
   maxLocationAgeMs=30000,
   notificationTitle=DEFAULT_NOTIFICATION_TITLE,
@@ -46,6 +47,7 @@ export function createBackgroundNavigationGeolocation({
   let sequence=0,appActive=true,appStateVersion=0;
   const watches=new Map();
   const notify=()=>onWatchChange(watches.size);
+  const diagnose=(type,details={})=>{try{onDiagnostic(type,details);}catch{/* Diagnostics are optional. */}};
   const report=(callback,error)=>{if(callback)callback(backgroundLocationError(error));};
   const removeBackground=id=>backgroundPlugin.removeWatcher({id}).catch(()=>{});
   const removeForeground=id=>Promise.resolve(foregroundPlugin.clearWatch?.({id})).catch(()=>{});
@@ -89,8 +91,8 @@ export function createBackgroundNavigationGeolocation({
         if(!foregroundPlugin?.watchPosition)throw Error('Foreground location watcher is unavailable.');
         return foregroundPlugin.watchPosition(foregroundOptions(options),(position,problem)=>{
           if(!watches.has(id))return;
-          if(problem){report(error,problem);return;}
-          if(position)success(position);
+          if(problem){diagnose('gps-error',{background:false,code:problem?.code});report(error,problem);return;}
+          if(position){diagnose('gps-fix',{background:false,accuracy:position.coords?.accuracy,ageMs:Math.max(0,clock()-Number(position.timestamp||clock()))});success(position);}
         });
       }
       const allowed=await ensureBackgroundNotification();
@@ -98,22 +100,20 @@ export function createBackgroundNavigationGeolocation({
       if(!watches.has(id))return null;
       return backgroundPlugin.addWatcher(backgroundOptions(options),(location,problem)=>{
         if(!watches.has(id))return;
-        if(problem){report(error,problem);return;}
+        if(problem){diagnose('gps-error',{background:true,code:problem?.code});report(error,problem);return;}
         if(!location)return;
         try{
-          const position=browserPosition(location,clock());
-          if(clock()-position.timestamp>maxLocationAgeMs){
-            report(error,{code:'STALE_LOCATION',message:'GPS delivered a stale location. Guidance is paused until a fresh fix arrives.'});return;
-          }
-          success(position);
-        }catch(problem){report(error,problem);}
+          const position=browserPosition(location,clock()),ageMs=Math.max(0,clock()-position.timestamp);
+          if(ageMs>maxLocationAgeMs){diagnose('gps-error',{background:true,code:'STALE_LOCATION'});report(error,{code:'STALE_LOCATION',message:'GPS delivered a stale location. Guidance is paused until a fresh fix arrives.'});return;}
+          diagnose('gps-fix',{background:true,accuracy:position.coords.accuracy,ageMs});success(position);
+        }catch(problem){diagnose('gps-error',{background:true,code:problem?.code});report(error,problem);}
       });
     }).then(nativeId=>{
       if(nativeId===null||nativeId===undefined)return;
       watch.nativeId=String(nativeId);
       if(!watches.has(id))clearNative(watch);
     }).catch(problem=>{
-      if(watches.has(id)){watches.delete(id);notify();report(error,problem);}
+      if(watches.has(id)){watches.delete(id);notify();diagnose('gps-error',{background,code:problem?.code});report(error,problem);}
     });
     return id;
   }
@@ -123,9 +123,7 @@ export function createBackgroundNavigationGeolocation({
     appActive=next;appStateVersion+=1;
     let removed=false;
     if(!appActive){
-      for(const[id,watch]of[...watches])if(!watch.background){
-        watches.delete(id);clearNative(watch);removed=true;
-      }
+      for(const[id,watch]of[...watches])if(!watch.background){watches.delete(id);clearNative(watch);removed=true;}
     }
     if(removed)notify();
     onAppModeChange({active:appActive,watchCount:watches.size});
