@@ -33,6 +33,7 @@ if (Capacitor.isNativePlatform()) {
     foregroundPlugin:Geolocation,
     backgroundPlugin:BackgroundGeolocation,
     ensureBackgroundNotification,
+    shouldUseBackground:()=>/^\/(?:navigation|permitted-loads)(?:\.html)?$/.test(location.pathname),
     onWatchChange:count=>{
       wakeQueue=wakeQueue.catch(()=>{}).then(()=>count?KeepAwake.keepAwake():KeepAwake.allowSleep());
       void wakeQueue.catch(()=>{});
@@ -59,6 +60,7 @@ if (Capacitor.isNativePlatform()) {
     else if(!['/','/index.html'].includes(location.pathname))location.assign('/index.html');
   });
   window.addEventListener('pageshow',()=>setAppActive(!document.hidden));
+  window.addEventListener('beforeunload',()=>gps.stopAll());
   document.addEventListener('visibilitychange',()=>setAppActive(!document.hidden));
 
   document.addEventListener('click',event=>{
@@ -82,7 +84,7 @@ if (Capacitor.isNativePlatform()) {
       testNotice.textContent='Drivers Lounge Test · '+DL_BUILD_REVISION+'. Use test data. Route verification is incomplete; this is not a validated truck-navigation release.';
       (document.querySelector('main')||document.body).prepend(testNotice);
     }
-    if(/\/(?:navigation|permitted-loads)(?:\.html)?$/.test(location.pathname)){
+    if(/^\/(?:navigation|permitted-loads)(?:\.html)?$/.test(location.pathname)){
       const note=document.createElement('p');note.className='dl-background-guidance-note';
       note.textContent='While guidance is active, location continues with the screen locked or another app open. Android shows a persistent navigation notification; iOS shows the system location indicator. Tap Stop guidance to end background location use.';
       (document.querySelector('main')||document.body).prepend(note);
