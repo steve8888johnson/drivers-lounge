@@ -20,6 +20,7 @@ Use the canonical server-only environment variables `TRUCK_ROUTING_HERE_API_KEY`
 - `DL_RELEASE=1 npm run check:routing-providers` is the release gate and requires two distinct valid providers with no active routing kill switch.
 - `ROUTING_BENCHMARK_LIVE=true npm run benchmark:routing` runs the safety benchmark through `/api/truck-route-consensus` semantics and requires aligned independent providers by default.
 - `ROUTING_BENCHMARK_LIVE=true ROUTING_BENCHMARK_MODE=single-provider npm run benchmark:routing` is permitted only for provider diagnostics. Its results are not release evidence.
+- `ROUTING_BENCHMARK_LIVE=true ROUTING_BENCHMARK_ENDPOINT=https://beta.driverslounge.app ROUTING_BENCHMARK_MODE=single-provider npm run benchmark:routing:deployed` runs the same cases against a deployed Drivers Lounge endpoint without copying provider credentials into the runner. Omit `ROUTING_BENCHMARK_MODE=single-provider` after two-provider release readiness is established.
 - Save the JSON benchmark output, provider/version identifiers, timestamp, app revision, and all failed cases with the release record.
 
 The runtime health endpoint `/api/truck-route-health` reports provider state, policy blockers, preview eligibility and release eligibility without returning credentials or credential-derived hashes. Production policy continues to block guidance unless independent cross-checking is configured.
