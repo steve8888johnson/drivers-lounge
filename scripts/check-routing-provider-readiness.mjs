@@ -8,12 +8,13 @@ console.log(`Routing provider readiness: ${readiness.status}.`);
 for(const provider of readiness.providers){
  const source=provider.configured?` via ${provider.source}`:'';
  const issues=provider.issues.length?` (${provider.issues.join(', ')})`:'';
- console.log(`- ${provider.label}: ${provider.state}${source}${issues}`);
+ console.log(`- ${provider.label}: ${provider.state} [credential ${provider.credentialState}]${source}${issues}`);
 }
 console.log(`Operational providers: ${readiness.activeProviderCount}; independent providers: ${readiness.independentProviderCount}; preview eligible: ${readiness.previewEligible}; release eligible: ${readiness.releaseEligible}.`);
 if(readiness.blockers.length)console.log(`Blockers: ${readiness.blockers.join(', ')}.`);
 const invalid=readiness.blockers.some(code=>['invalid_provider_credentials','conflicting_provider_aliases','duplicate_provider_credentials'].includes(code));
-if(invalid){console.error('Routing provider configuration is unsafe. Correct the server-side environment variables before deploying.');process.exit(1);}
+if(invalid&&release){console.error('Routing provider configuration is unsafe. Correct the server-side environment variables before releasing.');process.exit(1);}
+if(invalid&&!release)console.warn('Routing provider configuration is invalid. Preview deployment may continue, but routing remains fail-closed.');
 if(release&&!readiness.releaseEligible){
  console.error('Release routing gate failed. Production guidance requires two distinct, valid professional truck-routing provider credentials and no active kill switch.');
  process.exit(1);

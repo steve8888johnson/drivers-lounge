@@ -1,6 +1,7 @@
 import test from'node:test';
 import assert from'node:assert/strict';
 import{readFile}from'node:fs/promises';
+import{spawnSync}from'node:child_process';
 import healthHandler from'../api/truck-route-health.mjs';
 import{inspectRoutingCredential,readRoutingProviderReadiness}from'../src/assets/routing/provider-readiness.mjs';
 
@@ -73,6 +74,20 @@ test('health endpoint reports readiness without ever serializing credentials',()
   for(const key of Object.keys(process.env))if(!(key in saved))delete process.env[key];
   for(const[key,value]of Object.entries(saved))process.env[key]=value;
  }
+});
+
+test('preview build reports malformed credentials without making the app undeployable',()=>{
+ const env={...process.env,TOMTOM_API_KEY:'short',VERCEL_ENV:'preview'};
+ for(const key of ['HERE_API_KEY','TRUCK_ROUTING_HERE_API_KEY','TRUCK_ROUTING_TOMTOM_API_KEY','DL_RELEASE'])delete env[key];
+ const result=spawnSync(process.execPath,['scripts/check-routing-provider-readiness.mjs'],{cwd:new URL('..',import.meta.url),env,encoding:'utf8'});
+ assert.equal(result.status,0);assert.match(result.stderr,/remains fail-closed/i);assert.match(result.stdout,/credential malformed/i);
+});
+
+test('release build hard-fails the same malformed provider configuration',()=>{
+ const env={...process.env,TOMTOM_API_KEY:'short',DL_RELEASE:'1',VERCEL_ENV:'production'};
+ for(const key of ['HERE_API_KEY','TRUCK_ROUTING_HERE_API_KEY','TRUCK_ROUTING_TOMTOM_API_KEY'])delete env[key];
+ const result=spawnSync(process.execPath,['scripts/check-routing-provider-readiness.mjs'],{cwd:new URL('..',import.meta.url),env,encoding:'utf8'});
+ assert.equal(result.status,1);assert.match(result.stderr,/unsafe/i);
 });
 
 test('live benchmark uses consensus mode by default and permits explicit single-provider diagnostics',async()=>{

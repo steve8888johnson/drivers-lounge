@@ -35,6 +35,7 @@ function resolveProvider(env,definition){
   definition,value:valid?selected.value:'',public:{
    id:definition.id,label:definition.label,configured:entries.length>0,valid,
    state:entries.length===0?'missing':valid?'configured':'invalid',
+   credentialState:selected?.inspection.state||'missing',
    source:selected?.name||definition.canonical,
    canonicalConfigured:entries.some(entry=>entry.name===definition.canonical),
    aliasesConfigured:definition.aliases.filter(name=>entries.some(entry=>entry.name===name)),
