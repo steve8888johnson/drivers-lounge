@@ -32,3 +32,10 @@ test('native runtime keeps reviewed-route watches alive but scopes background us
  assert.match(source,/beforeunload.*gps\.stopAll/);
  assert.match(source,/persistent navigation notification/);
 });
+
+test('screen wake lock is released while background guidance continues',async()=>{
+ const source=await read('src/runtime.mjs');
+ assert.match(source,/count>0&&active\?KeepAwake\.keepAwake\(\):KeepAwake\.allowSleep\(\)/);
+ assert.match(source,/setWakeState\(detail\.watchCount,detail\.active\)/);
+ assert.match(source,/beforeunload.*setWakeState\(0,false\)/);
+});
