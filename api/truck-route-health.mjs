@@ -1,18 +1,22 @@
 import{readRoutingPolicy}from'../src/assets/routing/routing-policy.mjs';
+import{readRoutingProviderReadiness}from'../src/assets/routing/provider-readiness.mjs';
 const send=(res,status,body)=>{res.setHeader('Cache-Control','no-store');res.setHeader('Content-Type','application/json');res.statusCode=status;res.end(JSON.stringify(body));};
-const key=name=>String(process.env[name]||'').trim();
 export default function handler(req,res){
  if(req.method!=='GET'){res.setHeader('Allow','GET');return send(res,405,{error:'Use GET.'});}
- const here=Boolean(key('TRUCK_ROUTING_HERE_API_KEY')||key('HERE_API_KEY'));
- const tomtom=Boolean(key('TRUCK_ROUTING_TOMTOM_API_KEY')||key('TOMTOM_API_KEY'));
- const providers=[here?'HERE Routing API v8':null,tomtom?'TomTom Routing API v1':null].filter(Boolean),policy=readRoutingPolicy();
- const provider=providers[0]||null,crossCheckConfigured=providers.length>=2;
- const guidanceAllowed=Boolean(provider)&&!policy.globalDisabled&&(!policy.requireCrossCheck||crossCheckConfigured);
- const blockers=[];if(!provider)blockers.push('credentials_required');if(policy.globalDisabled)blockers.push('kill_switch_active');if(policy.requireCrossCheck&&!crossCheckConfigured)blockers.push('independent_cross_check_required');
+ const policy=readRoutingPolicy(),readiness=readRoutingProviderReadiness(process.env,policy);
+ const providers=readiness.providers.filter(item=>item.active).map(item=>item.label);
  return send(res,200,{
-  configured:Boolean(provider),guidanceAllowed,provider,providers,fallback:here&&tomtom?'TomTom Routing API v1':null,
-  crossCheckConfigured,crossCheckMode:crossCheckConfigured?'dual-provider-fail-closed':'single-provider-unverified',
-  routeEndpoint:'/api/truck-route-consensus',mode:'truck',status:provider?'configured':'credentials_required',safetyModel:'fail-closed',
-  policy:{version:policy.version,environment:policy.environment,requireCrossCheck:policy.requireCrossCheck,globalDisabled:policy.globalDisabled,blockers}
+  configured:readiness.validProviderCount>0,guidanceAllowed:readiness.guidanceAllowed,
+  provider:readiness.primaryProvider?.label||null,providers,fallback:readiness.secondaryProvider?.label||null,
+  crossCheckConfigured:readiness.crossCheckConfigured,
+  crossCheckMode:readiness.crossCheckConfigured?'dual-provider-fail-closed':readiness.activeProviderCount?'single-provider-unverified':'not-configured',
+  routeEndpoint:'/api/truck-route-consensus',mode:'truck',status:readiness.status,safetyModel:'fail-closed',
+  policy:{version:policy.version,environment:policy.environment,requireCrossCheck:policy.requireCrossCheck,globalDisabled:policy.globalDisabled,blockers:readiness.blockers},
+  readiness:{
+   schema:readiness.schema,status:readiness.status,configuredProviderCount:readiness.configuredProviderCount,
+   validProviderCount:readiness.validProviderCount,activeProviderCount:readiness.activeProviderCount,independentProviderCount:readiness.independentProviderCount,
+   previewEligible:readiness.previewEligible,releaseEligible:readiness.releaseEligible,
+   providers:readiness.providers,blockers:readiness.blockers
+  }
  });
 }

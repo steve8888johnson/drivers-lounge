@@ -12,11 +12,23 @@ Drivers Lounge must not market navigation as "truck legal," "premier," or "produ
 - Offline mode may preserve the app shell and reviewed permit packets, but it does not pretend to perform a new live restriction check.
 - Advertising must not interrupt active navigation or obscure safety warnings.
 
+## Provider-readiness and benchmark commands
+
+Use the canonical server-only environment variables `TRUCK_ROUTING_HERE_API_KEY` and `TRUCK_ROUTING_TOMTOM_API_KEY`. The legacy aliases `HERE_API_KEY` and `TOMTOM_API_KEY` remain readable during migration, but conflicting alias values, placeholder values, malformed values, or the same credential reused for both providers fail the build gate. No readiness response, benchmark report, or log may contain a credential value.
+
+- `npm run check:routing-providers` validates configuration without making a provider request. A one-provider preview remains explicitly `single_provider_unverified`.
+- `DL_RELEASE=1 npm run check:routing-providers` is the release gate and requires two distinct valid providers with no active routing kill switch.
+- `ROUTING_BENCHMARK_LIVE=true npm run benchmark:routing` runs the safety benchmark through `/api/truck-route-consensus` semantics and requires aligned independent providers by default.
+- `ROUTING_BENCHMARK_LIVE=true ROUTING_BENCHMARK_MODE=single-provider npm run benchmark:routing` is permitted only for provider diagnostics. Its results are not release evidence.
+- Save the JSON benchmark output, provider/version identifiers, timestamp, app revision, and all failed cases with the release record.
+
+The runtime health endpoint `/api/truck-route-health` reports provider state, policy blockers, preview eligibility and release eligibility without returning credentials or credential-derived hashes. Production policy continues to block guidance unless independent cross-checking is configured.
+
 ## Required proof before public routing claims
 
 ### Engine and data
 
-- [ ] Licensed commercial-routing provider configured in preview and production.
+- [ ] Two distinct licensed commercial-routing providers configured in preview and production for independent fail-closed verification.
 - [ ] Provider contract and data-use terms reviewed, including map-display and offline limitations.
 - [ ] Height, width, total length, trailer length, gross/current weight, axle groups, trailer count, hazmat categories, tunnel category, toll preference and departure time verified against provider units.
 - [ ] Clear provider/version identification recorded with every calculated route.
