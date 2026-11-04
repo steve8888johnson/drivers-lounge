@@ -8,7 +8,8 @@ console.log(`Routing provider readiness: ${readiness.status}.`);
 for(const provider of readiness.providers){
  const source=provider.configured?` via ${provider.source}`:'';
  const issues=provider.issues.length?` (${provider.issues.join(', ')})`:'';
- console.log(`- ${provider.label}: ${provider.state} [credential ${provider.credentialState}]${source}${issues}`);
+ const credential=`credential ${provider.credentialState}/${provider.credentialIssue}${provider.credentialNormalized?' normalized':''}`;
+ console.log(`- ${provider.label}: ${provider.state} [${credential}]${source}${issues}`);
 }
 console.log(`Operational providers: ${readiness.activeProviderCount}; independent providers: ${readiness.independentProviderCount}; preview eligible: ${readiness.previewEligible}; release eligible: ${readiness.releaseEligible}.`);
 if(readiness.blockers.length)console.log(`Blockers: ${readiness.blockers.join(', ')}.`);

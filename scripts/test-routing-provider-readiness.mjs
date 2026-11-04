@@ -9,12 +9,15 @@ const HERE='here_abcdefghijklmnopqrstuvwxyz_123456789';
 const TOMTOM='tomtom_abcdefghijklmnopqrstuvwxyz_987654321';
 const policy=(overrides={})=>({environment:'preview',requireCrossCheck:false,globalDisabled:false,...overrides});
 
-test('credential inspection rejects missing, placeholder, malformed and short values',()=>{
- assert.equal(inspectRoutingCredential('').state,'missing');
- assert.equal(inspectRoutingCredential('YOUR_HERE_API_KEY').state,'placeholder');
- assert.equal(inspectRoutingCredential('short').state,'malformed');
- assert.equal(inspectRoutingCredential(`valid-looking-key\nsecret`).state,'malformed');
- assert.equal(inspectRoutingCredential(HERE).valid,true);
+test('credential inspection normalizes only outer whitespace and reports safe issue codes',()=>{
+ assert.deepEqual(inspectRoutingCredential(''),{state:'missing',valid:false,issue:'missing',normalized:false});
+ assert.equal(inspectRoutingCredential('YOUR_HERE_API_KEY').issue,'placeholder');
+ assert.equal(inspectRoutingCredential('short').issue,'too_short');
+ assert.equal(inspectRoutingCredential(`valid-looking-key\nsecret`).issue,'internal_whitespace');
+ assert.equal(inspectRoutingCredential(`\"${HERE}\"`).issue,'surrounding_quotes');
+ assert.equal(inspectRoutingCredential(`${HERE}é`).issue,'non_ascii');
+ assert.deepEqual(inspectRoutingCredential(`  ${HERE}\n`),{state:'present',valid:true,issue:'outer_whitespace_trimmed',normalized:true});
+ assert.deepEqual(inspectRoutingCredential(HERE),{state:'present',valid:true,issue:'none',normalized:false});
 });
 
 test('missing providers remain fail-closed',()=>{
@@ -27,6 +30,14 @@ test('single provider is preview-eligible but never release-eligible',()=>{
  assert.equal(value.status,'single_provider_unverified');assert.equal(value.previewEligible,true);
  assert.equal(value.crossCheckConfigured,false);assert.equal(value.releaseEligible,false);
  assert.equal(value.primaryProvider.label,'TomTom Routing API v1');
+});
+
+test('outer whitespace normalization matches the routing adapter without weakening release policy',()=>{
+ const value=readRoutingProviderReadiness({TOMTOM_API_KEY:`  ${TOMTOM}\n`},policy());
+ assert.equal(value.previewEligible,true);assert.equal(value.releaseEligible,false);
+ const provider=value.providers.find(item=>item.id==='tomtom');
+ assert.equal(provider.valid,true);assert.equal(provider.credentialNormalized,true);
+ assert.equal(provider.credentialIssue,'outer_whitespace_trimmed');
 });
 
 test('two distinct valid providers satisfy the independent release gate',()=>{
@@ -80,7 +91,7 @@ test('preview build reports malformed credentials without making the app undeplo
  const env={...process.env,TOMTOM_API_KEY:'short',VERCEL_ENV:'preview'};
  for(const key of ['HERE_API_KEY','TRUCK_ROUTING_HERE_API_KEY','TRUCK_ROUTING_TOMTOM_API_KEY','DL_RELEASE'])delete env[key];
  const result=spawnSync(process.execPath,['scripts/check-routing-provider-readiness.mjs'],{cwd:new URL('..',import.meta.url),env,encoding:'utf8'});
- assert.equal(result.status,0);assert.match(result.stderr,/remains fail-closed/i);assert.match(result.stdout,/credential malformed/i);
+ assert.equal(result.status,0);assert.match(result.stderr,/remains fail-closed/i);assert.match(result.stdout,/credential malformed\/too_short/i);
 });
 
 test('release build hard-fails the same malformed provider configuration',()=>{
