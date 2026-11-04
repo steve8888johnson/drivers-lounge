@@ -1,6 +1,6 @@
 import test from'node:test';
 import assert from'node:assert/strict';
-import{parseLoadProfile,parsePermitPacketTexts,parsePermitText}from'../src/assets/permits/import.mjs';
+import{extractAuthorizedRouteText,parseLoadProfile,parsePermitPacketTexts,parsePermitPdfText,parsePermitText}from'../src/assets/permits/import.mjs';
 import{parsePublicProvider}from'../src/assets/permits/provider.mjs';
 import{canonicalPermitRoad,inferBorderEdge,permitTimeZoneForState,permitTimeZoneNeedsReview}from'../src/assets/permits/state-meta.mjs';
 
@@ -15,7 +15,7 @@ SIZE: Width Length Height
 8' 6" 75' 13' 6"
 Total Gross: 86,002
 Total Axles: 6
-LOAD: BATTERY From: 2052 E GRAND AVE, ERDA, UT 84074 To: US-491 CO BORDER
+LOAD: BATTERY From: 1000 TEST INDUSTRIAL RD, SAMPLE CITY, UT 84000 To: US-491 CO BORDER
 ROUTING:
 E GRAND AVE ; SHEEP LN ; UT138 - 179 ; I-80 ; I-15 ; US-6/89 ; US-191 ; I-70 ; US-191 ; US-491 E .
 RESTRICTIONS:
@@ -128,4 +128,108 @@ test('public issued-route QR imports use state metadata and canonical border roa
  assert.equal(permit.complete,false);
  assert.equal(permitTimeZoneNeedsReview('TX'),true);
  assert.equal(permitTimeZoneForState('CO'),'America/Denver');
+});
+
+
+// Additional synthetic excerpts mirror the table and multi-page route structures in
+// Kansas and Texas permits without retaining any carrier, vehicle, address or permit data.
+const ks=`Kansas Department of Transportation
+Central Permitting Office
+Permit #:26080000
+Overdimension Oversize and/or Overweight Single-Trip
+Permit Type Fee Effective Date Expiration Date
+Overdimension Oversize and/or Overweight $40.00 10/14/2026 10/20/2026
+LOAD
+Load Description: INDUSTRIAL COMPONENT
+Overall Length: 75' Overall Width: 12' 6" Overall Height: 13' 6"
+Gross Weight: 90520
+Axle: 1 2 3 4 5 6
+Weight: 10500 21500 21500 12340 12340 12340
+Spacing: 19' 4' 5" 38' 5" 4' 6" 4' 6"
+ROUTE
+Origin: SAMPLE INDUSTRIAL ROAD, 0.4mi from SAMPLE CITY
+0.38 US-83 Turn left onto US-83 Ramp
+0.27 US-83 Ramp Continue straight on US-83 [US-50], [US-400]
+75.46 US-83 Arrive at destination.
+Final Destination: US0270 OK Line
+Conditions and Restrictions
+Detour all construction and low overhead structures.
+Overwidth and/or overlength loads shall not move when visibility is less than one-half mile.
+Night movement is allowed only for overweight-only loads unless separately authorized.
+Any county road or city street requires approval from the appropriate local authority.`;
+
+const txOversize=`Texas Department of Motor Vehicles
+Texas Oversize/Overweight Single-Trip Permit
+Permit Number: 261000000002
+Effective: 10/14/2026
+Expiration: 10/18/2026
+Load Description: INDUSTRIAL COMPONENT Gross Weight: 92500
+Max. Width: 12' 6'' Max Height: 13' 6'' Max. Length: 75'
+Axle: 1 2 3 4 5 6
+Distances: 19' 4' 39' 5' 5'
+Weights: 10500 21500 21500 13000 13000 13000
+Route Description: Origin: SH0136 OK Line
+Destination: SH0031, 0.1mi SW of SAMPLE JUNCTION
+Route Conditions:
+Urban curfew: no movement 7:00am-9:00am and 4:00pm-6:00pm Monday-Friday.
+General Conditions:
+Permittee must adhere to the described route and request an amended route when necessary.
+Travel is not authorized on non-state-maintained roads without local approval.
+PAGE 3 OF 4
+Origin: SH0136 OK Line
+Miles Route To Distance Est. Time
+18.50 SH136 Head east on SH136 18.50 00:21
+36.40 SH15 Take sample state spur ramp 54.80 00:41
+42.30 US83 Continue south on US83 99.80 00:43
+65.40 US70 Continue southeast on US70 305.10 01:07
+PAGE 4 OF 4
+44.40 IH35W Continue south on IH35W 532.20 00:41
+7.50 SH31 Arrive at destination. 565.60 00:08
+Final Destination: SH0031, 0.1mi SW of SAMPLE JUNCTION`;
+
+test('Kansas table layout extracts dates, six-axle profile, route and Oklahoma handoff',()=>{
+ const permit=parsePermitPdfText(ks),load=parseLoadProfile(ks);
+ assert.equal(permit.state,'KS');
+ assert.equal(permit.number,'26080000');
+ assert.equal(permit.validFrom,'2026-10-14');
+ assert.equal(permit.validTo,'2026-10-20');
+ assert.equal(permit.exit.state,'OK');
+ assert.equal(permit.exit.road,'US-270');
+ assert.equal(load.profile.widthFt,'12.5');
+ assert.equal(load.profile.heightFt,'13.5');
+ assert.equal(load.profile.lengthFt,'75');
+ assert.equal(load.profile.weightLb,'90520');
+ assert.equal(load.profile.axles,'6');
+ assert.match(permit.routeText,/US-83 Ramp/i);
+ assert.match(permit.restrictions,/visibility is less than one-half mile/i);
+ assert.match(permit.restrictions,/local authority/i);
+});
+
+test('Texas multi-page layout isolates the issued route and preserves curfew and local-road conditions',()=>{
+ const permit=parsePermitPdfText(txOversize),load=parseLoadProfile(txOversize);
+ assert.equal(permit.state,'TX');
+ assert.equal(permit.number,'261000000002');
+ assert.equal(permit.validFrom,'2026-10-14');
+ assert.equal(permit.validTo,'2026-10-18');
+ assert.equal(permit.entry.state,'OK');
+ assert.equal(permit.entry.road,'SH-136');
+ assert.equal(load.profile.widthFt,'12.5');
+ assert.equal(load.profile.heightFt,'13.5');
+ assert.equal(load.profile.lengthFt,'75');
+ assert.equal(load.profile.weightLb,'92500');
+ assert.equal(load.profile.axles,'6');
+ assert.match(permit.routeText,/Origin: SH0136 OK Line/i);
+ assert.match(permit.routeText,/IH35W/i);
+ assert.match(permit.routeText,/Final Destination: SH0031/i);
+ assert.doesNotMatch(permit.routeText,/Permittee must adhere/i);
+ assert.match(permit.restrictions,/no movement 7:00am-9:00am/i);
+ assert.match(permit.restrictions,/non-state-maintained roads/i);
+});
+
+test('authorized-route extraction tolerates page labels without swallowing permit conditions',()=>{
+ const route=extractAuthorizedRouteText(txOversize,'TX');
+ assert.equal(route.extracted,true);
+ assert.match(route.text,/SH136/);
+ assert.match(route.text,/SH31 Arrive at destination/);
+ assert.doesNotMatch(route.text,/General Conditions/);
 });
