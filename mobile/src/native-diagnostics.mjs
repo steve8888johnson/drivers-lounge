@@ -47,16 +47,18 @@ export function summarizeNativeDiagnostics(events=[]){
  return summary;
 }
 
-export function createNativeDiagnostics({storage=globalThis.localStorage,storageKey=DEFAULT_STORAGE_KEY,clock=()=>Date.now(),platform='unknown',revision='unknown',limit=DEFAULT_LIMIT,onChange=()=>{}}={}){
+export function createNativeDiagnostics({storage,storageKey=DEFAULT_STORAGE_KEY,clock=()=>Date.now(),platform='unknown',revision='unknown',limit=DEFAULT_LIMIT,onChange=()=>{}}={}){
+ let deviceStorage=storage;
+ if(deviceStorage===undefined){try{deviceStorage=globalThis.localStorage;}catch{deviceStorage=null;}}
  const boundedLimit=Math.max(50,Math.min(1000,Number(limit)||DEFAULT_LIMIT));
  let record=emptyRecord({platform,revision,createdAt:clock()}),lastFixAt=0,lastRecordedFixAt=0,lastBand='',lastBackground=null;
  try{
-  const parsed=JSON.parse(storage?.getItem?.(storageKey)||'null');
+  const parsed=JSON.parse(deviceStorage?.getItem?.(storageKey)||'null');
   if(parsed?.schema===SCHEMA&&Array.isArray(parsed.events)){
    record={...emptyRecord({platform,revision,createdAt:parsed.createdAt||clock()}),events:parsed.events.slice(-boundedLimit).map(event=>({at:iso(event?.at),type:clean(event?.type,60),details:sanitizeDetails(event?.details)})).filter(event=>event.at&&event.type)};
   }
  }catch{/* Corrupt or unavailable device storage starts a fresh local report. */}
- const persist=()=>{try{storage?.setItem?.(storageKey,JSON.stringify(record));}catch{/* Diagnostics must never break navigation. */}};
+ const persist=()=>{try{deviceStorage?.setItem?.(storageKey,JSON.stringify(record));}catch{/* Diagnostics must never break navigation. */}};
  const changed=()=>{persist();try{onChange();}catch{/* UI notification is optional. */}};
  function recordEvent(type,details={}){
   const event={at:iso(clock()),type:clean(type,60),details:sanitizeDetails(details)};
