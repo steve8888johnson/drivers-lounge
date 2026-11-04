@@ -1,7 +1,9 @@
 name: Background guidance safety gate
 on:
   push:
-    branches: [feature/routing-background-guidance]
+    branches:
+      - feature/routing-background-guidance
+      - feature/routing-first
     paths:
       - 'mobile/**'
       - 'src/**'
@@ -10,55 +12,47 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/background-guidance-ci.yml'
+  pull_request:
+    branches:
+      - feature/routing-first
+    paths:
+      - 'mobile/**'
+      - 'src/**'
+      - 'api/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/background-guidance-ci.yml'
+  workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 concurrency:
-  group: background-guidance-${{ github.ref }}
+  group: background-guidance-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 env:
   DL_API_ORIGIN: https://drivers-lounge-f2fjsdxfm-steves-projects-c46af6ff.vercel.app
 jobs:
   prepare:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: feature/routing-background-guidance
-          fetch-depth: 0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '22'
       - run: npm ci
-      - name: Pin native background dependencies and lockfile
-        run: npm install --prefix mobile --save-exact @capacitor-community/background-geolocation@1.3.1 @capacitor/local-notifications@8.3.1
+      - run: npm ci --prefix mobile
       - run: npm test --prefix mobile
       - run: npm test
       - run: npm run check:syntax
       - name: Verify runtime dependency audit
         run: npm audit --prefix mobile --omit=dev --audit-level=moderate
-      - name: Commit deterministic mobile lockfile
-        shell: bash
-        run: |
-          set -euo pipefail
-          if git diff --quiet -- mobile/package.json mobile/package-lock.json; then
-            echo 'Mobile dependency files already match the pinned dependency set.'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add mobile/package.json mobile/package-lock.json
-          git commit -m 'lock native background guidance dependencies'
-          git push origin HEAD:feature/routing-background-guidance
   android:
     needs: prepare
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: feature/routing-background-guidance
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '22'
@@ -78,7 +72,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          manifest="$(find mobile/android/app/build/intermediates -path '*/merged_manifests/*/AndroidManifest.xml' -o -path '*/packaged_manifests/*/AndroidManifest.xml' | head -n 1)"
+          manifest="$(find mobile/android/app/build/intermediates \( -path '*/merged_manifests/*/AndroidManifest.xml' -o -path '*/packaged_manifests/*/AndroidManifest.xml' \) | head -n 1)"
           test -n "$manifest"
           test -f "$manifest"
           grep -q 'android.permission.POST_NOTIFICATIONS' "$manifest"
@@ -97,8 +91,6 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: feature/routing-background-guidance
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '22'
