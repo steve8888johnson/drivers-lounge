@@ -42,3 +42,16 @@ test('event storage is bounded and corrupt prior data is ignored safely',()=>{
  const report=diagnostics.snapshot();assert.equal(report.events.length,50);assert.equal(report.events[0].details.code,'30');assert.doesNotThrow(()=>JSON.parse(storage.value()));
  diagnostics.clear();assert.equal(diagnostics.snapshot().events.length,0);
 });
+
+test('blocked global local storage cannot break navigation diagnostics',()=>{
+ const descriptor=Object.getOwnPropertyDescriptor(globalThis,'localStorage');
+ Object.defineProperty(globalThis,'localStorage',{configurable:true,get(){throw Error('storage blocked');}});
+ try{
+  let diagnostics;
+  assert.doesNotThrow(()=>{diagnostics=createNativeDiagnostics({clock:()=>2_000});});
+  assert.doesNotThrow(()=>diagnostics.record('runtime-start',{online:true,page:'/navigation'}));
+  assert.equal(diagnostics.snapshot().events.length,1);
+ }finally{
+  if(descriptor)Object.defineProperty(globalThis,'localStorage',descriptor);else delete globalThis.localStorage;
+ }
+});
