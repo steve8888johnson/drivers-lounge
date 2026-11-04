@@ -143,7 +143,12 @@ export function parseLoadProfile(text){
   profile.lengthFt ||= measurement(source,'(?:Overall|Max\\.?|Maximum)?\\s*Length');
   const weight=source.match(/(?:Gross\s+Weight|\bGVW|Total\s+Gross)\s*:?\s*([\d,]{4,})/i);if(weight)profile.weightLb=weight[1].replace(/,/g,'');
   const axles=source.match(/Total\s+Axles\s*:?\s*(\d{1,2})/i);if(axles)profile.axles=axles[1];
-  const evidence=[...source.matchAll(/(?:^|\n)\s*(?:Weights?|Distances?|Spacing)\s*:?\s*([^\n]+)/gi)].map(match=>match[0].trim());profile.axleWeights=clean(evidence.join('\n'),500);
+  if(!profile.axles){
+    const row=source.match(/(?:^|\n)\s*Axle\s*:?\s*((?:\d{1,2}\s+){1,19}\d{1,2})(?:\s|$)/i)?.[1]||'';
+    const numbers=row.match(/\d{1,2}/g)?.map(Number)||[];
+    if(numbers.length>=2&&numbers.length<=20&&numbers.every((value,index)=>value===index+1))profile.axles=String(numbers.length);
+  }
+  const evidence=[...source.matchAll(/(?:^|\n)\s*(?:Axle\s*:|Weights?|Distances?|Spacing)\s*:?\s*([^\n]+)/gi)].map(match=>match[0].trim());profile.axleWeights=clean(evidence.join('\n'),500);
   const description=loadDescription(source);
   return{profile,description,confidence:Object.fromEntries(Object.entries(profile).map(([key,value])=>[key,{score:value ? .75 : 0,source:value?'Permit text extraction; confirm against original':'Not extracted'}]))};
 }
