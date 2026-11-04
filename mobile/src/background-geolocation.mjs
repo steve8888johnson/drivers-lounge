@@ -38,7 +38,8 @@ export function createBackgroundNavigationGeolocation({
   clock=()=>Date.now(),
   maxLocationAgeMs=30000,
   notificationTitle=DEFAULT_NOTIFICATION_TITLE,
-  notificationMessage=DEFAULT_NOTIFICATION_MESSAGE
+  notificationMessage=DEFAULT_NOTIFICATION_MESSAGE,
+  shouldUseBackground=()=>false
 }={}){
   if(!foregroundPlugin?.getCurrentPosition)throw Error('Foreground geolocation plugin is required.');
   if(!backgroundPlugin?.addWatcher||!backgroundPlugin?.removeWatcher)throw Error('Background geolocation plugin is required.');
@@ -46,7 +47,8 @@ export function createBackgroundNavigationGeolocation({
   const watches=new Map();
   const notify=()=>onWatchChange(watches.size);
   const report=(callback,error)=>{if(callback)callback(backgroundLocationError(error));};
-  const removeNative=id=>backgroundPlugin.removeWatcher({id}).catch(()=>{});
+  const removeBackground=id=>backgroundPlugin.removeWatcher({id}).catch(()=>{});
+  const removeForeground=id=>foregroundPlugin.clearWatch?.({id}).catch(()=>{});
   const foregroundOptions=options=>({
     enableHighAccuracy:options?.enableHighAccuracy===true,
     timeout:options?.timeout??15000,
@@ -63,7 +65,7 @@ export function createBackgroundNavigationGeolocation({
   function clearWatch(id){
     const watch=watches.get(id);if(!watch)return;
     watches.delete(id);notify();
-    if(watch.nativeId!==null)void removeNative(watch.nativeId);
+    if(watch.nativeId!==null)void(watch.background?removeBackground(watch.nativeId):removeForeground(watch.nativeId));
   }
 
   function getCurrentPosition(success,error,options={}){
@@ -71,8 +73,13 @@ export function createBackgroundNavigationGeolocation({
   }
 
   function watchPosition(success,error,options={}){
-    const id=++sequence,watch={nativeId:null};watches.set(id,watch);notify();
+    const background=shouldUseBackground(options)===true;
+    const id=++sequence,watch={nativeId:null,background};watches.set(id,watch);notify();
     Promise.resolve().then(async()=>{
+      if(!background){
+        if(!foregroundPlugin?.watchPosition)throw Error('Foreground location watcher is unavailable.');
+        return foregroundPlugin.watchPosition(foregroundOptions(options),position=>{if(watches.has(id))success(position);});
+      }
       const allowed=await ensureBackgroundNotification();
       if(!allowed)throw Object.assign(Error('Background guidance requires notification permission so Android can show the active-location indicator.'),{code:'NOT_AUTHORIZED'});
       if(!watches.has(id))return null;
@@ -90,14 +97,25 @@ export function createBackgroundNavigationGeolocation({
       });
     }).then(nativeId=>{
       if(nativeId===null||nativeId===undefined)return;
-      if(watches.has(id))watch.nativeId=String(nativeId);else void removeNative(String(nativeId));
+      if(watches.has(id))watch.nativeId=String(nativeId);
+      else void(background?removeBackground(String(nativeId)):removeForeground(String(nativeId)));
     }).catch(problem=>{
       if(watches.has(id)){watches.delete(id);notify();report(error,problem);}
     });
     return id;
   }
 
-  function setAppActive(active){appActive=Boolean(active);onAppModeChange({active:appActive,watchCount:watches.size});}
+  function setAppActive(active){
+    appActive=Boolean(active);
+    if(!appActive){
+      for(const[id,watch]of[...watches])if(!watch.background){
+        watches.delete(id);
+        if(watch.nativeId!==null)void removeForeground(watch.nativeId);
+      }
+      notify();
+    }
+    onAppModeChange({active:appActive,watchCount:watches.size});
+  }
   function stopAll(){for(const id of[...watches.keys()])clearWatch(id);}
 
   return{
