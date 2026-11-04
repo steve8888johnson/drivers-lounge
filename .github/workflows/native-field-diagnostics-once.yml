@@ -62,9 +62,30 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git restore --staged --worktree -- dist
+          git clean -fd -- dist
           git rm -r .github/patches .github/workflows/native-field-diagnostics-once.yml
-          git add -A
+          git add -- \
+            build.mjs \
+            mobile/README.md \
+            mobile/TESTING.md \
+            mobile/package.json \
+            mobile/package-lock.json \
+            mobile/scripts/build.mjs \
+            mobile/scripts/platforms.mjs \
+            mobile/src/background-geolocation.mjs \
+            mobile/src/runtime.mjs \
+            mobile/src/native-diagnostics.mjs \
+            mobile/test/background-geolocation.test.mjs \
+            mobile/test/platform-background-config.test.mjs \
+            mobile/test/native-diagnostics.test.mjs \
+            src/safety-center.html \
+            src/privacy.html \
+            src/native-diagnostics.html \
+            src/assets/native-diagnostics-ui.js \
+            src/assets/native-diagnostics.css
           git diff --cached --check
+          test "$(git diff --cached --name-only | grep -v '^\.github/' | wc -l)" -eq 18
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'add privacy-safe native field diagnostics'
