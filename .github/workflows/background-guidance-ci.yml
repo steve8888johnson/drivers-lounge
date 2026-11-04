@@ -15,6 +15,8 @@ permissions:
 concurrency:
   group: background-guidance-${{ github.ref }}
   cancel-in-progress: true
+env:
+  DL_API_ORIGIN: https://drivers-lounge-f2fjsdxfm-steves-projects-c46af6ff.vercel.app
 jobs:
   prepare:
     if: github.actor != 'github-actions[bot]'
@@ -67,9 +69,7 @@ jobs:
       - run: npm ci
       - run: npm ci --prefix mobile
       - run: npm test --prefix mobile
-      - env:
-          DL_API_ORIGIN: https://beta.driverslounge.app
-        run: npm run build --prefix mobile
+      - run: npm run build --prefix mobile
       - run: node mobile/scripts/platforms.mjs android
       - name: Compile Android background-guidance test app
         run: bash gradlew assembleDebug --no-daemon
@@ -78,7 +78,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          manifest=mobile/android/app/build/intermediates/merged_manifests/debug/processDebugManifest/AndroidManifest.xml
+          manifest="$(find mobile/android/app/build/intermediates -path '*/merged_manifests/*/AndroidManifest.xml' -o -path '*/packaged_manifests/*/AndroidManifest.xml' | head -n 1)"
+          test -n "$manifest"
           test -f "$manifest"
           grep -q 'android.permission.POST_NOTIFICATIONS' "$manifest"
           grep -q 'android.permission.FOREGROUND_SERVICE_LOCATION' "$manifest"
@@ -104,9 +105,7 @@ jobs:
       - run: npm ci
       - run: npm ci --prefix mobile
       - run: npm test --prefix mobile
-      - env:
-          DL_API_ORIGIN: https://beta.driverslounge.app
-        run: npm run build --prefix mobile
+      - run: npm run build --prefix mobile
       - run: node mobile/scripts/platforms.mjs ios
       - name: Verify iOS background-location declarations
         shell: bash
