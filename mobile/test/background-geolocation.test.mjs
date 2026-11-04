@@ -3,7 +3,7 @@ import assert from'node:assert/strict';
 import{backgroundLocationError,browserPosition,createBackgroundNavigationGeolocation}from'../src/background-geolocation.mjs';
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function fixture({notification=true,clock=()=>1_000_000,currentPosition}={}){
- let callback,resolveWatcher,foregroundCallback;const removals=[],foregroundRemovals=[],counts=[],modes=[];
+ let callback,resolveWatcher,foregroundCallback;const removals=[],foregroundRemovals=[],counts=[],modes=[],diagnostics=[];
  const foregroundPlugin={
   getCurrentPosition:async()=>currentPosition??({coords:{latitude:1},timestamp:clock()}),
   watchPosition:async(options,cb)=>{foregroundCallback=cb;return'foreground-1';},
@@ -13,8 +13,8 @@ function fixture({notification=true,clock=()=>1_000_000,currentPosition}={}){
   addWatcher:async(options,cb)=>{callback=cb;return await new Promise(resolve=>resolveWatcher=resolve);},
   removeWatcher:async({id})=>removals.push(id),openSettings:async()=>{}
  };
- const gps=createBackgroundNavigationGeolocation({foregroundPlugin,backgroundPlugin,ensureBackgroundNotification:async()=>notification,shouldUseBackground:options=>options?.dlBackgroundGuidance===true,onWatchChange:value=>counts.push(value),onAppModeChange:value=>modes.push(value),clock});
- return{gps,callback:()=>callback,registered:id=>resolveWatcher(id),removals,foregroundRemovals,foregroundCallback:()=>foregroundCallback,counts,modes};
+ const gps=createBackgroundNavigationGeolocation({foregroundPlugin,backgroundPlugin,ensureBackgroundNotification:async()=>notification,shouldUseBackground:options=>options?.dlBackgroundGuidance===true,onWatchChange:value=>counts.push(value),onAppModeChange:value=>modes.push(value),onDiagnostic:(type,details)=>diagnostics.push({type,details}),clock});
+ return{gps,callback:()=>callback,registered:id=>resolveWatcher(id),removals,foregroundRemovals,foregroundCallback:()=>foregroundCallback,counts,modes,diagnostics};
 }
 
 test('background fixes map to the browser geolocation contract',()=>{
@@ -81,4 +81,13 @@ test('native callback errors use browser-style geolocation codes',()=>{
  assert.equal(backgroundLocationError({code:'TIMEOUT'}).code,3);
  assert.equal(backgroundLocationError({code:'OS-PLUG-GLOC-0010'}).code,3);
  assert.equal(backgroundLocationError({code:'SOMETHING_ELSE'}).code,2);
+});
+
+
+test('diagnostic callback excludes position coordinates and route-capable values',async()=>{
+ const f=fixture({clock:()=>1_000_000});f.gps.watchPosition(()=>{},error=>assert.fail(error.message),{dlBackgroundGuidance:true});await tick();f.registered('native-private');await tick();
+ f.callback()({latitude:32.123456,longitude:-102.654321,accuracy:9,time:999_500});
+ assert.deepEqual(f.diagnostics.at(-1),{type:'gps-fix',details:{background:true,accuracy:9,ageMs:500}});
+ const serialized=JSON.stringify(f.diagnostics);
+ assert.doesNotMatch(serialized,/latitude|longitude|32\.123456|-102\.654321|altitude|bearing|speed/i);
 });
