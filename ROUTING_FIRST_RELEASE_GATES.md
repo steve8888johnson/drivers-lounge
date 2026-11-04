@@ -14,7 +14,7 @@ Drivers Lounge must not market navigation as "truck legal," "premier," or "produ
 
 ## Provider-readiness and benchmark commands
 
-Use the canonical server-only environment variables `TRUCK_ROUTING_HERE_API_KEY` and `TRUCK_ROUTING_TOMTOM_API_KEY`. The legacy aliases `HERE_API_KEY` and `TOMTOM_API_KEY` remain readable during migration, but conflicting alias values, placeholder values, malformed values, or the same credential reused for both providers disable preview guidance and fail the release gate. No readiness response, benchmark report, or log may contain a credential value.
+Use the canonical server-only environment variables `TRUCK_ROUTING_HERE_API_KEY` and `TRUCK_ROUTING_TOMTOM_API_KEY`. The legacy aliases `HERE_API_KEY` and `TOMTOM_API_KEY` remain readable during migration, but conflicting alias values, placeholder values, malformed values, or the same credential reused for both providers disable preview guidance and fail the release gate. No readiness response, benchmark report, or log may contain a credential value. Leading or trailing whitespace is normalized exactly as the route adapter does and is reported only as a non-secret warning; surrounding quotes or internal whitespace remain invalid.
 
 - `npm run check:routing-providers` validates configuration without making a provider request. A one-provider preview remains explicitly `single_provider_unverified`.
 - `DL_RELEASE=1 npm run check:routing-providers` is the release gate and requires two distinct valid providers with no active routing kill switch.
