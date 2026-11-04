@@ -13,13 +13,17 @@ const placeholder=value=>{
 };
 
 export function inspectRoutingCredential(value){
- const raw=String(value??''),text=clean(raw);
- if(!text)return{state:'missing',valid:false};
- if(/[\u0000-\u001f\u007f]/.test(raw)||/\s/.test(text))return{state:'malformed',valid:false};
- if(text.length<16||text.length>512)return{state:'malformed',valid:false};
- if(placeholder(text))return{state:'placeholder',valid:false};
- if(!/^[!-~]+$/.test(text))return{state:'malformed',valid:false};
- return{state:'present',valid:true};
+ const raw=String(value??''),text=clean(raw),normalized=raw!==text;
+ const result=(state,valid,issue)=>Object.freeze({state,valid,issue,normalized});
+ if(!text)return result('missing',false,'missing');
+ if((text.startsWith('"')&&text.endsWith('"'))||(text.startsWith("'")&&text.endsWith("'")))return result('malformed',false,'surrounding_quotes');
+ if(/\s/.test(text))return result('malformed',false,'internal_whitespace');
+ if(/[\u0000-\u001f\u007f]/.test(text))return result('malformed',false,'control_character');
+ if(text.length<16)return result('malformed',false,'too_short');
+ if(text.length>512)return result('malformed',false,'too_long');
+ if(placeholder(text))return result('placeholder',false,'placeholder');
+ if(!/^[!-~]+$/.test(text))return result('malformed',false,'non_ascii');
+ return result('present',true,normalized?'outer_whitespace_trimmed':'none');
 }
 
 function resolveProvider(env,definition){
@@ -36,6 +40,8 @@ function resolveProvider(env,definition){
    id:definition.id,label:definition.label,configured:entries.length>0,valid,
    state:entries.length===0?'missing':valid?'configured':'invalid',
    credentialState:selected?.inspection.state||'missing',
+   credentialIssue:selected?.inspection.issue||'missing',
+   credentialNormalized:Boolean(selected?.inspection.normalized),
    source:selected?.name||definition.canonical,
    canonicalConfigured:entries.some(entry=>entry.name===definition.canonical),
    aliasesConfigured:definition.aliases.filter(name=>entries.some(entry=>entry.name===name)),
