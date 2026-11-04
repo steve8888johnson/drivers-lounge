@@ -22,11 +22,13 @@ test('platform generator declares visible and restricted background location ser
  assert.match(source,/Location use ends when you stop guidance/);
 });
 
-test('native runtime keeps route watches alive across background state changes',async()=>{
+test('native runtime keeps reviewed-route watches alive but scopes background use to navigation screens',async()=>{
  const source=await read('src/runtime.mjs');
  assert.match(source,/createBackgroundNavigationGeolocation/);
  assert.match(source,/backgroundGuidanceSupported:true/);
  assert.match(source,/gps\.setAppActive/);
  assert.doesNotMatch(source,/gps\.pause\(/);
+ assert.match(source,/navigation\|permitted-loads/);
+ assert.match(source,/beforeunload.*gps\.stopAll/);
  assert.match(source,/persistent navigation notification/);
 });
