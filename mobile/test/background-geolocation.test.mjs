@@ -2,10 +2,10 @@ import{test}from'node:test';
 import assert from'node:assert/strict';
 import{backgroundLocationError,browserPosition,createBackgroundNavigationGeolocation}from'../src/background-geolocation.mjs';
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
-function fixture({notification=true,clock=()=>1_000_000}={}){
+function fixture({notification=true,clock=()=>1_000_000,currentPosition}={}){
  let callback,resolveWatcher,foregroundCallback;const removals=[],foregroundRemovals=[],counts=[],modes=[];
  const foregroundPlugin={
-  getCurrentPosition:async()=>({coords:{latitude:1},timestamp:clock()}),
+  getCurrentPosition:async()=>currentPosition??({coords:{latitude:1},timestamp:clock()}),
   watchPosition:async(options,cb)=>{foregroundCallback=cb;return'foreground-1';},
   clearWatch:async({id})=>foregroundRemovals.push(id)
  };
@@ -64,8 +64,21 @@ test('ordinary location watches remain foreground-only and never request backgro
  f.gps.setAppActive(false);await tick();assert.deepEqual(f.foregroundRemovals,['foreground-1']);
 });
 
+test('foreground watcher errors use the browser error callback instead of a null position',async()=>{
+ const f=fixture(),seen=[],errors=[];f.gps.watchPosition(value=>seen.push(value),error=>errors.push(error));await tick();await tick();
+ f.foregroundCallback()(undefined,{code:'OS-PLUG-GLOC-0003',message:'Permission denied.'});
+ assert.equal(seen.length,0);assert.equal(errors.length,1);assert.equal(errors[0].code,1);
+});
+
+test('current-position requests fail closed while the app is backgrounded',async()=>{
+ const f=fixture(),seen=[],errors=[];f.gps.setAppActive(false);f.gps.getCurrentPosition(value=>seen.push(value),error=>errors.push(error));await tick();
+ assert.equal(seen.length,0);assert.equal(errors.length,1);assert.match(errors[0].message,/foreground/i);
+});
+
 test('native callback errors use browser-style geolocation codes',()=>{
  assert.equal(backgroundLocationError({code:'NOT_AUTHORIZED'}).code,1);
+ assert.equal(backgroundLocationError({code:'OS-PLUG-GLOC-0003'}).code,1);
  assert.equal(backgroundLocationError({code:'TIMEOUT'}).code,3);
+ assert.equal(backgroundLocationError({code:'OS-PLUG-GLOC-0010'}).code,3);
  assert.equal(backgroundLocationError({code:'SOMETHING_ELSE'}).code,2);
 });
