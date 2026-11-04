@@ -11,7 +11,7 @@ import { createApiFetch } from './api.mjs';
 const BackgroundGeolocation=registerPlugin('BackgroundGeolocation');
 
 if (Capacitor.isNativePlatform()) {
-  let speechVersion=0,wakeQueue=Promise.resolve(),appActive=true;
+  let speechVersion=0,wakeQueue=Promise.resolve(),appActive=true,gps;
   const cancelSpeech=()=>{speechVersion++;void TextToSpeech.stop().catch(()=>{});};
   const speak=async text=>{
     const version=++speechVersion;
@@ -29,17 +29,23 @@ if (Capacitor.isNativePlatform()) {
       return permission==='granted';
     }catch{return false;}
   };
-  const gps=createBackgroundNavigationGeolocation({
+  const setWakeState=(count,active=appActive)=>{
+    wakeQueue=wakeQueue.catch(()=>{}).then(()=>count>0&&active?KeepAwake.keepAwake():KeepAwake.allowSleep());
+    void wakeQueue.catch(()=>{});
+  };
+  gps=createBackgroundNavigationGeolocation({
     foregroundPlugin:Geolocation,
     backgroundPlugin:BackgroundGeolocation,
     ensureBackgroundNotification,
     shouldUseBackground:()=>/^\/(?:navigation|permitted-loads)(?:\.html)?$/.test(location.pathname),
     onWatchChange:count=>{
-      wakeQueue=wakeQueue.catch(()=>{}).then(()=>count?KeepAwake.keepAwake():KeepAwake.allowSleep());
-      void wakeQueue.catch(()=>{});
+      setWakeState(count,appActive);
       window.dispatchEvent(new CustomEvent('dl-native-location-watch',{detail:{count,backgroundCapable:true}}));
     },
-    onAppModeChange:detail=>window.dispatchEvent(new CustomEvent('dl-native-app-state',{detail:{...detail,backgroundCapable:true}}))
+    onAppModeChange:detail=>{
+      setWakeState(detail.watchCount,detail.active);
+      window.dispatchEvent(new CustomEvent('dl-native-app-state',{detail:{...detail,backgroundCapable:true}}));
+    }
   });
   Object.defineProperty(navigator,'geolocation',{configurable:true,value:gps});
   window.DL_NATIVE=Object.freeze({
@@ -60,7 +66,7 @@ if (Capacitor.isNativePlatform()) {
     else if(!['/','/index.html'].includes(location.pathname))location.assign('/index.html');
   });
   window.addEventListener('pageshow',()=>setAppActive(!document.hidden));
-  window.addEventListener('beforeunload',()=>gps.stopAll());
+  window.addEventListener('beforeunload',()=>{gps.stopAll();cancelSpeech();setWakeState(0,false);});
   document.addEventListener('visibilitychange',()=>setAppActive(!document.hidden));
 
   document.addEventListener('click',event=>{
