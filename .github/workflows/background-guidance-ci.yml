@@ -1,0 +1,117 @@
+name: Background guidance safety gate
+on:
+  push:
+    branches:
+      - feature/routing-background-guidance
+      - feature/routing-first
+    paths:
+      - 'mobile/**'
+      - 'src/**'
+      - 'api/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/background-guidance-ci.yml'
+  pull_request:
+    branches:
+      - feature/routing-first
+    paths:
+      - 'mobile/**'
+      - 'src/**'
+      - 'api/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/background-guidance-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: background-guidance-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  DL_API_ORIGIN: https://drivers-lounge-f2fjsdxfm-steves-projects-c46af6ff.vercel.app
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm ci --prefix mobile
+      - run: npm test --prefix mobile
+      - run: npm test
+      - run: npm run check:syntax
+      - name: Verify runtime dependency audit
+        run: npm audit --prefix mobile --omit=dev --audit-level=moderate
+  android:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+      - run: npm ci --prefix mobile
+      - run: npm test --prefix mobile
+      - run: npm run build --prefix mobile
+      - run: node mobile/scripts/platforms.mjs android
+      - name: Compile Android background-guidance test app
+        run: bash gradlew assembleDebug --no-daemon
+        working-directory: mobile/android
+      - name: Verify merged Android safety declarations
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest="$(find mobile/android/app/build/intermediates \( -path '*/merged_manifests/*/AndroidManifest.xml' -o -path '*/packaged_manifests/*/AndroidManifest.xml' \) | head -n 1)"
+          test -n "$manifest"
+          test -f "$manifest"
+          grep -q 'android.permission.POST_NOTIFICATIONS' "$manifest"
+          grep -q 'android.permission.FOREGROUND_SERVICE_LOCATION' "$manifest"
+          grep -q 'BackgroundGeolocationService' "$manifest"
+          grep -q 'android:exported="false"' "$manifest"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: drivers-lounge-background-guidance-android
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+  ios:
+    needs: prepare
+    runs-on: macos-26
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm ci --prefix mobile
+      - run: npm test --prefix mobile
+      - run: npm run build --prefix mobile
+      - run: node mobile/scripts/platforms.mjs ios
+      - name: Verify iOS background-location declarations
+        shell: bash
+        run: |
+          set -euo pipefail
+          plist=mobile/ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c 'Print :UIBackgroundModes' "$plist" | grep -q location
+          /usr/libexec/PlistBuddy -c 'Print :NSLocationAlwaysAndWhenInUseUsageDescription' "$plist" | grep -q 'Location use ends when you stop guidance'
+      - name: Compile iOS simulator app
+        run: xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+        working-directory: mobile
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: drivers-lounge-background-guidance-ios-simulator
+          path: mobile/build/Build/Products/Debug-iphonesimulator/App.app
+          if-no-files-found: error
+          retention-days: 14

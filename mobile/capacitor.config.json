@@ -6,7 +6,8 @@
     "androidScheme": "https"
   },
   "android": {
-    "allowMixedContent": false
+    "allowMixedContent": false,
+    "useLegacyBridge": true
   },
   "ios": {
     "contentInset": "automatic"
@@ -14,6 +15,10 @@
   "plugins": {
     "CapacitorHttp": {
       "enabled": false
+    },
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_navigation",
+      "iconColor": "#FFFFFF"
     }
   }
 }
