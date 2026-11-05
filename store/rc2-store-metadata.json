@@ -1,5 +1,5 @@
 {
-  "release": "2.0.0-rc.2",
+  "release": "2.0.2",
   "appName": "Drivers Lounge",
   "subtitle": "Truck routes and driver tools",
   "shortDescription": "Plan truck routes, review restrictions, and connect with fellow drivers.",
@@ -14,31 +14,41 @@
     "support": "/support",
     "accountDeletion": "/delete-account"
   },
+  "publicUrls": {
+    "privacy": "https://driverslounge.app/privacy",
+    "terms": "https://driverslounge.app/terms",
+    "support": "https://driverslounge.app/support",
+    "accountDeletion": "https://driverslounge.app/delete-account"
+  },
   "reviewNotes": [
-    "Routing and road intelligence are advisory; posted signs, permits and official restrictions control.",
-    "Location is requested only for features that need it and is not declared as background location unless a native build later adds that capability.",
-    "Community content is user-generated; signed-in users can report posts, authors can remove their own posts, and users can immediately hide another driver's Community content on their device.",
+    "Routing and road intelligence are advisory; posted signs, issued permits, official restrictions and law-enforcement direction control.",
+    "When the user starts reviewed native guidance, Drivers Lounge collects precise location data to enable live truck guidance, route progress and deviation warnings even when the screen is locked or another app is open. Location use ends when the user taps Stop guidance.",
+    "Background location is used only for user-started navigation functionality, never for advertising or analytics. Android displays a persistent navigation notification and iOS displays the system location indicator while it is active.",
+    "A route deviation freezes guidance and instructs the driver to pull over; the app does not silently accept an automatic detour.",
+    "The native field-evidence packet stays on the device unless exported and contains no coordinates, addresses, route geometry, permit contents, account identifiers, device identifiers or free-form notes.",
+    "Community content is user-generated; signed-in users can report posts, authors can remove their own posts, and users can immediately hide another driver’s Community content on their device.",
     "The Community hidden-driver list is stored locally on the device/browser and is not uploaded as a server-side profile attribute.",
     "Account deletion is available from the Account screen and from a public web deletion page.",
     "Saved-offer email/SMS delivery is opt-in; in-app saving does not require marketing consent.",
-    "Drivers Lounge Free Finds are curated public offers and are not represented as paid sponsorships."
+    "Drivers Lounge Free Finds are curated public offers and are not represented as paid sponsorships.",
+    "Commercial payments remain disabled for this release."
   ],
   "dataSafety": {
     "collectedDependingOnUse": [
       "email/account identifier",
       "profile and business information supplied by the user",
       "driver credential/profile information supplied by the user",
-      "location when the user permits a location-dependent feature",
       "community posts and content reports",
       "carrier reviews and review reports",
       "road reports",
       "marketplace/load/job/pilot-car content submitted by users",
       "support requests",
       "advertising interaction events and saved offers",
-      "optional mobile number and communication preferences"
+      "optional mobile number and communication preferences",
+      "precise foreground location for navigation and nearby driver tools when the user permits access",
+      "precise background location during user-started active native guidance for route progress and deviation warnings"
     ],
     "doNotDeclareUnlessNativeBuildUses": [
-      "background location",
       "contacts",
       "microphone",
       "photos/media library",
@@ -46,18 +56,38 @@
       "advertising identifier",
       "cross-app tracking",
       "payments"
-    ]
+    ],
+    "backgroundLocation": {
+      "purpose": "App functionality: user-started live truck guidance, route progress and route-deviation warnings",
+      "activation": "Starts only after the user taps Start guidance on a reviewed route",
+      "termination": "Ends when the user taps Stop guidance or guidance is stopped",
+      "advertisingOrAnalytics": false,
+      "automaticServerUpload": false,
+      "androidIndicator": "Persistent navigation notification",
+      "iosIndicator": "System location indicator"
+    }
   },
   "externalOwnerGates": [
-    "Apple Developer/App Store Connect access and signing",
-    "Google Play Console access and signing",
-    "final bundle/package identifiers",
-    "final legal/business/support contact information",
-    "production Supabase migrations and authenticated QA",
-    "physical iOS/Android device testing",
-    "store screenshots and final artwork",
-    "explicit production promotion approval"
+    "Enroll Atlas Digital Works LLC or the account holder in the Apple Developer Program and accept current agreements.",
+    "Create the App Store Connect record for bundle ID dev.atlasdigital.driverslounge and SKU atlas-digital-drivers-lounge-ios.",
+    "Enroll in Google Play Console and create the app record for package dev.atlasdigital.driverslounge.",
+    "Create and securely retain the Android Play upload key and Apple distribution signing credentials.",
+    "Capture final physical-device screenshots and the required background-location demonstration video from the signed release candidate.",
+    "Complete Apple privacy details and Google Play Data safety/Background location declarations using the verified release build.",
+    "Configure a second independent professional truck-routing provider and pass the deployed consensus benchmark.",
+    "Complete Android and iPhone physical-device field evidence; the iOS simulator is not physical-device proof.",
+    "Run final production Supabase QA and enable leaked-password protection in the Supabase dashboard.",
+    "Keep commercial payments and broad production routing claims disabled until every applicable release gate is complete."
   ],
   "promotionalText": "Built by drivers for drivers. Plan truck trips, review restrictions, connect with other drivers, and find useful road tools. Core driver services stay free.",
-  "keywords": "truck driver,trucking,truck navigation,road reports,carrier reviews,CDL,truck stops,community"
+  "keywords": "truck driver,trucking,truck navigation,road reports,carrier reviews,CDL,truck stops,community",
+  "nativeBuild": {
+    "androidPackageName": "dev.atlasdigital.driverslounge",
+    "iosBundleId": "dev.atlasdigital.driverslounge",
+    "previewPackageAndBundleId": "dev.atlasdigital.driverslounge.preview",
+    "versionName": "2.0.2",
+    "buildNumber": 2000004,
+    "androidTargetApi": 36,
+    "appleSku": "atlas-digital-drivers-lounge-ios"
+  }
 }

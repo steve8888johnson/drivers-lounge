@@ -1,12 +1,14 @@
-# Drivers Lounge testing — November 4, 2026
+# Drivers Lounge testing — November 5, 2026
 
 This is a preview for checking the app. It is not a validated truck-navigation
 release. Plan tests while parked; any moving test must be monitored by a passenger.
 Keep using your established navigation and issued permits for actual driving.
 
+Build under test: **2.0.2-rc.1 / 2000004**.
+
 ## Android phone
 
-1. Download Drivers-Lounge-Test.apk from the supplied test download.
+1. Download `Drivers-Lounge-Field-Evidence-2.0.2-rc1.apk` from the supplied test download and verify its SHA-256 file before installation.
 2. Open it in the phone's Files/Downloads app. If Android asks, allow this browser
    or file manager to install this specific app, then turn that permission off
    after installation. Do not disable Play Protect; report any blocked installation.

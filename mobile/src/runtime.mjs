@@ -106,7 +106,7 @@ if (Capacitor.isNativePlatform()) {
     }
     if(/^\/(?:navigation|permitted-loads)(?:\.html)?$/.test(location.pathname)){
       const note=document.createElement('p');note.className='dl-background-guidance-note';
-      note.textContent='While guidance is active, location continues with the screen locked or another app open. Android shows a persistent navigation notification; iOS shows the system location indicator. Tap Stop guidance to end background location use.';
+      note.textContent='Drivers Lounge collects precise location data to provide live truck guidance, route progress and deviation warnings even when the screen is locked or another app is open. Location use starts only after you tap Start guidance and ends when you tap Stop guidance. It is not used for advertising or analytics. Android shows a persistent navigation notification; iOS shows the system location indicator.';
       (document.querySelector('main')||document.body).prepend(note);
     }
   },{once:true});
