@@ -204,6 +204,7 @@ function say(message, key = message) {
 function distance(m) { return m < 160 ? `${Math.round(m * 3.28084 / 10) * 10} ft` : `${(m / 1609.344).toFixed(1)} mi`; }
 function navAlert(message, key) { $('#nav-status').textContent = message; say(message, key); }
 function pauseFix(message, key) {
+  window.DL_NATIVE_DIAGNOSTICS?.recordAppEvent?.('guidance-paused', { code: key });
   navAlert(message, key); $('#maneuver').textContent = 'Guidance paused — verify route';
   $('#next-maneuver').textContent = 'Follow the issued permit. No automatic reroute.';
   $('#maneuver-distance').textContent = '—'; $('#remaining').textContent = '—'; $('#lane-info').textContent = 'Waiting for reliable GPS'; $('#nav-warnings').textContent = '';
@@ -275,6 +276,7 @@ async function startGuidance() {
   if (!navigator.geolocation) throw Error('GPS is unavailable on this device. Your permit wallet remains available.');
   progress = null; lastFix = null; activeState = ''; spoken = ''; spokenHazmat.clear();
   watching = navigator.geolocation.watchPosition(position => displayFix({ point: [position.coords.latitude, position.coords.longitude], accuracy: position.coords.accuracy, timestamp: position.timestamp }), () => pauseFix('GPS unavailable. Guidance paused; follow the issued permit.', 'gps-error'), { enableHighAccuracy: true, maximumAge: 3000, timeout: 12000 });
+  window.DL_NATIVE_DIAGNOSTICS?.recordAppEvent?.('guidance-start', { code: 'permit' });
   $('#stop-guidance').disabled = false; $('#start-guidance').disabled = true;
   $('#walkthrough-panel').hidden = true;
   $('#guidance-role').textContent = ({ driver: 'TRUCK DRIVER', lead: 'LEAD PILOT CAR', chase: 'CHASE PILOT CAR' })[$('#crew-role').value];
@@ -284,7 +286,7 @@ async function startGuidance() {
 }
 function stopGuidance(message = 'Guidance is off. Location sharing stopped.') {
   guidanceVersion += 1;
-  if (watching !== null) navigator.geolocation?.clearWatch(watching); watching = null; clearInterval(timer); clearInterval(crewTimer);
+  window.DL_NATIVE_DIAGNOSTICS?.recordAppEvent?.('guidance-stop', { code: 'permit' }); if (watching !== null) navigator.geolocation?.clearWatch(watching); watching = null; clearInterval(timer); clearInterval(crewTimer);
   if (trip?.shared) void crew.stop(trip.shared).catch(() => {});
   window.DL_NATIVE?.cancelSpeech();
   if ('speechSynthesis' in window) speechSynthesis.cancel();

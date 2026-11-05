@@ -12,7 +12,7 @@ import { createApiFetch } from './api.mjs';
 const BackgroundGeolocation=registerPlugin('BackgroundGeolocation');
 
 if (Capacitor.isNativePlatform()) {
-  let speechVersion=0,wakeQueue=Promise.resolve(),appActive=true,gps;
+  let speechVersion=0,wakeQueue=Promise.resolve(),appActive=true,gps,speechSuccessRecorded=false;
   const diagnostics=createNativeDiagnostics({platform:Capacitor.getPlatform(),revision:DL_BUILD_REVISION,onChange:()=>window.dispatchEvent(new Event('dl-native-diagnostics-updated'))});
   diagnostics.record('runtime-start',{page:location.pathname,online:navigator.onLine});
   const cancelSpeech=()=>{speechVersion++;void TextToSpeech.stop().catch(()=>{});};
@@ -22,6 +22,7 @@ if (Capacitor.isNativePlatform()) {
       await TextToSpeech.stop();
       if(version!==speechVersion)return;
       await TextToSpeech.speak({text,lang:'en-US',rate:.98,pitch:1,volume:1,category:'playback',queueStrategy:0});
+      if(!speechSuccessRecorded){speechSuccessRecorded=true;diagnostics.record('voice-spoken',{page:location.pathname});}
     }catch{diagnostics.record('voice-unavailable',{page:location.pathname});window.dispatchEvent(new Event('dl-native-voice-unavailable'));}
   };
   const ensureBackgroundNotification=async()=>{
@@ -53,7 +54,12 @@ if (Capacitor.isNativePlatform()) {
     }
   });
   Object.defineProperty(navigator,'geolocation',{configurable:true,value:gps});
-  window.DL_NATIVE_DIAGNOSTICS=Object.freeze({snapshot:()=>diagnostics.snapshot(),exportText:()=>diagnostics.exportText(),clear:()=>diagnostics.clear()});
+  const appDiagnosticEvents=new Set(['guidance-start','guidance-stop','guidance-deviation-frozen','guidance-paused','guidance-error']);
+  const recordAppEvent=(type,details={})=>{
+    const eventType=String(type||'').trim();if(!appDiagnosticEvents.has(eventType))return false;
+    diagnostics.record(eventType,{code:details?.code,page:location.pathname,watchCount:gps.watchCount});return true;
+  };
+  window.DL_NATIVE_DIAGNOSTICS=Object.freeze({snapshot:()=>diagnostics.snapshot(),exportText:()=>diagnostics.exportText(),clear:()=>diagnostics.clear(),recordAppEvent});
   window.DL_NATIVE=Object.freeze({
     apiOrigin:DL_API_ORIGIN,speak,cancelSpeech,
     backgroundGuidanceSupported:true,diagnosticsAvailable:true,

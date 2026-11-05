@@ -120,6 +120,15 @@ models and operating-system power modes behave the same way.
 - PDFs/images saved locally can be lost when the app is uninstalled or its data is cleared.
 - A successful automated build does not establish road legality or real-device behavior.
 
+
+## Physical-device evidence packet
+
+Open **Native field diagnostics** from the installed test app before starting the physical-device run. Clear the old raw diagnostics and the field checklist, then complete every item while parked except the controlled deviation test, which must be observed and operated by a passenger.
+
+The field gate combines privacy-minimized automatic evidence with fixed pass/fail observations. Automatic checks require a fresh precise fix, at least two background fixes over roughly two minutes with bounded gaps, an offline/online cycle, a successful native voice event, a recorded route-deviation freeze, and a guidance stop that releases the only GPS watch. The checklist separately covers screen lock, app switching, phone speaker, Bluetooth, network recovery, permission denial, weak/stale GPS, deviation behavior, the system location indicator, and Stop guidance cleanup.
+
+After every item passes, select both attestations and download **field packet**. The JSON intentionally contains no coordinates, addresses, route geometry, permit contents, account identifiers, device identifiers or free-form notes. Keep the raw diagnostic JSON separately only when engineering needs the bounded event timeline. A completed field packet proves the physical-device gate only; it does not prove provider consensus, route legality, store approval or production readiness.
+
 ## Report a problem
 
 Send this compact report in this chat. Screenshots are useful after hiding permit,

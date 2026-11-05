@@ -53,6 +53,7 @@ The identifier has not been confirmed as registered in either store.
   permit contents, account identifiers or device identifiers. The driver must
   explicitly copy or download the report before it leaves the device.
 - Native text-to-speech speaks existing guidance prompts; failures show a warning.
+- Native field diagnostics can export a separate privacy-minimized physical-device evidence packet. It combines fixed observations with safe GPS/background/network/voice/deviation/stop lifecycle counters and never includes coordinates or route content.
 - Same-app JSON API calls use native HTTPS to the configured Drivers Lounge backend.
   Other requests retain normal browser transport. API redirects are refused.
 - HTTPS links open the system browser sheet. Email confirmation and password reset
