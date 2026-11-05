@@ -76,7 +76,15 @@ jobs:
           node mobile/scripts/platforms.mjs android ios
           grep -q 'applicationId "dev.atlasdigital.driverslounge.preview"' mobile/android/app/build.gradle
           grep -q 'PRODUCT_BUNDLE_IDENTIFIER = dev.atlasdigital.driverslounge.preview;' mobile/ios/App/App.xcodeproj/project.pbxproj
-          DL_PRODUCTION_BUILD=1 node mobile/scripts/platforms.mjs android ios
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const path='mobile/www/native-build.json';
+          const build=JSON.parse(fs.readFileSync(path,'utf8'));
+          build.channel='release';
+          build.appId='dev.atlasdigital.driverslounge';
+          fs.writeFileSync(path,JSON.stringify(build,null,2)+'\n');
+          NODE
+          node mobile/scripts/platforms.mjs android ios
           grep -q 'applicationId "dev.atlasdigital.driverslounge"' mobile/android/app/build.gradle
           grep -q 'PRODUCT_BUNDLE_IDENTIFIER = dev.atlasdigital.driverslounge;' mobile/ios/App/App.xcodeproj/project.pbxproj
           grep -q 'targetSdkVersion = 36' mobile/android/variables.gradle
