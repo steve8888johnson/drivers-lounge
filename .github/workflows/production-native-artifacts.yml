@@ -1,0 +1,158 @@
+name: Production native artifacts
+on:
+  push:
+    branches: [feature/production-native-artifacts]
+permissions:
+  contents: write
+concurrency:
+  group: production-native-artifacts-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DL_RELEASE: '1'
+  DL_API_ORIGIN: https://driverslounge.app
+
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feature/production-native-artifacts
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+      - run: npm ci --prefix mobile
+      - name: Build release web bundle and Android project
+        run: |
+          set -euo pipefail
+          npm run build --prefix mobile
+          node mobile/scripts/platforms.mjs android
+          grep -q '"channel": "release"' mobile/www/native-build.json
+          grep -q '"apiOrigin": "https://driverslounge.app"' mobile/www/native-build.json
+          grep -q 'applicationId "dev.atlasdigital.driverslounge"' mobile/android/app/build.gradle
+          grep -q 'versionCode 2000004' mobile/android/app/build.gradle
+          grep -q 'versionName "2.0.2"' mobile/android/app/build.gradle
+          grep -q 'targetSdkVersion = 36' mobile/android/variables.gradle
+      - name: Verify production routing remains fail-closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS https://driverslounge.app/api/truck-route-health -o /tmp/health.json
+          node - <<'NODE'
+          const health=require('/tmp/health.json');
+          if(health.policy?.environment!=='production')throw Error('Production policy not visible.');
+          if(health.policy?.requireCrossCheck!==true)throw Error('Production cross-check requirement is not active.');
+          if(health.guidanceAllowed!==false||health.readiness?.releaseEligible!==false)throw Error('Production routing must remain fail-closed.');
+          console.log('Production routing is fail-closed as required.');
+          NODE
+      - name: Compile unsigned Android release artifacts
+        working-directory: mobile/android
+        run: bash gradlew bundleRelease assembleRelease --no-daemon
+      - name: Verify and checksum Android artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          aab=mobile/android/app/build/outputs/bundle/release/app-release.aab
+          apk=mobile/android/app/build/outputs/apk/release/app-release-unsigned.apk
+          test -s "$aab"
+          test -s "$apk"
+          mkdir -p release-artifacts/android
+          cp "$aab" release-artifacts/android/Drivers-Lounge-2.0.2-2000004-unsigned.aab
+          cp "$apk" release-artifacts/android/Drivers-Lounge-2.0.2-2000004-unsigned.apk
+          sha256sum release-artifacts/android/* > release-artifacts/android/SHA256SUMS.txt
+          cat > release-artifacts/android/RELEASE-NOTES.txt <<'EOF'
+          Drivers Lounge 2.0.2 (2000004)
+          Package: dev.atlasdigital.driverslounge
+          Target API: 36
+          Backend: https://driverslounge.app
+          Signing status: UNSIGNED — create a Play upload key before submission.
+          Routing status: production guidance remains fail-closed until a second independent provider is configured and verified.
+          EOF
+          cat release-artifacts/android/SHA256SUMS.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: drivers-lounge-2.0.2-production-android-unsigned
+          path: release-artifacts/android
+          if-no-files-found: error
+          retention-days: 30
+
+  ios:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feature/production-native-artifacts
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm ci --prefix mobile
+      - name: Build release web bundle and iOS project
+        run: |
+          set -euo pipefail
+          npm run build --prefix mobile
+          node mobile/scripts/platforms.mjs ios
+          grep -q '"channel": "release"' mobile/www/native-build.json
+          grep -q '"apiOrigin": "https://driverslounge.app"' mobile/www/native-build.json
+          grep -q 'PRODUCT_BUNDLE_IDENTIFIER = dev.atlasdigital.driverslounge;' mobile/ios/App/App.xcodeproj/project.pbxproj
+          grep -q 'CURRENT_PROJECT_VERSION = 2000004;' mobile/ios/App/App.xcodeproj/project.pbxproj
+          grep -q 'MARKETING_VERSION = 2.0.2;' mobile/ios/App/App.xcodeproj/project.pbxproj
+      - name: Compile unsigned iOS simulator app
+        working-directory: mobile
+        run: xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build-simulator CODE_SIGNING_ALLOWED=NO build
+      - name: Compile unsigned iOS device app
+        working-directory: mobile
+        run: xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build-device CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+      - name: Package and checksum iOS artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          simulator=mobile/build-simulator/Build/Products/Release-iphonesimulator/App.app
+          device=mobile/build-device/Build/Products/Release-iphoneos/App.app
+          test -d "$simulator"
+          test -d "$device"
+          mkdir -p release-artifacts/ios
+          ditto -c -k --sequesterRsrc --keepParent "$simulator" release-artifacts/ios/Drivers-Lounge-2.0.2-2000004-ios-simulator.zip
+          ditto -c -k --sequesterRsrc --keepParent "$device" release-artifacts/ios/Drivers-Lounge-2.0.2-2000004-ios-device-unsigned.zip
+          shasum -a 256 release-artifacts/ios/*.zip > release-artifacts/ios/SHA256SUMS.txt
+          cat > release-artifacts/ios/RELEASE-NOTES.txt <<'EOF'
+          Drivers Lounge 2.0.2 (2000004)
+          Bundle ID: dev.atlasdigital.driverslounge
+          Backend: https://driverslounge.app
+          Signing status: UNSIGNED — Apple Developer enrollment, distribution certificate and provisioning are required before TestFlight/App Store upload.
+          The simulator build is for Mac/Xcode testing. The device app is unsigned and cannot be installed normally on an iPhone.
+          Routing status: production guidance remains fail-closed until a second independent provider is configured and verified.
+          EOF
+          cat release-artifacts/ios/SHA256SUMS.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: drivers-lounge-2.0.2-production-ios-unsigned
+          path: release-artifacts/ios
+          if-no-files-found: error
+          retention-days: 30
+
+  cleanup:
+    needs: [android, ios]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feature/production-native-artifacts
+          fetch-depth: 0
+      - name: Remove temporary artifact workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/production-native-artifacts.yml
+          git commit -m 'Remove temporary production artifact workflow'
+          git push origin HEAD:feature/production-native-artifacts
