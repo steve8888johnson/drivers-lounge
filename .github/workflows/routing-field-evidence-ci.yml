@@ -8,7 +8,7 @@ concurrency:
   group: routing-field-evidence-${{ github.ref }}
   cancel-in-progress: true
 env:
-  DL_API_ORIGIN: https://beta.driverslounge.app
+  DL_API_ORIGIN: https://drivers-lounge-9cpom9f9u-steves-projects-c46af6ff.vercel.app
 jobs:
   prepare:
     if: github.actor != 'github-actions[bot]'
